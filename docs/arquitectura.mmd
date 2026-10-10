@@ -1,0 +1,45 @@
+flowchart TB
+    subgraph DriverDevice[Celular del conductor - PWA]
+        Frontend[Vue 3 y TypeScript - interfaz en espanol]
+        ServiceWorker[Service worker - recursos offline]
+        LocalStore[(IndexedDB - viajes descargados y capturas pendientes)]
+        Frontend <--> LocalStore
+        ServiceWorker --> Frontend
+    end
+    OfficeClient[Administrador - secretario - mecanico: interfaz web en espanol] -->|HTTPS API JSON| Api
+    Frontend -->|HTTPS API JSON y sincronizacion| Api
+    subgraph Application[Monolito modular Laravel - nombres tecnicos en ingles]
+        Api[Sesion - permisos - validacion del servidor]
+        AccessAndPersonnel[AccessAndPersonnel - Acceso y personal]
+        FleetAndDocuments[FleetAndDocuments - Flota y documentacion]
+        TransportAndDispatch[TransportAndDispatch - Transporte y despacho]
+        Workshop[Workshop - Taller]
+        Inventory[Inventory - Inventario]
+        Purchasing[Purchasing - Compras]
+        BillingAndPayments[BillingAndPayments - Facturacion y pagos]
+        Expenses[Expenses - Gastos]
+        Reports[Reports - Reportes]
+        Api --> AccessAndPersonnel
+        Api --> FleetAndDocuments
+        Api --> TransportAndDispatch
+        Api --> Workshop
+        Api --> Inventory
+        Api --> Purchasing
+        Api --> BillingAndPayments
+        Api --> Expenses
+        Api --> Reports
+        Synchronization[Synchronization - idempotencia y conflictos]
+        Audit[Audit - Auditoria transversal]
+        Api --> Synchronization
+        Api --> Audit
+        Workshop -->|Consumo mediante servicio de inventario| Inventory
+        Purchasing -->|Recepcion mediante servicio de inventario| Inventory
+    end
+    Application --> Database[(PostgreSQL - tablas y atributos en ingles)]
+    FleetAndDocuments --> PrivateStorage[Archivos privados - acceso autorizado]
+    Application --> Queue[Cola inicial PostgreSQL]
+    Queue --> QueueWorker[Trabajador Laravel - mismo proyecto]
+    QueueWorker --> Notifications[Vencimientos y tareas diferidas]
+    Database --> DatabaseBackup[Respaldos y prueba de restauracion]
+    PrivateStorage --> FileBackup[Respaldo de archivos privados]
+    Application --> Monitoring[Errores y monitoreo]

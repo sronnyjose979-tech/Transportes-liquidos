@@ -1,0 +1,404 @@
+erDiagram
+    %% Nombres tecnicos en ingles; reglas funcionales en propuesta-tecnica.md
+    %% trips -> invoice_items: 0..N es limite provisional; parcial pendiente, no habilitada.
+    %% Sin parcial: proponer 0..1 y UNIQUE trip_id. No fijar UK antes de confirmar la politica.
+    users ||--o{ user_roles : userRoles
+    roles ||--o{ user_roles : userRoles
+    users o|--o| employees : employee
+    customers ||--o{ transport_requests : transportRequests
+    transport_requests ||--o{ trips : trips
+    fleet_assets ||--o| tractor_units : tractorUnit
+    fleet_assets ||--o| tankers : tanker
+    tankers ||--|{ compartments : compartments
+    trips ||--o{ trip_asset_assignments : tripAssetAssignments
+    fleet_assets ||--o{ trip_asset_assignments : tripAssetAssignments
+    trips ||--o{ driver_assignments : driverAssignments
+    employees ||--o{ driver_assignments : driverAssignments
+    trips ||--o| trip_loads : tripLoad
+    trips ||--o| trip_unloads : tripUnload
+    operation_sites ||--o{ trip_loads : tripLoads
+    operation_sites ||--o{ trip_unloads : tripUnloads
+    trip_loads ||--o{ load_items : loadItems
+    compartments ||--o{ load_items : loadItems
+    trip_unloads ||--o{ unload_items : unloadItems
+    load_items ||--o| unload_items : unloadItem
+    trips ||--o{ trip_events : tripEvents
+    users ||--o{ trip_events : tripEvents
+    fleet_assets ||--o{ work_orders : workOrders
+    users o|--o{ work_orders : approvedWorkOrders
+    work_orders ||--o{ diagnoses : diagnoses
+    employees ||--o{ diagnoses : diagnoses
+    work_orders ||--o{ work_tasks : workTasks
+    work_tasks ||--o{ task_assignments : taskAssignments
+    employees ||--o{ task_assignments : taskAssignments
+    fleet_assets ||--o{ asset_readings : assetReadings
+    trip_events o|--o{ asset_readings : assetReadings
+    users ||--o{ purchase_requests : purchaseRequests
+    users o|--o{ purchase_requests : approvedPurchaseRequests
+    purchase_requests ||--o{ purchase_request_items : purchaseRequestItems
+    spare_parts ||--o{ purchase_request_items : purchaseRequestItems
+    suppliers ||--o{ purchases : purchases
+    users o|--o{ purchases : approvedPurchases
+    purchase_requests o|--o{ purchases : purchases
+    purchases ||--o{ purchase_items : purchaseItems
+    spare_parts ||--o{ purchase_items : purchaseItems
+    work_tasks ||--o{ part_consumptions : partConsumptions
+    spare_parts ||--o{ part_consumptions : partConsumptions
+    spare_parts ||--o{ inventory_movements : inventoryMovements
+    warehouses ||--o{ inventory_movements : inventoryMovements
+    purchase_items o|--o{ inventory_movements : inventoryMovements
+    part_consumptions o|--o| inventory_movements : inventoryMovement
+    inventory_movements o|--o| inventory_movements : reversal
+    users ||--o{ inventory_movements : inventoryMovements
+    customers ||--o{ invoices : invoices
+    invoices ||--o{ invoice_items : invoiceItems
+    trips ||--o{ invoice_items : invoiceItems
+    customers ||--o{ payments : payments
+    payments ||--o{ payment_allocations : paymentAllocations
+    invoices ||--o{ payment_allocations : paymentAllocations
+    trips o|--o{ expenses : expenses
+    users ||--o{ expenses : expenses
+    trip_events o|--o| expenses : expense
+    document_types ||--o{ documents : documents
+    users ||--o{ documents : documents
+    documents ||--|{ document_links : documentLinks
+    fleet_assets o|--o{ document_links : documentLinks
+    employees o|--o{ document_links : documentLinks
+    trips o|--o{ document_links : documentLinks
+    work_orders o|--o{ document_links : documentLinks
+    purchases o|--o{ document_links : documentLinks
+    expenses o|--o{ document_links : documentLinks
+    invoices o|--o{ document_links : documentLinks
+    operation_sites ||--o{ routes : originRoutes
+    operation_sites ||--o{ routes : destinationRoutes
+    routes ||--o{ transport_requests : transportRequests
+    liquid_products ||--o{ transport_requests : transportRequests
+    customers ||--o{ transport_rates : transportRates
+    routes ||--o{ transport_rates : transportRates
+    transport_rates ||--o{ transport_requests : transportRequests
+    users o|--o{ unload_items : acceptedUnloadItems
+    users {
+        uuid id PK
+        string login
+        boolean is_active
+    }
+    roles {
+        uuid id PK
+        string name
+    }
+    user_roles {
+        uuid user_id PK,FK
+        uuid role_id PK,FK
+    }
+    employees {
+        uuid id PK
+        uuid user_id FK
+        string name
+        boolean is_active
+    }
+    customers {
+        uuid id PK
+        string name
+    }
+    fleet_assets {
+        uuid id PK
+        string code
+        string type
+        string service_status
+    }
+    tractor_units {
+        uuid fleet_asset_id PK,FK
+    }
+    tankers {
+        uuid fleet_asset_id PK,FK
+        boolean has_physical_partitions
+    }
+    compartments {
+        uuid id PK
+        uuid tanker_id FK
+        string code
+        decimal capacity_liters
+        boolean is_active
+    }
+    transport_requests {
+        uuid id PK
+        uuid customer_id FK
+        uuid liquid_product_id FK
+        uuid route_id FK
+        uuid transport_rate_id FK
+        decimal requested_liters
+        datetime requested_at
+        string status
+        string description
+    }
+    trips {
+        uuid id PK
+        uuid transport_request_id FK
+        string execution_status
+        string administrative_status
+        datetime scheduled_start_at
+        datetime scheduled_end_at
+        datetime departed_at
+        datetime arrived_at
+    }
+    trip_asset_assignments {
+        uuid id PK
+        uuid trip_id FK
+        uuid fleet_asset_id FK
+        datetime starts_at
+        datetime ends_at
+        string reason
+    }
+    driver_assignments {
+        uuid id PK
+        uuid trip_id FK
+        uuid employee_id FK
+        datetime starts_at
+        datetime ends_at
+        string reason
+    }
+    liquid_products {
+        uuid id PK
+        string name
+        boolean is_active
+    }
+    operation_sites {
+        uuid id PK
+        string name
+        string address
+    }
+    trip_loads {
+        uuid id PK
+        uuid trip_id FK
+        uuid operation_site_id FK
+        string status
+        datetime occurred_at
+    }
+    load_items {
+        uuid id PK
+        uuid trip_load_id FK
+        uuid compartment_id FK
+        decimal loaded_liters
+    }
+    trip_unloads {
+        uuid id PK
+        uuid trip_id FK
+        uuid operation_site_id FK
+        string status
+        datetime occurred_at
+    }
+    unload_items {
+        uuid id PK
+        uuid trip_unload_id FK
+        uuid load_item_id FK
+        decimal delivered_liters
+        string difference_reason
+        decimal accepted_liters
+        string acceptance_status
+        uuid accepted_by_id FK
+        datetime accepted_at
+    }
+    trip_events {
+        uuid id PK
+        uuid trip_id FK
+        uuid created_by_id FK
+        string type
+        datetime occurred_at
+        string validation_status
+        decimal fuel_liters
+        string description
+    }
+    work_orders {
+        uuid id PK
+        uuid fleet_asset_id FK
+        string status
+        string reason
+        datetime opened_at
+        datetime closed_at
+        uuid approved_by_id FK
+        datetime approved_at
+    }
+    diagnoses {
+        uuid id PK
+        uuid work_order_id FK
+        uuid mechanic_id FK
+        string description
+        datetime occurred_at
+    }
+    work_tasks {
+        uuid id PK
+        uuid work_order_id FK
+        string description
+        string status
+        decimal labor_cost
+        string currency
+    }
+    task_assignments {
+        uuid work_task_id PK,FK
+        uuid employee_id PK,FK
+    }
+    asset_readings {
+        uuid id PK
+        uuid fleet_asset_id FK
+        uuid trip_event_id FK
+        string type
+        decimal value
+        string unit
+        datetime measured_at
+    }
+    spare_parts {
+        uuid id PK
+        string code
+        string description
+        string unit
+    }
+    warehouses {
+        uuid id PK
+        string name
+    }
+    suppliers {
+        uuid id PK
+        string name
+    }
+    purchase_requests {
+        uuid id PK
+        uuid requested_by_id FK
+        uuid approved_by_id FK
+        string status
+        datetime approved_at
+        string reason
+    }
+    purchase_request_items {
+        uuid id PK
+        uuid purchase_request_id FK
+        uuid spare_part_id FK
+        decimal quantity
+    }
+    purchases {
+        uuid id PK
+        uuid supplier_id FK
+        uuid purchase_request_id FK
+        uuid approved_by_id FK
+        datetime approved_at
+        string status
+        datetime purchased_at
+        string currency
+    }
+    purchase_items {
+        uuid id PK
+        uuid purchase_id FK
+        uuid spare_part_id FK
+        decimal quantity
+        decimal unit_cost
+    }
+    part_consumptions {
+        uuid id PK
+        uuid work_task_id FK
+        uuid spare_part_id FK
+        decimal quantity
+        decimal unit_cost
+        string currency
+        string status
+    }
+    inventory_movements {
+        uuid id PK
+        uuid spare_part_id FK
+        uuid warehouse_id FK
+        uuid purchase_item_id FK
+        uuid part_consumption_id FK
+        uuid reversal_of_id FK
+        string type
+        decimal signed_quantity
+        datetime occurred_at
+        uuid created_by_id FK
+        string reason
+    }
+    invoices {
+        uuid id PK
+        uuid customer_id FK
+        string issuance_status
+        string payment_terms
+        datetime issued_at
+        datetime due_at
+        string currency
+        date billing_period_start
+        date billing_period_end
+    }
+    invoice_items {
+        uuid id PK
+        uuid invoice_id FK
+        uuid trip_id FK
+        string description
+        decimal billed_liters
+        decimal applied_rate_per_liter
+        decimal subtotal
+        decimal tax_amount
+    }
+    payments {
+        uuid id PK
+        uuid customer_id FK
+        decimal amount
+        string currency
+        datetime occurred_at
+        string reference
+        string status
+    }
+    payment_allocations {
+        uuid id PK
+        uuid payment_id FK
+        uuid invoice_id FK
+        decimal amount
+        string status
+    }
+    expenses {
+        uuid id PK
+        uuid trip_id FK
+        uuid recorded_by_id FK
+        uuid trip_event_id FK
+        string description
+        decimal amount
+        string currency
+        datetime occurred_at
+        string status
+    }
+    document_types {
+        uuid id PK
+        string name
+        boolean tracks_expiration
+    }
+    documents {
+        uuid id PK
+        uuid document_type_id FK
+        string storage_key
+        date issued_on
+        date expires_on
+        string status
+        uuid uploaded_by_id FK
+    }
+    document_links {
+        uuid id PK
+        uuid document_id FK
+        uuid fleet_asset_id FK
+        uuid employee_id FK
+        uuid trip_id FK
+        uuid work_order_id FK
+        uuid purchase_id FK
+        uuid expense_id FK
+        uuid invoice_id FK
+    }
+    routes {
+        uuid id PK
+        uuid origin_site_id FK
+        uuid destination_site_id FK
+        string name
+        boolean is_active
+    }
+    transport_rates {
+        uuid id PK
+        uuid customer_id FK
+        uuid route_id FK
+        decimal rate_per_liter
+        string currency
+        datetime agreed_at
+        boolean is_active
+    }
