@@ -18,6 +18,7 @@ class SessionController extends Controller
             throw ValidationException::withMessages(['login' => 'Las credenciales no son válidas.']);
         }
         $request->session()->regenerate();
+        $request->session()->put('password_hash_web', Auth::guard('web')->hashPasswordForCookie(Auth::guard('web')->user()->getAuthPassword()));
 
         return $this->show($request);
     }

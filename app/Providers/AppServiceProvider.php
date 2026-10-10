@@ -3,6 +3,7 @@
 namespace App\Providers;
 
 use App\Models\User;
+use App\Modules\AccessAndPersonnel\Console\BootstrapAdministrator;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -26,6 +27,8 @@ class AppServiceProvider extends ServiceProvider
     {
         Gate::define('manage-catalogs', fn (User $user): bool => $user->is_active && $user->roles()->where('name', 'administrator')->exists()
         );
+        Gate::define('manage-personnel', fn (User $user): bool => $user->is_active && $user->roles()->where('name', 'administrator')->exists());
+        $this->commands([BootstrapAdministrator::class]);
         RateLimiter::for('login', fn (Request $request) => Limit::perMinute(5)->by($request->ip())
         );
     }

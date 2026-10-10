@@ -9,6 +9,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 class Role extends Model
 {
+    public const SUPPORTED_NAMES = ['administrator', 'secretary', 'driver', 'mechanic'];
+
     use HasUuids;
 
     public $timestamps = false;
