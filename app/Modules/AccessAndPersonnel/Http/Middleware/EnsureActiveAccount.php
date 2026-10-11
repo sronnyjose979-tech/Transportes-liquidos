@@ -11,12 +11,15 @@ class EnsureActiveAccount
 {
     public function handle(Request $request, Closure $next): Response
     {
-        if (! $request->user()?->is_active) {
+        // Re-read state even when the guard already holds an authenticated instance.
+        $user = $request->user()?->fresh();
+        if (! $user?->is_active) {
             Auth::guard('web')->logout();
             $request->session()->invalidate();
             $request->session()->regenerateToken();
             abort(403, 'La cuenta no está activa.');
         }
+        Auth::guard('web')->setUser($user);
 
         return $next($request);
     }

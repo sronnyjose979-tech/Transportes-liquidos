@@ -28,6 +28,8 @@ class AppServiceProvider extends ServiceProvider
         Gate::define('manage-catalogs', fn (User $user): bool => $user->is_active && $user->roles()->where('name', 'administrator')->exists()
         );
         Gate::define('manage-personnel', fn (User $user): bool => $user->is_active && $user->roles()->where('name', 'administrator')->exists());
+        // Provisional fleet permissions approved for this stage.
+        Gate::define('manage-fleet', fn (User $user): bool => $user->is_active && $user->roles()->where('name', 'administrator')->exists());
         $this->commands([BootstrapAdministrator::class]);
         RateLimiter::for('login', fn (Request $request) => Limit::perMinute(5)->by($request->ip())
         );

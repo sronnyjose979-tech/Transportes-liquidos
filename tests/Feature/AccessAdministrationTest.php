@@ -200,6 +200,7 @@ class AccessAdministrationTest extends PostgresTestCase
     public function test_self_deactivation_invalidates_current_session(): void
     {
         $admin = $this->account();
+        $this->account();
         $this->actingAs($admin)->patchJson('/api/users/'.$admin->id.'/activation', ['is_active' => false])->assertOk();
         $this->getJson('/api/session')->assertUnauthorized();
     }

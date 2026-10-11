@@ -4,6 +4,8 @@ use App\Modules\AccessAndPersonnel\Http\Controllers\AccountController;
 use App\Modules\AccessAndPersonnel\Http\Controllers\EmployeeController;
 use App\Modules\AccessAndPersonnel\Http\Controllers\SessionController;
 use App\Modules\AccessAndPersonnel\Http\Middleware\EnsureActiveAccount;
+use App\Modules\FleetAndDocuments\Http\Controllers\TankerController;
+use App\Modules\FleetAndDocuments\Http\Controllers\TractorUnitController;
 use App\Modules\Inventory\Http\Controllers\SparePartController;
 use App\Modules\Purchasing\Http\Controllers\SupplierController;
 use App\Modules\TransportAndDispatch\Http\Controllers\CustomerController;
@@ -17,6 +19,14 @@ Route::prefix('api')->group(function () {
     Route::middleware(['auth', EnsureActiveAccount::class, 'auth.session'])->group(function () {
         Route::get('session', [SessionController::class, 'show']);
         Route::post('logout', [SessionController::class, 'destroy']);
+        Route::middleware('can:manage-fleet')->name('fleet.')->group(function () {
+            foreach (['tractor-units' => TractorUnitController::class, 'tankers' => TankerController::class] as $units => $controller) {
+                Route::get($units, [$controller, 'index'])->name($units.'.index');
+                Route::post($units, [$controller, 'store'])->name($units.'.store');
+                Route::get($units.'/{id}', [$controller, 'show'])->whereUuid('id')->name($units.'.show');
+                Route::patch($units.'/{id}', [$controller, 'update'])->whereUuid('id')->name($units.'.update');
+            }
+        });
         Route::middleware('can:manage-personnel')->group(function () {
             $accounts = AccountController::class;
             $employees = EmployeeController::class;

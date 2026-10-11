@@ -31,6 +31,16 @@ class AccountAdministration
                 if (array_key_exists('is_active', $data)) {
                     $data['is_active'] = (bool) $data['is_active'];
                 }
+                $wasActiveAdministrator = $user->exists && $user->is_active
+                    && $user->roles()->where('name', 'administrator')->exists();
+                $retainsAdministratorRole = $roles === null || Role::query()
+                    ->whereIn('id', $roles)->where('name', 'administrator')->exists();
+                if ($wasActiveAdministrator && (! ($data['is_active'] ?? $user->is_active) || ! $retainsAdministratorRole)
+                    && ! User::query()->where('is_active', true)->whereKeyNot($user->id)
+                        ->whereHas('roles', fn ($query) => $query->where('name', 'administrator'))->exists()) {
+                    $field = ($data['is_active'] ?? null) === false ? 'is_active' : 'roles';
+                    throw ValidationException::withMessages([$field => 'Debe permanecer al menos un administrador activo.']);
+                }
                 if (isset($data['password'])) {
                     $data['password'] = Hash::make($data['password']);
                     $data['remember_token'] = Str::random(60);
