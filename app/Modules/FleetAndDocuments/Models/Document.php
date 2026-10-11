@@ -11,6 +11,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 #[Fillable(['document_type_id', 'fleet_asset_id', 'storage_key', 'issued_on', 'expires_on', 'uploaded_by_id'])]
 class Document extends Model
@@ -43,6 +44,17 @@ class Document extends Model
         return $this->belongsTo(User::class, 'uploaded_by_id');
     }
 
+    public function configurationSnapshot(): HasOne
+    {
+        return $this->hasOne(DocumentConfigurationSnapshot::class);
+    }
+
+    public function scopeCurrent(Builder $query): Builder
+    {
+        return $query->whereExists(fn ($current) => $current->selectRaw('1')
+            ->from('current_fleet_documents')->whereColumn('current_fleet_documents.document_id', 'documents.id'));
+    }
+
     private static function localDate(?DateTimeInterface $at): CarbonImmutable
     {
         return ($at === null ? CarbonImmutable::now('America/Costa_Rica') : CarbonImmutable::instance($at)->setTimezone('America/Costa_Rica'))->startOfDay();
@@ -50,7 +62,7 @@ class Document extends Model
 
     public function validity(?DateTimeInterface $at = null): DocumentValidity
     {
-        if (! $this->documentType->tracks_expiration) {
+        if (! $this->configurationSnapshot->tracks_expiration) {
             return DocumentValidity::NoExpiration;
         }
         $today = self::localDate($at)->toDateString();
@@ -66,7 +78,7 @@ class Document extends Model
     public function scopeWithValidity(Builder $query, DocumentValidity $validity, ?DateTimeInterface $at = null): Builder
     {
         $today = self::localDate($at);
-        $query->whereHas('documentType', fn (Builder $types) => $types->where('tracks_expiration', $validity !== DocumentValidity::NoExpiration));
+        $query->whereHas('configurationSnapshot', fn (Builder $types) => $types->where('tracks_expiration', $validity !== DocumentValidity::NoExpiration));
 
         return match ($validity) {
             DocumentValidity::NoExpiration => $query,

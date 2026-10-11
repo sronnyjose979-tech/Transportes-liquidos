@@ -118,9 +118,11 @@ class FleetDocumentTest extends PostgresTestCase
         $type = $this->type();
         $this->rejected(fn () => $this->document($asset, $type, null));
         $optional = $this->type(false);
-        $this->document($asset, $optional, null);
-        $this->rejected(fn () => $optional->update(['tracks_expiration' => true]));
-        $this->assertFalse($optional->fresh()->tracks_expiration);
+        $historical = $this->document($asset, $optional, null);
+        $optional->update(['tracks_expiration' => true]);
+        $this->assertTrue($optional->fresh()->tracks_expiration);
+        $this->assertSame(DocumentValidity::NoExpiration, $historical->fresh()->validity());
+        $this->rejected(fn () => $this->document($asset, $optional, null));
         $this->rejected(fn () => Document::create(['fleet_asset_id' => $asset->id, 'document_type_id' => $type->id, 'storage_key' => 'private/file.pdf', 'issued_on' => '2026-10-12', 'expires_on' => '2026-10-11', 'uploaded_by_id' => User::factory()->create()->id]));
     }
 
@@ -129,7 +131,7 @@ class FleetDocumentTest extends PostgresTestCase
         $document = $this->document($this->asset(), $this->type());
         $this->rejected(fn () => DB::table('documents')->where('id', $document->id)->update(['storage_key' => 'replacement.pdf']));
         $this->rejected(fn () => DB::table('documents')->where('id', $document->id)->delete());
-        $this->rejected(fn () => DB::statement('TRUNCATE documents'));
+        $this->rejected(fn () => DB::statement('TRUNCATE documents'), ['23514', '0A000']);
         foreach (['fleet_assets' => $document->fleet_asset_id, 'document_types' => $document->document_type_id, 'users' => $document->uploaded_by_id] as $table => $id) {
             // Existing fleet children use NO ACTION; document references use RESTRICT.
             $this->rejected(fn () => DB::table($table)->where('id', $id)->delete(), ['23001', '23503']);

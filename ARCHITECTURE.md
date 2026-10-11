@@ -244,3 +244,125 @@ Validación de esta etapa: 73 pruebas y 739 aserciones correctas en PostgreSQL 1
 temporal, incluidas vigencia, historial, FK y serialización con conexiones independientes;
 Pint --test y git diff --check correctos. No se migró transporte_db. El sandbox
 requirió ejecución ampliada para crear el socket Unix privado del clúster temporal.
+
+## Etapa 4.2: API y gestión documental privada
+
+La aprobación de esta etapa añade dos tablas mediante una migración nueva:
+`document_configuration_snapshots` (PK/FK `document_id`) conserva nombre,
+`tracks_expiration` y requisitos por cabezal/cisterna al registrar; sus filas son
+inmutables. `current_fleet_documents` tiene PK `(fleet_asset_id, document_type_id)`,
+`document_id` único y FK compuesta a la identidad completa de `documents`.
+No se modifica ninguna migración anterior ni se actualizan documentos históricos.
+
+La migración bloquea registros/configuración durante su comprobación y se detiene
+si encuentra documentos anteriores: el esquema 4.1 no registra las configuraciones
+pasadas ni una selección actual verificable. No intenta completar información ni
+seleccionar por fecha. Requiere resolver explícitamente esa información en una tarea
+aprobada antes de desplegar sobre una base con historial. La reversión también se
+rechaza si hay documentos: restaurar vigencia por configuración viva reinterpretaría
+el historial. Nunca usar `down` como recuperación de datos desplegados.
+
+El trigger AFTER INSERT crea la configuración histórica y cambia la referencia
+actual en la misma transacción que el documento. Se conserva el trigger 4.1 que
+serializa cada INSERT con cambios de tipo y exige vencimiento según configuración
+actual. El bloqueo del tipo y el UPSERT sobre la PK de referencia serializan
+registros concurrentes; rollback revierte documento, copia y referencia juntos.
+Una fecha de registro mayor no determina cuál es actual. Los triggers impiden
+escrituras directas de copias/referencias fuera del registro documental y mantienen
+las prohibiciones de UPDATE/DELETE/TRUNCATE del historial. Las garantías no cubren
+SQL privilegiado que deshabilite triggers o altere DDL.
+
+`Document::validity` y `withValidity` conservan los límites de la etapa 4.1 en
+America/Costa_Rica, utilizando ahora la configuración congelada. La configuración
+de tipos cambia al confirmar la transacción administrativa, sin un flujo adicional
+de aprobaciones. Activar vencimiento exige fecha en registros futuros y no cambia
+los documentos previos. Los requisitos obligatorios actuales se consultan de manera
+prospectiva: ausente significa que no existe referencia actual de ese tipo; un
+actual vencido no se presenta como ausente. Ningún estado bloquea viajes.
+
+Permisos: `manage-document-types` solo para `administrator` activo;
+`manage-fleet-documents` para `administrator` o `secretary` activos. La secretaria
+consulta tipos pero no los modifica. Las escrituras revalidan cuenta y roles dentro
+de la transacción, compartiendo advisory lock 873210 con administración de cuentas
+para serializar revocaciones. No se amplían permisos de administración de flota.
+La API conserva sesión, CSRF, respuestas privadas `no-store` y paginación hasta 100.
+
+| Método | Ruta | Contrato |
+| --- | --- | --- |
+| GET / POST | `/api/document-types` | Listar tipos / crear con nombre y tres booleanos explícitos. |
+| PATCH | `/api/document-types/{id}` | Cambiar nombre y/o requisitos; solo administrador. |
+| GET | `/api/documents` | Documentos actuales; filtros `fleet_asset_id`, `document_type_id`, `validity`. |
+| GET | `/api/documents/{id}` | Documento individual, incluido histórico. |
+| GET | `/api/documents/{id}/download` | Descarga autorizada como attachment. |
+| GET / POST | `/api/fleet-assets/{assetId}/documents` | Listar actuales / registrar archivo y tipo. |
+| GET | `/api/fleet-assets/{assetId}/documents/history` | Historial completo; filtros de tipo/vigencia. |
+| GET | `/api/fleet-assets/{assetId}/documents/missing` | Tipos obligatorios actuales sin documento actual. |
+| POST | `/api/fleet-assets/{assetId}/documents/{id}/renew` | Crear otro documento del mismo activo/tipo, sin editar el anterior. |
+
+Carga/renovación usa multipart con `file`, `issued_on` opcional y `expires_on`
+obligatorio cuando la configuración vigente lo requiere. Registro incluye
+`document_type_id`; renovación deriva el tipo del documento de referencia y
+rechaza otro tipo suministrado. Un registro adicional del mismo par activo/tipo
+es una nueva revisión actual; renovar un documento histórico del mismo par es
+válido y no devuelve a ese registro antiguo la condición de actual. No hay endpoints
+de eliminación ni actualización de documentos. Se rechazan claves de almacenamiento,
+autor, fecha de registro, IDs y campos extra suministrados por el cliente.
+
+Respuestas documentales incluyen IDs, configuración congelada, fechas, autor,
+`is_current` y `validity`; nunca `storage_key` ni rutas físicas. La fecha de registro
+se genera en PostgreSQL y se presenta con zona America/Costa_Rica. Avisos se obtienen
+con `validity=expiring_soon` (0–15 días incluidos) o `validity=expired`; por defecto
+excluyen revisiones anteriores. El historial permite usar los mismos filtros sin
+perder registros antiguos. No hay correo, push, tareas programadas ni frontend.
+
+`Application/DocumentAdministration` coordina operaciones; Requests validan,
+Resources representan y Controllers exponen HTTP. `Infrastructure/PrivateDocumentStorage`
+es concreto para el disco local privado `fleet_documents`, fuera de las raíces de
+los discos servidos `local` y `public`, con `serve=false` y sin enlaces/URLs públicas.
+La carga comprueba extensión, MIME detectado desde el contenido, estructura básica
+PDF/JPG/PNG y límite exacto de 10.000.000 bytes. No agrega un analizador completo de
+PDF ni dependencias. Nombres internos UUID evitan sobrescrituras; la descarga valida
+la forma de la clave, transmite attachment con MIME fijo y `nosniff` y devuelve 404
+si falta el archivo. Fallos operativos de carga devuelven 503 genérico, sin SQL,
+claves privadas ni rutas, incluso con debug local habilitado.
+
+El archivo se escribe antes de abrir la transacción. Un recibo privado `.pending`
+se crea antes de escribirlo. Un mutex de filesystem coordina cargas y recuperación
+en el almacenamiento local compartido. Ante errores se consulta PostgreSQL antes
+de borrar: cualquier archivo referenciado por historial se conserva. Si falla la
+limpieza o no se puede confirmar el estado de la base, se conserva el recibo y se
+registra únicamente el UUID del intento. El recibo se retira tras el commit real,
+no después de un savepoint. La recuperación difiere intentos cuyo backend aún tiene
+una transacción abierta; no confunde datos aún invisibles con archivos huérfanos.
+
+Recuperación manual, sin tarea programada: `php artisan fleet-documents:reconcile-storage`.
+Procesa solo recibos del almacenamiento privado, conserva todos los archivos con
+referencia histórica y compensa únicamente cargas sin referencia confirmada. Es
+repetible; recibos corruptos, base no disponible o archivos históricos ausentes
+requieren revisión/recuperación y no eliminación del historial. Esta coordinación
+no es una transacción distribuida ni sustituye respaldos coherentes de base/archivos.
+El disco debe ser local compartido por los workers que lo utilizan; no cambiarlo a
+S3 ni replicarlo por host sin diseñar otra coordinación. SQL externo que registre
+claves sin el servicio de carga no tiene garantía de existencia física.
+
+El servidor PHP debe admitir `upload_max_filesize=10M` y `post_max_size=12M` (o límites
+mayores), y el proxy HTTP debe admitir multipart de ese tamaño. La validación de
+aplicación mantiene el límite menor exacto de 10.000.000 bytes. Estos límites se
+configuraron en el PHP del entorno de desarrollo, sin cambiar producción.
+
+Validación reproducible, activando las herramientas ya instaladas:
+
+```sh
+source /workspace/.tools/activate.sh
+bash tests/run-postgres.sh
+vendor/bin/pint --test
+git diff --check
+```
+
+Las pruebas documentales usan fixtures PDF/JPG/PNG reales y Storage::fake. Se cubren
+permisos, CSRF, límite exacto, MIME/extensión/estructura, fechas, configuración
+congelada, historial, descargas, filtros, rollback, escrituras parciales, limpieza
+fallida y recuperación. Conexiones PostgreSQL independientes ejercitan los triggers
+instalados, la visibilidad antes/después del commit, la serialización y conservación
+de archivos durante transacciones activas. Solo se usan esquemas sintéticos en el
+clúster temporal de PostgreSQL 18; no se migra ni consulta `transporte_db`.

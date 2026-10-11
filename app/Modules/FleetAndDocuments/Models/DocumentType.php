@@ -37,9 +37,9 @@ class DocumentType extends Model
         return $query->where($column, true);
     }
 
-    // Absence of records only; this does not determine legal applicability.
+    // Current requirements are forward-looking; absence is distinct from expiration.
     public function scopeMissingFor(Builder $query, FleetAsset $asset): Builder
     {
-        return $query->requiredFor($asset->type)->whereDoesntHave('documents', fn (Builder $documents) => $documents->where('fleet_asset_id', $asset->id));
+        return $query->requiredFor($asset->type)->whereDoesntHave('documents', fn (Builder $documents) => $documents->current()->where('fleet_asset_id', $asset->id));
     }
 }

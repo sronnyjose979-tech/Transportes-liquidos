@@ -30,6 +30,14 @@ return [
 
     'disks' => [
 
+        'fleet_documents' => [
+            'driver' => 'local',
+            'root' => storage_path('app/fleet-documents-private'),
+            'visibility' => 'private',
+            'serve' => false,
+            'throw' => true,
+        ],
+
         'local' => [
             'driver' => 'local',
             'root' => storage_path('app/private'),

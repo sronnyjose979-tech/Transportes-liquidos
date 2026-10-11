@@ -4,6 +4,8 @@ use App\Modules\AccessAndPersonnel\Http\Controllers\AccountController;
 use App\Modules\AccessAndPersonnel\Http\Controllers\EmployeeController;
 use App\Modules\AccessAndPersonnel\Http\Controllers\SessionController;
 use App\Modules\AccessAndPersonnel\Http\Middleware\EnsureActiveAccount;
+use App\Modules\FleetAndDocuments\Http\Controllers\DocumentController;
+use App\Modules\FleetAndDocuments\Http\Controllers\DocumentTypeController;
 use App\Modules\FleetAndDocuments\Http\Controllers\TankerController;
 use App\Modules\FleetAndDocuments\Http\Controllers\TractorUnitController;
 use App\Modules\Inventory\Http\Controllers\SparePartController;
@@ -19,6 +21,21 @@ Route::prefix('api')->group(function () {
     Route::middleware(['auth', EnsureActiveAccount::class, 'auth.session'])->group(function () {
         Route::get('session', [SessionController::class, 'show']);
         Route::post('logout', [SessionController::class, 'destroy']);
+        Route::middleware('can:manage-fleet-documents')->name('fleet.documents.')->group(function () {
+            $documents = DocumentController::class;
+            $types = DocumentTypeController::class;
+            Route::get('document-types', [$types, 'index']);
+            Route::post('document-types', [$types, 'store'])->middleware('can:manage-document-types');
+            Route::patch('document-types/{id}', [$types, 'update'])->whereUuid('id')->middleware('can:manage-document-types');
+            Route::get('documents', [$documents, 'index'])->name('index');
+            Route::get('documents/{id}', [$documents, 'show'])->whereUuid('id')->name('show');
+            Route::get('documents/{id}/download', [$documents, 'download'])->whereUuid('id')->name('download');
+            Route::get('fleet-assets/{assetId}/documents', [$documents, 'index'])->whereUuid('assetId')->name('asset');
+            Route::get('fleet-assets/{assetId}/documents/history', [$documents, 'index'])->whereUuid('assetId')->name('history');
+            Route::get('fleet-assets/{assetId}/documents/missing', [$documents, 'missing'])->whereUuid('assetId')->name('missing');
+            Route::post('fleet-assets/{assetId}/documents', [$documents, 'store'])->whereUuid('assetId')->name('store');
+            Route::post('fleet-assets/{assetId}/documents/{id}/renew', [$documents, 'renew'])->whereUuid(['assetId', 'id'])->name('renew');
+        });
         Route::middleware('can:manage-fleet')->name('fleet.')->group(function () {
             foreach (['tractor-units' => TractorUnitController::class, 'tankers' => TankerController::class] as $units => $controller) {
                 Route::get($units, [$controller, 'index'])->name($units.'.index');
