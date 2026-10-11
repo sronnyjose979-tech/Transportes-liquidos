@@ -176,3 +176,71 @@ asignaciones, cambios de configuración y estados, historial de capacidad al car
 y matriz detallada de permisos. La edición de capacidades está autorizada para la
 administración básica actual; futuros procesos de carga deben definir conservación
 histórica antes de permitir cambios sobre compartimentos utilizados.
+
+## Etapa 4.1: persistencia y dominio documental de flota
+
+Aprobación específica de esta etapa: documentación independiente por cabezal/cisterna,
+renovaciones mediante registros nuevos, vigencia derivada y advertencias sin bloqueo
+técnico de asignación. Esta última decisión sustituye para flota el bloqueo por
+vencimiento del borrador de docs/; no representa autorización legal para circular.
+No hay integración con despacho en esta etapa.
+
+FleetAndDocuments incorpora DocumentType y Document en Models y el enum
+Domain/DocumentValidity. Document pertenece directamente a FleetAsset, DocumentType
+y User (uploaded_by_id bigint compatible con users.id). No se crea DocumentLink:
+un registro tiene un activo obligatorio; las siete referencias del borrador y el
+archivo compartido entre destinos no se implementan. Los nuevos IDs son UUID.
+DocumentType contiene name, tracks_expiration, required_for_tractor_units y
+required_for_tankers, todos explícitos. No se impone unicidad comercial del nombre
+ni se crean tipos iniciales mediante seeders. DEKRA, marchamo y permisos de transporte
+son tipos reconocidos; pesos/dimensiones conserva su procedimiento pendiente.
+
+Document guarda storage_key (referencia en almacenamiento privado, sin binarios),
+issued_on opcional, expires_on y registered_at TIMESTAMPTZ automático del servidor.
+No hay status persistido ni timestamps genéricos. CHECK impide claves/nombres vacíos
+y emisión posterior a vencimiento. FK sin cascadas preservan referencias; índices
+cubren historial por activo/tipo/registro, vencimientos por tipo y autor.
+Triggers impiden UPDATE, DELETE y TRUNCATE de documentos: una renovación es INSERT
+sin sustituir la referencia histórica. No se comprueba existencia física ni privacidad
+del archivo; no se carga, descarga, elimina ni sobrescribe archivo alguno.
+
+Vigencia interpretada en America/Costa_Rica por fecha calendario: más de 15 días
+valid, de 0 a 15 expiring_soon, fechas anteriores expired, tipo sin requisito de
+vencimiento no_expiration. Incluye todo el día de vencimiento; emisión no define
+inicio de aplicabilidad. Document::validity y withValidity comparten estos límites;
+las consultas pueden combinarse con FleetAsset::documents. Cargar documentType
+anticipadamente al evaluar colecciones evita N+1. Sin requisito, se permite fecha
+opcional, pero la vigencia sigue siendo no_expiration según la regla aprobada.
+
+DocumentType::requiredFor consulta requisitos por clase; missingFor detecta solamente
+requisitos sin registros. Historial y consultas de vigencia no eligen el documento
+más reciente ni certifican cumplimiento/aplicabilidad. Falta decidir selección de
+documento aplicable, aceptación y efecto histórico de cambiar la configuración de
+un tipo. Actualmente la vigencia y los requisitos usan su configuración vigente.
+Activar tracks_expiration se rechaza si existen registros sin expires_on; no se
+inventan fechas ni se modifican documentos históricos para completar esa transición.
+
+INSERT de documento realiza UPDATE sin cambio de tracks_expiration en su tipo,
+serializando con cambios de configuración antes de verificar vencimiento obligatorio.
+READ COMMITTED revisa datos confirmados; un snapshot obsoleto REPEATABLE READ o
+SERIALIZABLE puede abortar con 40001. No se agregan reintentos ni servicio HTTP.
+La unidad atómica es cada INSERT y su validación; futuras cargas deberán coordinar
+archivo y registro sin efectos externos dentro de una transacción prolongada.
+Operaciones sobre varios tipos deberán ordenar sus locks para evitar deadlocks.
+
+PDF/JPG/PNG y máximo 10 MB quedan expresados como constantes de Document (10.000.000
+bytes); no validan contenido físico en esta etapa. La comprobación de MIME, tamaño,
+archivo privado y permisos de registro pertenece a la futura capa de carga autorizada.
+No se crean endpoints, controladores, requests, resources, interfaz ni notificaciones.
+
+Migración nueva crea únicamente dos tablas y sus funciones/triggers. Toma locks DDL
+sobre objetos nuevos, sin alterar tablas existentes. down elimina historial y requiere
+un plan de recuperación autorizado; no se ejecutó. La inmutabilidad no protege frente
+a administradores PostgreSQL que deshabiliten triggers o eliminen objetos. Antes de
+desplegar se debe aprobar destino y recuperación coherente de archivos/base. Pruebas
+se ejecutan exclusivamente con tests/run-postgres.sh sobre PostgreSQL 18 temporal.
+
+Validación de esta etapa: 73 pruebas y 739 aserciones correctas en PostgreSQL 18.6
+temporal, incluidas vigencia, historial, FK y serialización con conexiones independientes;
+Pint --test y git diff --check correctos. No se migró transporte_db. El sandbox
+requirió ejecución ampliada para crear el socket Unix privado del clúster temporal.
