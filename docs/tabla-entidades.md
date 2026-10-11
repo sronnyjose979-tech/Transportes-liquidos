@@ -1,5 +1,34 @@
 # Entidades y nombres técnicos
 
+> Referencia histórica del borrador inicial. Para Transporte y Despacho y sus
+> contratos futuros prevalece [etapa-5-1.md](etapa-5-1.md); el esquema de flota y
+> documentos vigente se describe en ARCHITECTURE.md y etapas 4.x. Este borrador
+> conserva hipótesis sustituidas: liberación automática, pagos parciales, bloqueo
+> documental y cierre sin pendientes. No utilizarlas como requisitos de 5.2.
+> Fuente vigente: [REGLAS_TRANSPORTE_DESPACHO.md](REGLAS_TRANSPORTE_DESPACHO.md).
+> RN-TR-17 permanece pendiente. Producto histórico y excepciones de recursos
+> requieren el diseño de 5.1; prohibiciones absolutas del borrador no prevalecen.
+
+## Actualización de Transporte y Despacho 5.1
+
+Estas filas resumen las diferencias frente a las entidades históricas de abajo.
+La especificación completa y el estado de aprobación están en [etapa-5-1.md](etapa-5-1.md).
+
+| Entidad propuesta | Cambio vigente / restricción |
+| --- | --- |
+| Trip | Producto histórico propio; captura de término y confirmaciones oficiales separadas; liberación manual independiente. |
+| TransportRequest | Volumen editable con historia; producto con autorización y revisión de viajes asociados. |
+| Asignaciones | Conflictos entre viajes admiten excepción administrativa específica; no unicidad absoluta por recurso. |
+| TransportAuthorization / AssignmentConflict | Evidencia acotada de aprobaciones y conflictos; estructura física pendiente de aprobación. |
+| TransportChange / TripWarning | Historia de solicitud/viaje y pendientes conservados al cerrar; no solo log técnico. |
+| TripDeparturePermit / TripAttachment | Datos/evidencia privada de viaje; configuración por sitio; ausencia RN-TR-17 pendiente. |
+| TripOdometerReading / TripExpense | Datos definitivos de oficina; integración futura sin duplicar lecturas/gastos. |
+| TripAllowanceDisbursement / TripAllowanceSettlement | Entregas individuales autorizadas y reales; saldo por acuerdo. |
+| TripPriceRevision | Precio de viaje con autorización administrativa; fórmula comercial todavía pendiente. |
+| Invoice / Payment | Contratos futuros: agrupación por cliente y pago íntegro único; no implementación de facturación. |
+
+## Tabla histórica del borrador
+
 | Modelo propuesto | Tabla | Responsabilidad | Atributos iniciales |
 |---|---|---|---|
 | User | users | Cuenta de acceso. | id, login, is_active |

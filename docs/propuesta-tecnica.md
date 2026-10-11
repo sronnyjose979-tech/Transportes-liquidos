@@ -1,5 +1,14 @@
 # Propuesta técnica actualizada para revisión
 
+> Referencia histórica del borrador inicial. Para Transporte y Despacho y sus
+> contratos futuros prevalece [etapa-5-1.md](etapa-5-1.md); el esquema de flota y
+> documentos vigente se describe en ARCHITECTURE.md y etapas 4.x. Este borrador
+> conserva hipótesis sustituidas: liberación automática, pagos parciales, bloqueo
+> documental y cierre sin pendientes. No utilizarlas como requisitos de 5.2.
+> Fuente vigente: [REGLAS_TRANSPORTE_DESPACHO.md](REGLAS_TRANSPORTE_DESPACHO.md).
+> RN-TR-17 permanece pendiente. Producto histórico y excepciones de recursos
+> requieren el diseño de 5.1; prohibiciones absolutas del borrador no prevalecen.
+
 Estado: borrador conceptual/lógico. Conserva el diseño existente, incorpora las correcciones de la empresa y distingue requisitos de decisiones propuestas. La implementación queda posterior a la revisión y aprobación del ER. No se generan migraciones, modelos Eloquent ni SQL.
 
 ## Requisitos confirmados

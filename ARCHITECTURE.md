@@ -537,3 +537,81 @@ Resultados finales 4.4: 96 pruebas PHPUnit y 1.113 aserciones, 14 pruebas UI sim
 y 14 E2E reales correctas; typecheck, build, Pint y diff correctos. Clúster E2E
 `/tmp/transporte-tests-FdqbHi` detenido; trazas/capturas bajo `e2e/browser/`. Informe
 completo y comando reproducible en `docs/etapa-4-4.md`.
+
+## Etapa 5.1: diseño documental de Transporte y Despacho
+
+Base e1aaae8, sin cambios de código, migraciones, esquema ni dependencias. Fuente
+íntegra: [docs/REGLAS_TRANSPORTE_DESPACHO.md](docs/REGLAS_TRANSPORTE_DESPACHO.md).
+Diseño y trazabilidad de RN-TR-01..39 y RN-SEG-01 en
+[docs/etapa-5-1.md](docs/etapa-5-1.md), con ER conceptual en
+[docs/modelo-er-transporte-5-1.mmd](docs/modelo-er-transporte-5-1.mmd).
+RN-TR-17 permanece pendiente; las demás reglas están confirmadas, pero campos,
+restricciones y estados propuestos aún requieren aprobación antes de 5.2.
+
+Reutilizar catálogos de transporte, Employee/User/Role y flota/documentación vigente.
+Conservar producto histórico por viaje: derivarlo siempre de solicitud mutable
+violaría RN-TR-02/26. Solicitud admite cambios auditados de volumen y cambios
+administrativamente autorizados de producto; viajes cargados/completados no cambian.
+
+Detectar conflictos concurrentes de recursos y admitir excepciones específicas solo
+con autorización administrativa (RN-TR-04); no UNIQUE absoluto entre viajes que impida
+la regla. Un conductor/cabezal/cisterna por viaje a la vez. Liberación manual de oficina,
+sin automatismo de reloj/finalización/cancelación. Conductor empleado activo con cuenta
+activa e identificación como conductor; correspondencia con rol driver por aprobar.
+
+Inicio/finalización/cierre oficiales son de secretaria/administrador. Conductor reporta
+fin e información; oficina registra volúmenes definitivos, kilometraje y gastos.
+Administrador autoriza diferencias de litros antes de finalización, sustituciones
+(cisterna anterior vacía), gastos sin comprobante, cada viático, cambios de producto
+y precios y cargos por cancelación. Cierre puede conservar pendientes, pero no omite
+esas autorizaciones. Correcciones cerradas y cambios de solicitud preservan auditoría.
+
+Permiso de salida configurable por sitio; dato y adjunto de viaje requieren diseño
+propio. No ampliar Document con referencias ficticias ni modificar almacenamiento 4.4.
+RN-TR-17 no se resuelve con advertencia de documentos de flota ni bloqueo automático.
+Las alertas documentales mantienen vigencia y snapshots existentes, sin bloqueo.
+
+Persistencia propuesta separa hechos, confirmaciones, autorizaciones, aplicación,
+liberación, evidencia, pendientes al cierre y auditoría. Nuevas estructuras de permiso,
+lecturas, gastos y desembolsos son propuestas; evitar duplicar futuros gastos/lecturas.
+No crear motor genérico de aprobación ni implementar facturación o PWA en etapa 5.
+
+Contratos futuros RN-TR-30..38: factura individual/agrupada mismo cliente; viajes
+completados pueden facturarse antes de terminar solicitud según acuerdo. Contado/crédito,
+un pago íntegro por factura, métodos configurables administrados por administrador.
+Facturas emitidas no se editan; anulación/corrección fiscal autorizada por administrador.
+Modelo comercial exacto RN-TR-03 pendiente, sin fórmula fija por litro/viaje.
+
+Diseño funcional consolidado y fuente recuperada; 5.2 aún no autorizada. Aprobar
+propuestas técnicas y concretar pendientes necesarios del alcance elegido antes de DDL.
+El ER global previo permanece como borrador histórico señalado, no fuente de migraciones.
+
+## Etapa 5.2A: núcleo de persistencia implementado
+
+Autorización específica: cinco migraciones nuevas 000060–000100, once modelos y relaciones,
+Gates de persistencia y cinco grupos de pruebas. Informe en [docs/etapa-5-2a.md](docs/etapa-5-2a.md).
+Se reutilizan catálogos y usuarios existentes; UUID nuevos, FK User bigint, NUMERIC(15,2).
+Planificación scheduled/rescheduled, ejecución pending/in_progress/completed/cancelled y
+administración open/closed son dimensiones distintas; no hay transiciones automáticas.
+Producto histórico de Trip y nombre capturado no cambian por edición de solicitud/catálogo.
+
+Raíces actualizables con version+1; trigger diferido exige auditoría exacta OLD/NEW en la
+misma transacción. Historia SQL/Eloquent inmutable. Cierre con pendientes conserva evidencia;
+corrección de closed no implica reapertura ni modificación de otro módulo.
+Solicitudes, decisiones y aplicaciones de autorización son registros separados e inmutables;
+decide solo administrator activo, solicita/gestiona administrator o secretary activos.
+Aplicación única, vinculada a versión/destino/contenido del cambio. Solo aplicación de cambio
+de producto de solicitud está representada; no se implementan operaciones económicas.
+
+Se comparte advisory lock 873210 para coordinar actores y revocaciones; actualización de
+raíces toma lock de sentencia antes de filas. Concurrencia de aplicación probada en PostgreSQL
+real. No se incorporan asignaciones/conflictos/sustituciones/liberaciones de 5.2B.
+Gates no amplían permisos anteriores; driver sin relación de asignación no recibe acceso
+privado de viaje. SQL comprueba actores registrados, no autentica conexiones arbitrarias.
+
+Sin servicios, API, frontend, precio, viáticos, facturación, carga/descarga ni comportamiento
+para RN-TR-17. Las restricciones de estado son de persistencia, no autorización de un flujo
+operativo todavía incompleto. Las propuestas 5.1 restantes conservan su estado pendiente.
+
+Verificación final 5.2A: 123 pruebas y 1.261 aserciones correctas en PostgreSQL 18 aislado,
+incluidas 27 nuevas; Pint --test y git diff --check correctos. No se migró transporte_db.

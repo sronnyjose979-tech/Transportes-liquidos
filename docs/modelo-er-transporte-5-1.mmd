@@ -1,0 +1,225 @@
+%% Propuesta conceptual 5.1, no DDL aprobado. Detalles y pendientes en etapa-5-1.md.
+%% Fuente: REGLAS_TRANSPORTE_DESPACHO.md; RN-TR-17 pendiente.
+%% Cardinalidades/campos tecnicos propuestos, no migracion aprobada.
+%% Autorizaciones, gastos, permisos, lecturas y viaticos operativos propuestos; fiscalidad futura excluida.
+%% Recursos no se liberan por cierre/finalizacion/cancelacion.
+erDiagram
+    customers ||--o{ transport_requests : solicita
+    liquid_products ||--o{ transport_requests : producto_unico
+    operation_sites ||--o{ routes : origen
+    operation_sites ||--o{ routes : destino
+    routes ||--o{ transport_requests : ruta_comercial
+    transport_requests ||--o{ trips : genera
+    liquid_products ||--o{ trips : producto_historico
+    trips ||--o{ trip_asset_assignments : historial_activos
+    fleet_assets ||--o{ trip_asset_assignments : recurso
+    trips ||--o{ driver_assignments : historial_conductor
+    employees ||--o{ driver_assignments : responsable
+    users o|--o| employees : cuenta_opcional
+    trips ||--o| trip_loads : carga_unica
+    trips ||--o| trip_unloads : descarga_unica
+    operation_sites ||--o{ trip_loads : carga_real
+    operation_sites ||--o{ trip_unloads : descarga_real
+    trip_loads ||--o{ load_items : detalles
+    compartments ||--o{ load_items : compartimento
+    trip_unloads ||--o{ unload_items : detalles
+    load_items ||--o| unload_items : trazabilidad_propuesta
+    trips ||--o{ trip_events : capturas
+    users ||--o{ trip_events : registra
+    trips o|--o{ transport_changes : auditoria_propuesta
+    transport_requests o|--o{ transport_changes : cambios_solicitud
+    users ||--o{ transport_changes : actor
+    trips ||--o{ trip_warnings : avisos_conservados
+    transport_requests {
+        uuid id PK
+        uuid customer_id FK
+        uuid liquid_product_id FK
+        uuid route_id FK
+        decimal requested_liters
+        datetime requested_at
+        string status
+    }
+    trips {
+        uuid id PK
+        uuid transport_request_id FK
+        uuid liquid_product_id FK
+        string product_name_snapshot
+        string execution_status
+        string administrative_status
+        datetime scheduled_start_at
+        datetime scheduled_end_at
+        datetime officially_started_at
+        datetime officially_completed_at
+        bigint started_by_id FK
+        bigint completed_by_id FK
+        bigint closed_by_id FK
+        datetime closed_at
+        integer version
+    }
+    trip_asset_assignments {
+        uuid id PK
+        uuid trip_id FK
+        uuid fleet_asset_id FK
+        datetime starts_at
+        datetime ends_at
+        bigint assigned_by_id FK
+        bigint released_by_id FK
+        string reason
+    }
+    driver_assignments {
+        uuid id PK
+        uuid trip_id FK
+        uuid employee_id FK
+        datetime starts_at
+        datetime ends_at
+        bigint assigned_by_id FK
+        bigint released_by_id FK
+        string reason
+    }
+    trip_loads {
+        uuid id PK
+        uuid trip_id FK,UK
+        uuid operation_site_id FK
+        datetime occurred_at
+        bigint recorded_by_id FK
+    }
+    load_items {
+        uuid id PK
+        uuid trip_load_id FK
+        uuid compartment_id FK
+        decimal loaded_liters
+        decimal capacity_liters_snapshot
+    }
+    trip_unloads {
+        uuid id PK
+        uuid trip_id FK,UK
+        uuid operation_site_id FK
+        datetime occurred_at
+        bigint recorded_by_id FK
+    }
+    unload_items {
+        uuid id PK
+        uuid trip_unload_id FK
+        uuid load_item_id FK,UK
+        decimal delivered_liters
+        decimal accepted_liters
+    }
+    trip_events {
+        uuid id PK
+        uuid trip_id FK
+        bigint created_by_id FK
+        string type
+        datetime occurred_at
+        datetime registered_at
+    }
+    transport_changes {
+        uuid id PK
+        uuid trip_id FK
+        uuid transport_request_id FK
+        bigint actor_id FK
+        string action
+        json before_values
+        json after_values
+        string reason
+        datetime registered_at
+    }
+    trip_warnings {
+        uuid id PK
+        uuid trip_id FK
+        string code
+        json evidence
+        datetime captured_at
+    }
+    users {
+        bigint id PK
+    }
+    employees {
+        uuid id PK
+        bigint user_id FK,UK
+    }
+    %% TransportChange y TransportAuthorization: exactamente un destino solicitud o viaje.
+    trips o|--o{ transport_authorizations : autorizacion_especifica
+    transport_requests o|--o{ transport_authorizations : cambio_producto
+    users ||--o{ transport_authorizations : autoriza_administrador
+    transport_authorizations ||--o{ assignment_conflicts : cubre_conflicto
+    trips ||--o{ assignment_conflicts : excepciones
+    %% Los pares de asignaciones y FK por clase de recurso requieren aprobar D06.
+    trips ||--o{ trip_departure_permits : permiso_registrado
+    operation_sites ||--o{ trip_departure_permits : requisito_por_sitio
+    trips ||--o{ trip_attachments : evidencia_privada
+    trip_departure_permits o|--o{ trip_attachments : adjuntos_opcionales
+    trips ||--o{ trip_odometer_readings : lecturas
+    fleet_assets ||--o{ trip_odometer_readings : cabezal
+    trips ||--o{ trip_expenses : gastos_canonicos
+    trips ||--o{ trip_allowance_disbursements : entregas_individuales
+    employees ||--o{ trip_allowance_disbursements : conductor
+    transport_authorizations ||--o| trip_allowance_disbursements : autoriza_entrega
+    trips ||--o{ trip_allowance_settlements : liquidacion_propuesta
+    trips ||--o{ trip_price_revisions : historial_precio
+    transport_authorizations ||--o| trip_price_revisions : aprobacion_precio
+    transport_authorizations {
+        uuid id PK
+        uuid trip_id FK
+        uuid transport_request_id FK
+        bigint requested_by_id FK
+        bigint authorized_by_id FK
+        string type
+        json authorized_content
+        string reason
+        datetime authorized_at
+    }
+    assignment_conflicts {
+        uuid id PK
+        uuid trip_id FK
+        uuid authorization_id FK
+        json conflict_evidence
+    }
+    trip_departure_permits {
+        uuid id PK
+        uuid trip_id FK
+        uuid operation_site_id FK
+        boolean requirement_snapshot
+        json permit_data
+        bigint recorded_by_id FK
+    }
+    trip_attachments {
+        uuid id PK
+        uuid trip_id FK
+        uuid departure_permit_id FK
+        string private_storage_key
+        bigint recorded_by_id FK
+    }
+    trip_odometer_readings {
+        uuid id PK
+        uuid trip_id FK
+        uuid fleet_asset_id FK
+        decimal value
+        string reading_type
+        bigint recorded_by_id FK
+    }
+    trip_expenses {
+        uuid id PK
+        uuid trip_id FK
+        decimal amount
+        string currency
+        uuid authorization_id FK
+        bigint recorded_by_id FK
+    }
+    trip_allowance_disbursements {
+        uuid id PK
+        uuid trip_id FK
+        uuid employee_id FK
+        uuid authorization_id FK,UK
+        decimal delivered_amount
+        string currency
+        bigint recorded_by_id FK
+        datetime delivered_at
+    }
+    trip_price_revisions {
+        uuid id PK
+        uuid trip_id FK
+        uuid authorization_id FK,UK
+        json previous_price
+        json proposed_price
+        string reason
+    }

@@ -5,6 +5,7 @@ namespace App\Providers;
 use App\Models\User;
 use App\Modules\AccessAndPersonnel\Console\BootstrapAdministrator;
 use App\Modules\FleetAndDocuments\Console\ReconcileDocumentStorage;
+use App\Modules\TransportAndDispatch\Policies\TransportCorePolicy;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -33,6 +34,11 @@ class AppServiceProvider extends ServiceProvider
         Gate::define('manage-fleet', fn (User $user): bool => $user->is_active && $user->roles()->where('name', 'administrator')->exists());
         Gate::define('manage-document-types', fn (User $user): bool => $user->is_active && $user->roles()->where('name', 'administrator')->exists());
         Gate::define('manage-fleet-documents', fn (User $user): bool => $user->is_active && $user->roles()->whereIn('name', ['administrator', 'secretary'])->exists());
+        // Persistence permissions only; driver ownership awaits assignments in 5.2B.
+        foreach (['manage-transport-core', 'request-transport-authorization', 'correct-transport-record', 'record-transport-information', 'resolve-transport-warning'] as $ability) {
+            Gate::define($ability, [TransportCorePolicy::class, 'manage']);
+        }
+        Gate::define('decide-transport-authorization', [TransportCorePolicy::class, 'decide']);
         $this->commands([BootstrapAdministrator::class, ReconcileDocumentStorage::class]);
         RateLimiter::for('login', fn (Request $request) => Limit::perMinute(5)->by($request->ip())
         );

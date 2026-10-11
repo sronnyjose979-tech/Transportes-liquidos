@@ -1,5 +1,33 @@
 # Relaciones y cardinalidades
 
+> Referencia histórica del borrador inicial. Para Transporte y Despacho y sus
+> contratos futuros prevalece [etapa-5-1.md](etapa-5-1.md); el esquema de flota y
+> documentos vigente se describe en ARCHITECTURE.md y etapas 4.x. Este borrador
+> conserva hipótesis sustituidas: liberación automática, pagos parciales, bloqueo
+> documental y cierre sin pendientes. No utilizarlas como requisitos de 5.2.
+> Fuente vigente: [REGLAS_TRANSPORTE_DESPACHO.md](REGLAS_TRANSPORTE_DESPACHO.md).
+> RN-TR-17 permanece pendiente. Producto histórico y excepciones de recursos
+> requieren el diseño de 5.1; prohibiciones absolutas del borrador no prevalecen.
+
+## Actualización de cardinalidades 5.1
+
+Propuesta conceptual, sin DDL aprobado. Detalles en [etapa-5-1.md](etapa-5-1.md).
+
+| Relación | Cardinalidad / condición actual |
+| --- | --- |
+| Solicitud → viaje | 1 : 0..N; viaje pertenece exactamente a una solicitud. |
+| Producto → solicitud / viaje | 1 : 0..N en ambas; producto de Trip histórico, no siempre derivado de solicitud mutable. |
+| Viaje → cabezal/cisterna/conductor | Historial 1 : 0..N por asignaciones; durante operación uno por función simultáneamente. |
+| Recurso → asignaciones | 1 : 0..N; solapamientos entre viajes requieren RN-TR-04 autorizado. |
+| Viaje → carga / descarga | 1 : 0..1 antes de registro; una operación de cada clase según RN-TR-09. Completitud por precisar. |
+| Solicitud / viaje → cambios y autorizaciones | 1 : 0..N; propuesta de destino XOR por registro. |
+| Viaje → pendientes conservados | 1 : 0..N; cierre no elimina ni valida pendientes. |
+| Viaje → viáticos | 1 : 0..N entregas; cada desembolso tiene autorización individual. |
+| Viaje → permiso/adjuntos/lecturas/gastos | 1 : 0..N propuesto; precisiones en pendientes del diseño. |
+| Factura → pagos | Contrato futuro: factura pagada íntegramente en una transacción; no aprobar 1:N de abonos del borrador. |
+
+## Tabla histórica del borrador
+
 La cardinalidad junto a A indica cuántas A corresponden a una B; junto a B, cuántas B corresponden a una A. En cabeceras en borrador se admite ausencia de detalles; al confirmar/emitir se exigen. Trip–InvoiceItem tiene límite superior provisional hasta decidir facturación parcial.
 
 | Tablas A → B | Cardinalidad A : B | Relación propuesta desde A | Restricciones |
