@@ -6,6 +6,7 @@ use App\Modules\AccessAndPersonnel\Http\Controllers\SessionController;
 use App\Modules\AccessAndPersonnel\Http\Middleware\EnsureActiveAccount;
 use App\Modules\FleetAndDocuments\Http\Controllers\DocumentController;
 use App\Modules\FleetAndDocuments\Http\Controllers\DocumentTypeController;
+use App\Modules\FleetAndDocuments\Http\Controllers\FleetAssetLookupController;
 use App\Modules\FleetAndDocuments\Http\Controllers\TankerController;
 use App\Modules\FleetAndDocuments\Http\Controllers\TractorUnitController;
 use App\Modules\Inventory\Http\Controllers\SparePartController;
@@ -22,6 +23,7 @@ Route::prefix('api')->group(function () {
         Route::get('session', [SessionController::class, 'show']);
         Route::post('logout', [SessionController::class, 'destroy']);
         Route::middleware('can:manage-fleet-documents')->name('fleet.documents.')->group(function () {
+            Route::get('fleet-assets', [FleetAssetLookupController::class, 'index'])->name('assets');
             $documents = DocumentController::class;
             $types = DocumentTypeController::class;
             Route::get('document-types', [$types, 'index']);

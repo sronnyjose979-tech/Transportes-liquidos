@@ -25,6 +25,7 @@ class DocumentResource extends JsonResource
             'expires_on' => $this->expires_on?->toDateString(),
             'registered_at' => $this->registered_at->setTimezone('America/Costa_Rica')->toIso8601String(),
             'uploaded_by_id' => $this->uploaded_by_id,
+            'uploaded_by' => ['id' => (string) $this->uploadedBy->id, 'name' => $this->uploadedBy->name],
             'is_current' => (bool) $this->is_current,
             'validity' => $this->resource->validity()->value,
         ];

@@ -45,7 +45,7 @@ class DocumentAdministration
 
     public function documents(): Builder
     {
-        return Document::query()->with('configurationSnapshot')->select('documents.*')
+        return Document::query()->with(['configurationSnapshot', 'uploadedBy:id,name'])->select('documents.*')
             ->selectRaw('EXISTS (SELECT 1 FROM current_fleet_documents WHERE document_id = documents.id) AS is_current');
     }
 

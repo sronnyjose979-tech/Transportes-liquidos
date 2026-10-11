@@ -366,3 +366,90 @@ fallida y recuperación. Conexiones PostgreSQL independientes ejercitan los trig
 instalados, la visibilidad antes/después del commit, la serialización y conservación
 de archivos durante transacciones activas. Solo se usan esquemas sintéticos en el
 clúster temporal de PostgreSQL 18; no se migra ni consulta `transporte_db`.
+
+## Etapa 4.3: interfaz web documental
+
+Interfaz en español en `/documentacion`, enlazada desde la bienvenida existente.
+Blade entrega únicamente el contenedor público, sin identidad ni datos privados,
+con `Cache-Control: no-store`; Vue consulta la sesión antes de solicitar información.
+Vite conserva la entrada original y añade `resources/js/app.ts`. Los componentes,
+contratos, cliente HTTP y presentación pertenecen a
+`resources/js/modules/FleetAndDocuments/`, con Composition API y TypeScript estricto,
+`noUncheckedIndexedAccess` y `exactOptionalPropertyTypes`. No hay router, estado
+compartido global, biblioteca visual adicional ni funcionalidad de otros módulos.
+
+Dependencias autorizadas: Vue 3.5.43, @vitejs/plugin-vue 6.0.10, TypeScript 5.9.3 y
+vue-tsc 3.3.13. Se conservaron Vite 8.3.4, Tailwind 4.3.3 y las demás dependencias
+directas existentes; el nuevo `package-lock.json` fija las versiones instaladas.
+TypeScript 5.9 es compatible con el compilador de componentes instalado.
+
+Se amplía solamente la lectura necesaria aprobada:
+
+- `GET /api/fleet-assets`: `FleetAssetLookupController`, Request y Resource propios;
+  devuelve exclusivamente `id`, `code`, `type`, ordenados por código/ID y paginados
+  (25 por defecto, máximo 100). `manage-fleet-documents` permite administrador y
+  secretaria activos. No concede `manage-fleet`, ni expone capacidades o estado de
+  servicio, ni añade escrituras de activos.
+- `DocumentResource` conserva `uploaded_by_id` y añade
+  `uploaded_by: {id, name}`; carga anticipada `uploadedBy:id,name` evita N+1 y lectura
+  de otros atributos de la cuenta. Listados, registros, renovaciones e historial
+  comparten la representación. Es el nombre visible actual de la cuenta, no una
+  nueva copia histórica del nombre ni el nombre de Employee. No modifica documentos
+  ni configuración histórica; no hay cambios de esquema.
+
+Pantallas: acceso/cierre de sesión existente; selector paginado de cabezales y
+cisternas; documentos actuales, indicadores por estado y requisitos faltantes;
+registro/renovación multipart; historial completo o por tipo; tipos documentales
+paginados, con creación/configuración visibles solo al administrador. Tabla en
+escritorio y tarjetas en móvil/tablet, etiquetas, estados de carga/vacío/error,
+mensajes en español, indicadores con texto y color, recorrido por teclado y foco
+restaurado al cancelar o confirmar formularios. Las versiones históricas solo
+ofrecen descarga; no se muestran edición/eliminación. La condición `is_current`
+se presenta separada de `validity`, incluidos actuales vencidos.
+
+`api.ts` utiliza `fetch` al mismo origen, sesión mediante cookies y
+`X-XSRF-TOKEN` obtenido de la cookie emitida por `/api/csrf`. Los cuerpos JSON y
+multipart conservan los contratos aprobados; renovación no envía otro tipo,
+autor ni fecha de registro. Todas las autorizaciones y validaciones de contenido,
+tamaño, vencimiento y transacciones permanecen en Laravel/PostgreSQL. La interfaz
+solo usa `required`/`accept` como ayudas y requisitos recibidos del tipo actual;
+no recalcula vigencia ni identifica actuales por fecha. Los indicadores se obtienen
+con consultas paginadas y filtros de la API, no contando la página visible.
+
+Lecturas tienen `AbortController`; cambiar activo, filtros, página o desmontar
+componentes cancela consultas y descarta respuestas obsoletas. Se deshabilitan
+formularios y navegación durante escrituras para evitar envíos accidentales
+simultáneos. No se añaden reintentos automáticos ni garantías nuevas de idempotencia.
+Ante conexión interrumpida o error de servidor, se pide consultar los documentos
+antes de reenviar una carga: la respuesta perdida no permite saber si se confirmó.
+Se conservan entradas/archivo ante validación y errores operativos.
+
+401 retira datos privados de la interfaz y presenta acceso; 403 vuelve a consultar
+roles y desmonta componentes privilegiados; 404 informa recurso/archivo ausente;
+419 exige actualización explícita de CSRF antes de reenviar; 422 muestra errores
+por campo. También se manejan 413, 429 y fallos de servidor/conexión sin imprimir
+el cuerpo de errores internos. Contratos JSON se verifican en ejecución además de
+sus tipos estáticos. La descarga usa el endpoint autorizado, Blob en memoria y
+nombre local generado; libera su URL temporal. Nunca usa claves de almacenamiento,
+rutas físicas, URLs públicas, localStorage, sessionStorage ni IndexedDB. No hay
+service worker, caché privada persistente ni trabajo offline.
+
+Verificación: PHPUnit mediante `bash tests/run-postgres.sh` exclusivamente en
+PostgreSQL 18 temporal, `npm run typecheck`, `npm run build`,
+`npm run test:frontend`, `vendor/bin/pint --test` y `git diff --check`.
+Las pruebas de navegador usan Playwright/Python y Chromium ya disponibles; no se
+instala otra dependencia. Arrancan un servidor PHP temporal para la vista Blade y
+artefactos Vite reales, con sesión/cache en memoria, e interceptan todas las llamadas
+`/api/*` con datos sintéticos. No realizan conexiones de base de datos. Prueban
+interacciones, roles, formularios, errores, carreras de lectura, descargas, teclado
+y tamaños 390/768/1440. Estas pruebas no sustituyen una prueba end-to-end de sesión
+real: los permisos, cookies/CSRF, persistencia y almacenamiento se validan por
+separado en las pruebas HTTP/backend PostgreSQL. No se accede a `transporte_db`.
+
+Los indicadores corresponden al activo seleccionado y se actualizan al cargar,
+registrar/renovar o pulsar Actualizar; no hay polling ni notificaciones. Consultas
+separadas pueden observar commits distintos bajo concurrencia y no constituyen
+un snapshot global. La descarga carga en memoria un archivo limitado por la API
+(10.000.000 bytes). No se aprovisionaron usuarios ni datos de aplicación; iniciar
+uso real requiere las migraciones/datos autorizados previamente. La precondición
+4.2 de detener migración ante historial no determinable sigue vigente.
