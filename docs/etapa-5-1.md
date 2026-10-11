@@ -203,15 +203,15 @@ Identificadores técnicos son propuesta; actores y reglas son confirmados.
 | Evento informativo | reporte de término | Conductor reporta, con actor/fechas; no equivale a completed. |
 | Ejecución | in_progress → completed | Oficina confirma oficialmente; diferencias requieren aprobación administrativa; no libera recursos. |
 | Ejecución | draft/scheduled/dispatched/in_progress → cancelled | Oficina cancela incluso tras inicio con motivo/actor/fecha y conservación de hechos/recursos. Cancelar completed sigue D02. |
-| Administración | open → under_review → closed | Tras finalización oficial y revisión; under_review opcional propuesto. Cierre conserva pendientes y controles especiales. |
+| Administración | open → under_review → closed | Tras finalización oficial o cancelación y revisión (aclaración posterior); under_review opcional propuesto. Cierre conserva pendientes y controles especiales. |
 | Administración | corrección de closed conservando closed | Oficina con auditoría; autorización por dato; sin modificación automática fiscal. |
 | Recursos | asignación → liberación manual | Secretaria/administrador; actor/fecha/motivo auditados; individual/conjunta D06. |
 | Recursos | sustitución durante viaje | Administrador autoriza cabezal/conductor; cisterna también requiere estar vacía. Misma identidad de viaje. |
 
 No confundir fin informado, llegada, descarga, fin oficial y cierre. RN-TR-28 no
 permite completar oficialmente sin RN-TR-10. Viaje cancelado conserva operación y
-puede generar cargo autorizado, pero RN-TR-27 solo confirma cierre después de
-finalización oficial: procedimiento administrativo de cancelados necesita decisión D02.
+puede generar cargo autorizado, el cierre de cancelados fue autorizado explícitamente después de 5.2A: puede cerrarse
+sin finalización oficial ficticia, conservando cancelación y cierre como hechos distintos.
 
 ## Matriz de permisos
 
@@ -317,7 +317,7 @@ u otros contratos aún no definidos; no reabren permisos ya confirmados.
 | ID | Prioridad | Decisión necesaria | Impacto |
 | --- | --- | --- | --- |
 | D01 | Alta, negocio RN-TR-17 | Conducta ante permiso obligatorio ausente, actor y evidencia si corresponde. No elegir bloqueo/aviso/excepción. | Flujo dependiente de permiso. |
-| D02 | Alta | Requisitos completos de carga/descarga/finalización; producto aplicable en pendientes e iniciados sin carga; cierre de cancelados y cancelación de completados. | Estados, snapshot, nulabilidad y confirmaciones. |
+| D02 | Alta | Requisitos completos de carga/descarga/finalización; producto aplicable en pendientes e iniciados sin carga; cancelación de completados; cierre de cancelados resuelto por aclaración posterior. | Estados, snapshot, nulabilidad y confirmaciones. |
 | D03 | Alta | Modelo comercial/unidad, moneda, precisión, origen y fecha de efecto de precio acordado; no fórmula fija. | Precio y revisiones, sin facturación. |
 | D04 | Alta, técnica | Aprobar rol driver como identificación de conductor o definición laboral distinta; continuidad tras desactivación. | Elegibilidad sin cambiar regla cuenta/empleado activo. |
 | D05 | Alta | Evidencia y validación de cisterna vacía para sustitución; intervalos efectivos. | RN-TR-13, sin permitir trasvase rutinario. |

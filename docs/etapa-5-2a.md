@@ -62,7 +62,8 @@ cinco grupos de pruebas en tests/Feature/Transport*.php. No modificar rutas exis
 - Route referenciada conserva identidad/configuración; modificarla retrospectivamente
   se rechaza. No se versionan direcciones del catálogo OperationSite en esta entrega.
 - Estados con CHECK; fecha y actor van juntos. completed necesita inicio y finalización;
-  closed necesita finalización y cronología coherente. cancelled necesita motivo y actor.
+  closed necesita finalización o cancelación y cronología coherente, tras la migración
+  correctiva 000110. cancelled necesita motivo y actor.
   Son restricciones de representación, no un servicio que autoriza ejecutar transiciones.
 - Solicitud de autorización y cambio tienen exactamente un destino solicitud/viaje.
 - Intención, decisión, aplicación, cambio, revisión, evento, advertencia y resolución
@@ -179,3 +180,33 @@ No se migran datos previos ni se inventa información histórica. Las nuevas mig
 solo se ejecutaron en la base temporal de pruebas. down destruye las tablas nuevas y
 no es un procedimiento de recuperación; no se ejecutó. Despliegue exige destino autorizado,
 revisión y respaldo/recuperación. No commit ni push. No avanzar a 5.2B sin autorización.
+
+## Corrección posterior: cierre administrativo de cancelados
+
+Autorización explícita posterior a e98198f: un viaje cancelado puede cerrarse sin una
+finalización oficial ficticia. Esta decisión completa el caso antes pendiente del diseño
+5.1 y amplía el cierre descrito por RN-TR-27 sin modificar la fuente original de requisitos.
+
+Migración nueva 2026_10_11_000110_allow_cancelled_trip_administrative_closure.php.
+No modifica las cinco migraciones publicadas. Sustituye close_after_completion por
+close_after_terminal_state: closed requiere ejecución completed o cancelled. Chronology
+exige cierre no anterior a finalización si completed, ni a cancelación si cancelled.
+
+Permanecen vigentes: motivo/actor/fecha de cancelación, actor/fecha de cierre, ausencia de
+finalización oficial para cancelled, auditoría exacta, permisos, producto histórico y
+advertencias conservadas. Correcciones posteriores mantienen closed y el historial.
+No hay liberaciones automáticas ni nuevas operaciones de asignación.
+
+Cuatro pruebas añadidas a TransportInformationRecordsTest: cancelación antes/después
+de inicio, cierre por administrador/secretaria sin fin ficticio, actores/fechas separados,
+avisos e historia intactos tras corrección, rechazo de pendientes/en curso, cierre anterior
+a cancelación, ausencia de actor, actor conductor y auditoría ausente.
+
+Verificación: bash tests/run-postgres.sh, 127 pruebas y 1.295 aserciones correctas en
+PostgreSQL 18 temporal; clúster /tmp/transporte-tests-5Brzm2 detenido por runner.
+Pint --test y git diff --check correctos. Sin migraciones contra transporte_db.
+
+La migración correctiva valida los datos existentes al añadir las restricciones. ALTER
+TABLE toma bloqueo de tabla; requiere plan de despliegue autorizado. down restaura las
+restricciones anteriores, pero PostgreSQL lo rechaza si ya existen cancelados cerrados:
+no modifica datos para forzar reversión. No se ejecutó down. Sin commit/push ni 5.2B.

@@ -615,3 +615,16 @@ operativo todavía incompleto. Las propuestas 5.1 restantes conservan su estado 
 
 Verificación final 5.2A: 123 pruebas y 1.261 aserciones correctas en PostgreSQL 18 aislado,
 incluidas 27 nuevas; Pint --test y git diff --check correctos. No se migró transporte_db.
+
+## Corrección 5.2A: cierre de viajes cancelados
+
+Aclaración aprobada después de e98198f: cancelled puede cerrarse administrativamente
+sin officially_completed_at ni completed_by_id ficticios. Nueva migración 000110,
+sin modificar las publicadas, admite closed cuando ejecución es completed o cancelled
+y valida cronología frente al hecho terminal correspondiente. Actores/fechas de cierre
+y cancelación siguen separados; permisos, motivo, auditoría, producto y avisos intactos.
+No se añaden asignaciones ni liberaciones; 5.2B continúa fuera de alcance.
+
+TransportInformationRecordsTest añade cuatro pruebas. Suite completa: 127 pruebas,
+1.295 aserciones correctas, PostgreSQL 18 temporal; Pint --test y diff correctos.
+Detalles y límites de reversión/despliegue en docs/etapa-5-2a.md.
