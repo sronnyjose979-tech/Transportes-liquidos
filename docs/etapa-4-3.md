@@ -122,3 +122,11 @@ privado persistente. Se inspeccionaron también las capturas de las tres resoluc
 - No se generaron cuentas ni migraciones nuevas, ni se aprovisionó una base real.
   La restricción de migración 4.2 para historial no verificable permanece vigente.
 - Sin commit ni push.
+
+## Continuidad en etapa 4.4
+
+La limitación de navegador con API simulada quedó cubierta posteriormente por una
+suite real, independiente y reproducible, con Laravel, sesión/CSRF, PostgreSQL 18
+temporal y disco privado real. Ver `docs/etapa-4-4.md` y
+`bash tests/run-postgres.sh --e2e`. Los resultados de 4.3 anteriores describen
+únicamente las verificaciones ejecutadas en esa etapa.

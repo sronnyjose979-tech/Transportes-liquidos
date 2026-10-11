@@ -453,3 +453,87 @@ un snapshot global. La descarga carga en memoria un archivo limitado por la API
 (10.000.000 bytes). No se aprovisionaron usuarios ni datos de aplicación; iniciar
 uso real requiere las migraciones/datos autorizados previamente. La precondición
 4.2 de detener migración ante historial no determinable sigue vigente.
+
+## Etapa 4.4: integración documental de extremo a extremo
+
+La limitación de 4.3 (navegador con API simulada) queda cubierta por una suite
+adicional real. `bash tests/run-postgres.sh --e2e` reutiliza el runner PostgreSQL 18:
+crea un clúster UTF-8 sin TCP, socket privado y `transporte_test` con `transport_test`.
+La ejecución normal sin argumento conserva PHPUnit. No se cambia ningún esquema,
+contrato, dependencia, regla de negocio ni código de producción del módulo.
+
+Instrumentación exclusivamente en `tests/E2E/`, fuera del directorio público:
+
+- `bootstrap.php` exige la marca de aislamiento, ruta canónica del clúster temporal,
+  directorio de datos y workspace derivado. Antes de migrar o atender HTTP verifica
+  configuración efectiva y `current_database`, `current_user`, versión mayor 18.
+  Conserva únicamente `pgsql_testing`, sin conexiones secundarias ni DB_URL.
+  Evita leer `.env` y configuración/rutas/eventos cacheados del desarrollo;
+  genera clave efímera y usa almacenamiento, vistas, logs y caché bajo el clúster.
+- `console.php` aplica las migraciones aprobadas únicamente después de esa guardia,
+  crea usuarios/flota/tipos sintéticos, inspecciona filas y hashes de archivos,
+  controla el reloj de dominio y la caducidad de sesiones, ejerce restricciones y
+  la recuperación manual. No expone endpoints de prueba.
+- `server.php` ejecuta el kernel HTTP y rutas reales de Laravel con CSRF activo;
+  sirve los artefactos Vite compilados. PHP usa cuatro workers y sesiones database
+  en la misma base temporal. El filesystem privado es real, compartido entre esos
+  workers y separado del almacenamiento del entorno de desarrollo.
+- `network.py` transmite las peticiones y respuestas reales por un proxy localhost
+  de biblioteca estándar. Conserva íntegros los bytes multipart. Para una prueba
+  puede retirar metadatos de origen, dirigir una descarga a un UUID inexistente o
+  cerrar la conexión después de recibir un 201 real de Laravel. No genera ni
+  reemplaza payloads de API; no hay `route.fulfill`, Storage::fake ni SQLite.
+- `test_document_module.py` controla Chromium/Playwright ya instalados, utiliza Vue
+  y las cookies reales y guarda capturas y trazas por prueba. Cierra navegador,
+  servidor/proxy y workers; el runner detiene PostgreSQL incluso ante fallos.
+  Los artefactos sintéticos quedan bajo `/tmp/transporte-tests-*/e2e/` para revisión.
+
+Las 14 pruebas reales cubren acceso/cierre, administrador/secretaria, rechazo de
+conductor/mecánico y anónimos, consulta/escritura de tipos por rol, PDF/JPG/PNG en
+cabezales/cisternas, renovación, una sola referencia actual, historial completo,
+configuración congelada y descarga binaria autorizada. SQL y hashes demuestran que
+renovar/cambiar requisitos no edita documentos anteriores ni sobrescribe archivos.
+Un archivo de exactamente 10.000.000 bytes llega al disco real; uno mayor y otros
+contenidos inválidos se rechazan con 422 sin registros/recibos pendientes.
+
+El reloj de `CarbonImmutable` se fija solo en el bootstrap de prueba: 05:59:59 UTC
+corresponde a 23:59:59 America/Costa_Rica del día anterior. Se ejercitan +15, +16 y
+0 días, paso a 06:00:00 UTC (medianoche local), vencidos, sin vencimiento y requisitos
+faltantes. Se mantiene el timestamp de registro generado por PostgreSQL. La sesión
+usa el reloj real; para comprobar caducidad se envejece `sessions.last_activity`
+después de finalizar lecturas que podrían renovarla legítimamente.
+
+Laravel 13 acepta `Sec-Fetch-Site: same-origin` o un token CSRF válido como parte
+de su protección existente. Las pruebas conservan ese comportamiento: verifican
+401 por sesión caducada y 419 mediante peticiones sin origen válido ni token.
+La interfaz conserva entradas/archivo y necesita actualización manual de CSRF,
+sin reenvío automático. No se deshabilita middleware ni se cambia autorización.
+
+Ante red interrumpida antes del envío se comprueba el estado real de PostgreSQL,
+sin inferirlo solo del error. Ante respuesta perdida tras una renovación confirmada,
+el proxy ve 201, el navegador recibe fallo de conexión y la inspección confirma dos
+versiones, una referencia actual y ambos archivos intactos. La interfaz no reintenta;
+tras cancelar y actualizar se consulta la versión confirmada. No se añade una regla
+nueva de idempotencia: reenviar deliberadamente sigue creando otra versión.
+
+Dos renovaciones HTTP de sesiones independientes se solapan con una barrera de
+advisory lock; las lecturas ven la referencia anterior durante el bloqueo y después
+hay una sola referencia actual y tres versiones/archivos intactos. Se induce también
+un rechazo de persistencia real desde el servicio de aplicación y se verifica rollback
+y compensación del archivo nuevo. La recuperación manual procesa recibos reales
+históricos/huérfanos y es repetible. Se reutilizan las pruebas PHPUnit de conexiones
+independientes para espera SQL, snapshots inmutables, fallos parciales y recuperación
+diferida ante transacciones abiertas; no se reemplazan por simulación del servidor.
+
+Validación separada: PHPUnit sobre PostgreSQL 18 aislado, 14 pruebas UI con API
+simulada (`npm run test:frontend`) y 14 E2E reales (`bash tests/run-postgres.sh --e2e`),
+además de tipos, build, Pint y diff. La suite E2E necesita los artefactos de
+`npm run build`, sin Vite dev activo, PHP, binarios PostgreSQL 18, Python/Playwright
+y Chromium disponibles. No instala nada ni despliega; valida el stack local con
+HTTP/Chromium y filesystem, no TLS/proxy/almacenamiento de producción ni otros
+navegadores. No se inicia Transporte y Despacho.
+
+Resultados finales 4.4: 96 pruebas PHPUnit y 1.113 aserciones, 14 pruebas UI simuladas
+y 14 E2E reales correctas; typecheck, build, Pint y diff correctos. Clúster E2E
+`/tmp/transporte-tests-FdqbHi` detenido; trazas/capturas bajo `e2e/browser/`. Informe
+completo y comando reproducible en `docs/etapa-4-4.md`.
