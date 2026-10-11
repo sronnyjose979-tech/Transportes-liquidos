@@ -97,6 +97,10 @@ class FleetIntegrityTest extends PostgresTestCase
 
     public function test_capacity_and_codes_are_protected_by_database_constraints(): void
     {
+        $column = DB::selectOne("SELECT data_type, numeric_precision, numeric_scale FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'compartments' AND column_name = 'capacity_liters'");
+        $this->assertSame('numeric', $column->data_type);
+        $this->assertSame(12, $column->numeric_precision);
+        $this->assertSame(2, $column->numeric_scale);
         $asset = $this->tanker(true);
         $other = $this->tanker();
         $this->validateDeferred();
@@ -143,6 +147,39 @@ class FleetIntegrityTest extends PostgresTestCase
         return new PDO('pgsql:host='.$config['host'].';port='.$config['port'].';dbname='.$config['database'], $config['username'], $config['password'], [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
     }
 
+    public function test_invalid_aggregates_fail_at_real_commit_and_leave_no_rows(): void
+    {
+        $connection = $this->independentConnection();
+        try {
+            foreach (['tractor_unit', 'tanker'] as $type) {
+                $id = (string) Str::uuid();
+                $connection->beginTransaction();
+                $statement = $connection->prepare('INSERT INTO fleet_assets (id, code, type) VALUES (?, ?, ?)');
+                $statement->execute([$id, 'COMMIT-'.$id, $type]);
+                if ($type === 'tanker') {
+                    $statement = $connection->prepare('INSERT INTO tankers (fleet_asset_id, has_physical_partitions) VALUES (?, true)');
+                    $statement->execute([$id]);
+                }
+                try {
+                    // No SET CONSTRAINTS: test the deferred triggers at COMMIT itself.
+                    $connection->commit();
+                    $this->fail('Un agregado incompleto no puede confirmarse.');
+                } catch (PDOException $exception) {
+                    $this->assertSame('23514', $exception->getCode());
+                    if ($connection->inTransaction()) {
+                        $connection->rollBack();
+                    }
+                }
+                $this->assertDatabaseMissing('fleet_assets', ['id' => $id]);
+                $this->assertDatabaseMissing('tankers', ['fleet_asset_id' => $id]);
+            }
+        } finally {
+            if ($connection->inTransaction()) {
+                $connection->rollBack();
+            }
+        }
+    }
+
     public function test_concurrent_child_writers_serialize_and_obsolete_snapshots_abort(): void
     {
         $asset = $this->tanker(true, 2);
@@ -176,6 +213,18 @@ class FleetIntegrityTest extends PostgresTestCase
                 $this->fail('Un snapshot obsoleto no puede eliminar el último compartimento.');
             } catch (PDOException $exception) {
                 $this->assertSame('40001', $exception->getCode());
+                if ($second->inTransaction()) {
+                    $second->rollBack();
+                }
+            }
+            $this->assertSame(1, DB::table('compartments')->where('tanker_id', $asset->id)->count());
+            $second->beginTransaction(); // Default READ COMMITTED sees the first writer's commit.
+            try {
+                $second->exec("DELETE FROM compartments WHERE id = '{$ids[1]}'");
+                $second->commit();
+                $this->fail('Eliminar el último compartimento debe fallar al confirmar.');
+            } catch (PDOException $exception) {
+                $this->assertSame('23514', $exception->getCode());
                 if ($second->inTransaction()) {
                     $second->rollBack();
                 }

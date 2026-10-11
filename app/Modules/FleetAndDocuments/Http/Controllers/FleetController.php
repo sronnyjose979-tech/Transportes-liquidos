@@ -8,6 +8,7 @@ use App\Modules\FleetAndDocuments\Http\Requests\FleetAssetRequest;
 use App\Modules\FleetAndDocuments\Http\Resources\FleetAssetResource;
 use App\Modules\FleetAndDocuments\Models\FleetAsset;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -17,7 +18,8 @@ abstract class FleetController extends Controller
 
     private function units(): Builder
     {
-        return FleetAsset::query()->where('type', $this->assetType())->with('tanker.compartments');
+        return FleetAsset::query()->where('type', $this->assetType())
+            ->with(['tanker.compartments' => fn (HasMany $query) => $query->withTankerCapacity()]);
     }
 
     public function index(Request $request): JsonResponse

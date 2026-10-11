@@ -7,6 +7,7 @@ use App\Modules\FleetAndDocuments\Models\Compartment;
 use App\Modules\FleetAndDocuments\Models\FleetAsset;
 use App\Modules\FleetAndDocuments\Models\Tanker;
 use App\Modules\FleetAndDocuments\Models\TractorUnit;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
@@ -20,35 +21,14 @@ class FleetAdministration
             return DB::transaction(function () use ($actor, $type, $data, $id): FleetAsset {
                 DB::select('SELECT pg_advisory_xact_lock(873210)');
                 Gate::forUser(User::query()->findOrFail($actor->id))->authorize('manage-fleet');
-                if ($id === null) {
-                    $asset = FleetAsset::create(['code' => $data['code'], 'type' => $type, 'service_status' => 'available']);
-                    if ($type === 'tractor_unit') {
-                        TractorUnit::create(['fleet_asset_id' => $asset->id]);
-                    } else {
-                        Tanker::create(['fleet_asset_id' => $asset->id, 'has_physical_partitions' => $data['has_physical_partitions']]);
-                        foreach ($data['compartments'] as $compartment) {
-                            Compartment::create([...$compartment, 'tanker_id' => $asset->id]);
-                        }
-                    }
-                } else {
-                    $asset = FleetAsset::query()->where('type', $type)->lockForUpdate()->findOrFail($id);
-                    if (array_key_exists('code', $data)) {
-                        $asset->code = $data['code'];
-                        $asset->save();
-                    }
-                    foreach ($data['compartments'] ?? [] as $index => $values) {
-                        $compartment = Compartment::query()->where('tanker_id', $asset->id)->lockForUpdate()->find($values['id']);
-                        if ($compartment === null) {
-                            throw ValidationException::withMessages(['compartments.'.$index.'.id' => 'El compartimento no pertenece a esta cisterna.']);
-                        }
-                        $compartment->fill(array_intersect_key($values, array_flip(['code', 'capacity_liters'])))->save();
-                    }
-                }
+                $asset = $id === null
+                    ? $this->createAsset($type, $data)
+                    : $this->updateAsset($type, $data, $id);
                 // Check the entire aggregate before returning a successful HTTP response.
                 DB::statement('SET CONSTRAINTS fleet_asset_integrity, tractor_unit_integrity, tanker_integrity, compartment_integrity IMMEDIATE');
                 DB::statement('SET CONSTRAINTS fleet_asset_integrity, tractor_unit_integrity, tanker_integrity, compartment_integrity DEFERRED');
 
-                return $asset->load('tanker.compartments');
+                return $asset->load(['tanker.compartments' => fn (HasMany $query) => $query->withTankerCapacity()]);
             });
         } catch (QueryException $exception) {
             $state = $exception->errorInfo[0] ?? null;
@@ -61,5 +41,38 @@ class FleetAdministration
             }
             throw $exception;
         }
+    }
+
+    private function createAsset(string $type, array $data): FleetAsset
+    {
+        $asset = FleetAsset::create(['code' => $data['code'], 'type' => $type, 'service_status' => 'available']);
+        if ($type === 'tractor_unit') {
+            TractorUnit::create(['fleet_asset_id' => $asset->id]);
+        } else {
+            Tanker::create(['fleet_asset_id' => $asset->id, 'has_physical_partitions' => $data['has_physical_partitions']]);
+            foreach ($data['compartments'] as $compartment) {
+                Compartment::create([...$compartment, 'tanker_id' => $asset->id]);
+            }
+        }
+
+        return $asset;
+    }
+
+    private function updateAsset(string $type, array $data, string $id): FleetAsset
+    {
+        $asset = FleetAsset::query()->where('type', $type)->lockForUpdate()->findOrFail($id);
+        if (array_key_exists('code', $data)) {
+            $asset->code = $data['code'];
+            $asset->save();
+        }
+        foreach ($data['compartments'] ?? [] as $index => $values) {
+            $compartment = Compartment::query()->where('tanker_id', $asset->id)->lockForUpdate()->find($values['id']);
+            if ($compartment === null) {
+                throw ValidationException::withMessages(['compartments.'.$index.'.id' => 'El compartimento no pertenece a esta cisterna.']);
+            }
+            $compartment->fill(array_intersect_key($values, array_flip(['code', 'capacity_liters'])))->save();
+        }
+
+        return $asset;
     }
 }

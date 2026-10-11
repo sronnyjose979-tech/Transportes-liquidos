@@ -115,7 +115,8 @@ el borrador de docs/ sin aprobar sus demás propuestas:
 Estructura física: app/Modules/FleetAndDocuments/Models contiene los cuatro modelos;
 Http/Requests valida entradas, Http/Resources representa salidas y
 Http/Controllers expone cabezales/cisternas. Application/FleetAdministration
-coordina autorización, transacciones y escritura del agregado. No se crean capas
+coordina autorización, transacciones y escritura del agregado; save() mantiene el
+límite transaccional y delega creación/actualización en dos métodos privados. No se crean capas
 vacías, ni documentos, asignaciones, mantenimiento, despacho o facturación.
 
 Contrato JSON por sesión/CSRF existente, provisionalmente solo administrator activo:
@@ -132,8 +133,14 @@ Contrato JSON por sesión/CSRF existente, provisionalmente solo administrator ac
 type usa los identificadores técnicos tractor_unit/tanker determinados por endpoint.
 Resources devuelven data con id, code, type, service_status; cisternas incluyen
 has_physical_partitions, compartments y total_capacity_liters. Cantidades se
-representan como cadenas decimales con dos posiciones; la suma opera con dígitos
-enteros, sin coma flotante ni desbordamiento de enteros para el total. Listados
+representan como cadenas decimales con dos posiciones. La consulta de carga anticipada
+de compartimentos usa SUM(capacity_liters) OVER (PARTITION BY tanker_id)::text:
+PostgreSQL suma NUMERIC sin limitar el total a NUMERIC(12,2), sin coma flotante.
+Total y detalles provienen de la misma consulta/snapshot; no hay consultas adicionales
+por cisterna ni campo persistido de total. El alias derivado es interno y el Resource
+solo presenta el total de la primera fila (siempre hay al menos un compartimento).
+La ventana repite ese valor en las filas del detalle, con un pequeño coste de transferencia;
+solo procesa los compartimentos de las cisternas cargadas. Listados
 incluyen links/meta. Respuestas privadas llevan no-store. Errores: 401 sin sesión,
 403 sin autorización, 404 para UUID inexistente/tipo distinto, 419 por CSRF y
 422 por validación, unicidad o configuración inválida. No se exponen excepciones SQL.

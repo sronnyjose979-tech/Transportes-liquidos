@@ -4,6 +4,8 @@ namespace Tests\Feature;
 
 use App\Models\User;
 use App\Modules\AccessAndPersonnel\Models\Role;
+use App\Modules\FleetAndDocuments\Application\FleetAdministration;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Tests\PostgresTestCase;
@@ -204,6 +206,103 @@ class FleetApiTest extends PostgresTestCase
         $this->assertDatabaseHas('fleet_assets', ['id' => $tanker['id'], 'code' => 'CAPACITY']);
         $this->getJson('/api/tankers/'.$tanker['id'])->assertOk()->assertJsonPath('data.total_capacity_liters', '3000.31');
         $this->patchJson('/api/tankers/'.$tanker['id'], ['total_capacity_liters' => '1.00'])->assertUnprocessable();
+    }
+
+    public function test_large_total_remains_exact_and_internal_alias_is_not_exposed(): void
+    {
+        $this->actingAs($this->account());
+        $payload = $this->tanker('LARGE', true);
+        $payload['compartments'][0]['capacity_liters'] = '9999999999.99';
+        $payload['compartments'][1]['capacity_liters'] = '9999999999.99';
+        $created = $this->postJson('/api/tankers', $payload)->assertCreated()
+            ->assertJsonPath('data.total_capacity_liters', '19999999999.98');
+        $id = $created->json('data.id');
+        $updated = $this->patchJson('/api/tankers/'.$id, ['code' => 'LARGE-UPDATED'])->assertOk();
+        $shown = $this->getJson('/api/tankers/'.$id)->assertOk();
+        $listed = $this->getJson('/api/tankers')->assertOk();
+        foreach ([$created->json('data'), $updated->json('data'), $shown->json('data'), $listed->json('data.0')] as $asset) {
+            $this->assertSame('19999999999.98', $asset['total_capacity_liters']);
+            $this->assertEqualsCanonicalizing(
+                ['id', 'code', 'type', 'service_status', 'has_physical_partitions', 'total_capacity_liters', 'compartments'],
+                array_keys($asset)
+            );
+            foreach ($asset['compartments'] as $compartment) {
+                $this->assertEqualsCanonicalizing(['id', 'tanker_id', 'code', 'capacity_liters', 'is_active'], array_keys($compartment));
+                $this->assertSame('9999999999.99', $compartment['capacity_liters']);
+            }
+        }
+    }
+
+    public function test_tanker_list_query_count_does_not_grow_with_assets(): void
+    {
+        $this->actingAs($this->account());
+        $this->postJson('/api/tankers', $this->tanker('FIRST', true))->assertCreated();
+        DB::enableQueryLog();
+        try {
+            $counts = [];
+            foreach ([1, 4] as $count) {
+                DB::flushQueryLog();
+                $response = $this->getJson('/api/tankers')->assertOk()->assertJsonCount($count, 'data');
+                $queries = collect(DB::getQueryLog())->filter(fn (array $query): bool => preg_match('/from "(?:fleet_assets|tankers|compartments)"/', $query['query']) === 1
+                );
+                $counts[] = $queries->count();
+                foreach ($response->json('data') as $asset) {
+                    $this->assertSame('11111.04', $asset['total_capacity_liters']);
+                }
+                if ($count === 1) {
+                    for ($index = 2; $index <= 4; $index++) {
+                        $this->postJson('/api/tankers', $this->tanker('T-'.$index, true))->assertCreated();
+                    }
+                }
+            }
+            // Count, assets, tankers, compartments: aggregation adds no round trip.
+            $this->assertSame([4, 4], $counts);
+        } finally {
+            DB::disableQueryLog();
+            DB::flushQueryLog();
+        }
+    }
+
+    public function test_foreign_compartment_rolls_back_asset_and_earlier_compartment_changes(): void
+    {
+        $this->actingAs($this->account());
+        $first = $this->postJson('/api/tankers', $this->tanker('FIRST', true))->assertCreated()->json('data');
+        $second = $this->postJson('/api/tankers', $this->tanker('SECOND'))->assertCreated()->json('data');
+        $own = $first['compartments'][0];
+        $this->patchJson('/api/tankers/'.$first['id'], [
+            'code' => 'ROLLBACK',
+            'compartments' => [
+                ['id' => $own['id'], 'code' => 'CHANGED', 'capacity_liters' => '0.01'],
+                ['id' => $second['compartments'][0]['id'], 'code' => 'FOREIGN'],
+            ],
+        ])->assertUnprocessable()->assertJsonValidationErrors('compartments.1.id');
+        $this->assertDatabaseHas('fleet_assets', ['id' => $first['id'], 'code' => 'FIRST']);
+        $this->assertDatabaseHas('compartments', ['id' => $own['id'], 'code' => $own['code'], 'capacity_liters' => $own['capacity_liters']]);
+        $this->getJson('/api/tankers/'.$first['id'])->assertOk()->assertJsonPath('data.total_capacity_liters', '11111.04');
+    }
+
+    public function test_fleet_service_rechecks_revocation_for_creation_and_update(): void
+    {
+        foreach (['deactivation', 'role-removal'] as $revocation) {
+            $actor = $this->account();
+            $this->actingAs($actor);
+            $asset = $this->postJson('/api/tractor-units', ['code' => $revocation])->assertCreated()->json('data.id');
+            $this->assertTrue($actor->can('manage-fleet'));
+            if ($revocation === 'deactivation') {
+                User::whereKey($actor->id)->update(['is_active' => false]);
+            } else {
+                $actor->roles()->detach();
+            }
+            foreach ([null, $asset] as $id) {
+                try {
+                    app(FleetAdministration::class)->save($actor, 'tractor_unit', ['code' => 'DENIED'], $id);
+                    $this->fail('Una autorización anterior no permite escribir tras revocación.');
+                } catch (AuthorizationException $exception) {
+                    $this->assertDatabaseMissing('fleet_assets', ['code' => 'DENIED']);
+                    $this->assertDatabaseHas('fleet_assets', ['id' => $asset, 'code' => $revocation]);
+                }
+            }
+        }
     }
 
     public function test_fleet_writes_require_csrf_for_real_requests(): void
