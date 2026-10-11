@@ -80,4 +80,19 @@ class Trip extends Model
     {
         return $this->hasMany(TransportAuthorizationRequest::class);
     }
+
+    public function assetAssignments(): HasMany
+    {
+        return $this->hasMany(TripAssetAssignment::class);
+    }
+
+    public function driverAssignments(): HasMany
+    {
+        return $this->hasMany(DriverAssignment::class);
+    }
+
+    public function assignmentOperations(): HasMany
+    {
+        return $this->hasMany(TransportAssignmentOperation::class);
+    }
 }

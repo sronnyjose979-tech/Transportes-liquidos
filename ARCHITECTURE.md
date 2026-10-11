@@ -628,3 +628,30 @@ No se añaden asignaciones ni liberaciones; 5.2B continúa fuera de alcance.
 TransportInformationRecordsTest añade cuatro pruebas. Suite completa: 127 pruebas,
 1.295 aserciones correctas, PostgreSQL 18 temporal; Pint --test y diff correctos.
 Detalles y límites de reversión/despliegue en docs/etapa-5-2a.md.
+
+## Etapa 5.2B: asignaciones y disponibilidad efectiva
+
+Base 524fad0. Nuevas migraciones 000120/000130 incorporan asignaciones de activos y
+conductores, liberaciones separadas, operaciones/conflictos inmutables y guard de
+serialización. Detalles y límites en [docs/etapa-5-2b.md](docs/etapa-5-2b.md).
+No se modifican migraciones publicadas, catálogos, producto histórico ni funciones 4.4.
+
+Current deriva de ausencia de liberación; cancelar/finalizar/cerrar/programación no
+liberan. in_progress exige un recurso vigente por función. Liberación individual válida
+en planificación/estados terminales; sustitución activa debe preservar cardinalidad.
+Empleado activo + cuenta activa + rol driver; activo de tipo correcto con servicio available.
+Excepciones de ocupación no dispensan elegibilidad ni garantizan disponibilidad física.
+
+AssignmentAdministration coordina transacciones y permisos vigentes. Decisiones reutilizan
+5.2A; aplicaciones tienen XOR de cambio/operación. Aprobación administrativa específica,
+contenido y ocupantes exactos, consumo único. Sustituciones de cabezal/conductor atómicas;
+si hay ocupación adicional se requieren las dos aprobaciones. Cisterna excluida mientras
+D05 no defina comprobación de estado vacío; no se inventa evidencia ni trasvase.
+
+Se comparte lock 873210 y se escribe guard para invalidar snapshots obsoletos. PostgreSQL
+protege integridad incluso ante SQL directo; tests comprueban concurrencia READ COMMITTED
+y REPEATABLE READ con conexiones independientes. La migración se detiene ante viajes ya
+in_progress sin historia verificable, sin inventar recursos. Sin frontend, API ni 5.3.
+
+Validación: 144 pruebas y 1.436 aserciones correctas en PostgreSQL 18 aislado; 17 nuevas.
+Pint --test y git diff --check correctos. No se migra transporte_db ni se instalan dependencias.

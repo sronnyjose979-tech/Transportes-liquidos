@@ -3,7 +3,10 @@
 namespace Tests\Support;
 
 use App\Models\User;
+use App\Modules\AccessAndPersonnel\Models\Employee;
 use App\Modules\AccessAndPersonnel\Models\Role;
+use App\Modules\FleetAndDocuments\Application\FleetAdministration;
+use App\Modules\TransportAndDispatch\Application\AssignmentAdministration;
 use App\Modules\TransportAndDispatch\Models\Customer;
 use App\Modules\TransportAndDispatch\Models\LiquidProduct;
 use App\Modules\TransportAndDispatch\Models\OperationSite;
@@ -18,6 +21,7 @@ use App\Modules\TransportAndDispatch\Models\TripProductReview;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 trait TransportFixtures
 {
@@ -55,6 +59,9 @@ trait TransportFixtures
     protected function change(Model $target, array $data, ?User $actor = null): TransportChange
     {
         $actor ??= User::findOrFail($target->registered_by_id);
+        if ($target instanceof Trip && ($data['execution_status'] ?? null) === 'in_progress') {
+            $this->ensureAssignments($target);
+        }
         $before = $this->row($target);
         $target->forceFill($data + ['version' => $before['version'] + 1])->save();
         $after = $this->row($target);
@@ -118,6 +125,30 @@ trait TransportFixtures
             $this->fail('La escritura debía rechazarse.');
         } catch (QueryException $exception) {
             $this->assertContains($exception->errorInfo[0], (array) $states);
+        }
+    }
+
+    protected function assignmentResources(): array
+    {
+        $admin = $this->actor();
+        $fleet = app(FleetAdministration::class);
+        $tractor = $fleet->save($admin, 'tractor_unit', ['code' => (string) Str::uuid()]);
+        $tanker = $fleet->save($admin, 'tanker', ['code' => (string) Str::uuid(), 'has_physical_partitions' => false,
+            'compartments' => [['code' => 'A', 'capacity_liters' => '1000', 'is_active' => true]]]);
+        $employee = Employee::create(['name' => 'Conductor sintético', 'is_active' => true, 'user_id' => $this->actor('driver')->id]);
+
+        return ['driver' => $employee, 'tractor_unit' => $tractor, 'tanker' => $tanker];
+    }
+
+    protected function ensureAssignments(Trip $trip): void
+    {
+        $service = app(AssignmentAdministration::class);
+        $resources = $this->assignmentResources();
+        foreach ($resources as $kind => $resource) {
+            $query = $kind === 'driver' ? $trip->driverAssignments()->current() : $trip->assetAssignments()->current()->where('asset_type', $kind);
+            if (! $query->exists()) {
+                $service->assign($trip->registeredBy, $trip->id, $kind, $resource->id, 'Preparación de fixture activo');
+            }
         }
     }
 }
