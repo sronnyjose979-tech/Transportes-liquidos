@@ -655,3 +655,32 @@ in_progress sin historia verificable, sin inventar recursos. Sin frontend, API n
 
 Validación: 144 pruebas y 1.436 aserciones correctas en PostgreSQL 18 aislado; 17 nuevas.
 Pint --test y git diff --check correctos. No se migra transporte_db ni se instalan dependencias.
+
+## Etapa 5.3 — Operaciones de viajes y finalización oficial
+
+Base 3453808. Tres migraciones nuevas 000140/000150/000160, cinco modelos operativos y
+TripOperations coordinan inicio, carga/descarga y detalles por compartimento, reportes
+del conductor asignado, lecturas/correcciones inmutables y finalización oficial D02.
+Sin frontend ni API. Diseño, contratos y límites: [docs/etapa-5-3.md](docs/etapa-5-3.md).
+
+Litros NUMERIC(15,2), capacidad/código capturados desde flota, producto obtenido del Trip
+histórico, actor/fecha/evidencia y unicidad de operaciones. Descarga conserva la capacidad
+histórica; cero comunicado se distingue de ausencia. Lecturas conservan precisión reportada
+y trazabilidad por cabezal; distancia por tramo sin compensación inventada de reinicio.
+
+Se reutilizan auditoría, lock/guard y autorizaciones existentes. Finalizar requiere inicio,
+asignaciones históricas válidas, carga/descarga y cobertura de cada detalle. Cualquier
+diferencia por compartimento, incluso con totales iguales, exige autorización exclusiva
+del administrador con contenido/versión exactos y consumo único. Fecha/actor/auditoría y
+aplicación son atómicos; SQL protege cobertura y diferencias ante escrituras directas.
+Las finalizaciones previas no se reconstruyen ni invalidan durante correcciones ajenas.
+
+Planificación, ejecución y cierre permanecen separados. Reporte del conductor opcional;
+no finaliza ni se exige evidencia adicional. Recursos nunca se liberan automáticamente.
+RN-TR-17 y comprobación de cisterna vacía D05 siguen excluidos; no se avanza a 5.4.
+
+Validación: 170 pruebas y 1.574 aserciones correctas en PostgreSQL 18 aislado, Pint --test
+y git diff --check correctos. Tres suites nuevas cubren reglas, roles, SQL y concurrencia.
+Fixtures de estados históricos incorporan operaciones reales para respetar D02; el test
+de TRUNCATE de compartimentos conserva rechazo, ahora por FK 0A000. No se migró
+transporte_db ni se modificaron migraciones publicadas o dependencias.

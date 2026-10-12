@@ -7,6 +7,7 @@ use App\Modules\AccessAndPersonnel\Models\Employee;
 use App\Modules\AccessAndPersonnel\Models\Role;
 use App\Modules\FleetAndDocuments\Application\FleetAdministration;
 use App\Modules\TransportAndDispatch\Application\AssignmentAdministration;
+use App\Modules\TransportAndDispatch\Application\TripOperations;
 use App\Modules\TransportAndDispatch\Models\Customer;
 use App\Modules\TransportAndDispatch\Models\LiquidProduct;
 use App\Modules\TransportAndDispatch\Models\OperationSite;
@@ -18,6 +19,7 @@ use App\Modules\TransportAndDispatch\Models\TransportChange;
 use App\Modules\TransportAndDispatch\Models\TransportRequest;
 use App\Modules\TransportAndDispatch\Models\Trip;
 use App\Modules\TransportAndDispatch\Models\TripProductReview;
+use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
@@ -59,8 +61,12 @@ trait TransportFixtures
     protected function change(Model $target, array $data, ?User $actor = null): TransportChange
     {
         $actor ??= User::findOrFail($target->registered_by_id);
-        if ($target instanceof Trip && ($data['execution_status'] ?? null) === 'in_progress') {
+        if ($target instanceof Trip && in_array($data['execution_status'] ?? null, ['in_progress', 'completed'], true)) {
             $this->ensureAssignments($target);
+        }
+        if ($target instanceof Trip && ($data['execution_status'] ?? null) === 'completed'
+            && isset($data['officially_completed_at']) && ! $target->tripLoad()->exists()) {
+            $this->operationalRecords($target);
         }
         $before = $this->row($target);
         $target->forceFill($data + ['version' => $before['version'] + 1])->save();
@@ -70,6 +76,17 @@ trait TransportFixtures
             'trip_id' => $target instanceof Trip ? $target->id : null, 'action' => 'correction', 'before_values' => $before,
             'after_values' => $after, 'from_version' => $before['version'], 'to_version' => $after['version'],
             'actor_id' => $actor->id, 'reason' => 'Corrección sintética']);
+    }
+
+    protected function operationalRecords(Trip $trip): void
+    {
+        $service = app(TripOperations::class);
+        $assignment = $trip->assetAssignments()->current()->where('asset_type', 'tanker')->firstOrFail();
+        $compartment = $assignment->fleetAsset->tanker->compartments->first();
+        $load = $service->load($trip->registeredBy, $trip->id, $trip->transportRequest->route->origin_site_id,
+            [$compartment->id => '100.00'], CarbonImmutable::now(), 'Fixture de carga');
+        $service->unload($trip->registeredBy, $trip->id, $trip->transportRequest->route->destination_site_id,
+            [$load->items->first()->id => '100.00'], CarbonImmutable::now(), 'Fixture de descarga');
     }
 
     protected function intent(TransportRequest $request, LiquidProduct $product): TransportAuthorizationRequest

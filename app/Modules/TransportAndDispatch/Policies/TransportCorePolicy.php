@@ -3,6 +3,7 @@
 namespace App\Modules\TransportAndDispatch\Policies;
 
 use App\Models\User;
+use App\Modules\TransportAndDispatch\Models\Trip;
 
 class TransportCorePolicy
 {
@@ -14,6 +15,16 @@ class TransportCorePolicy
     public function decide(User $user): bool
     {
         return $this->hasRole($user, ['administrator']);
+    }
+
+    public function report(User $user, Trip $trip): bool
+    {
+        if ($this->manage($user)) {
+            return true;
+        }
+
+        return $this->hasRole($user, ['driver']) && $trip->driverAssignments()->current()
+            ->whereHas('employee', fn ($query) => $query->where('user_id', $user->id)->where('is_active', true))->exists();
     }
 
     private function hasRole(User $user, array $roles): bool

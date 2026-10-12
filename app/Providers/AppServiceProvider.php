@@ -40,6 +40,8 @@ class AppServiceProvider extends ServiceProvider
         }
         Gate::define('decide-transport-authorization', [TransportCorePolicy::class, 'decide']);
         Gate::define('manage-trip-assignments', [TransportCorePolicy::class, 'manage']);
+        Gate::define('manage-trip-operations', [TransportCorePolicy::class, 'manage']);
+        Gate::define('report-trip-information', [TransportCorePolicy::class, 'report']);
         Gate::define('authorize-trip-assignment-exception', [TransportCorePolicy::class, 'decide']);
         $this->commands([BootstrapAdministrator::class, ReconcileDocumentStorage::class]);
         RateLimiter::for('login', fn (Request $request) => Limit::perMinute(5)->by($request->ip())

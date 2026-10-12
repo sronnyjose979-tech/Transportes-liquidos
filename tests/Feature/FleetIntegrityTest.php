@@ -134,7 +134,8 @@ class FleetIntegrityTest extends PostgresTestCase
     {
         $asset = $this->tanker();
         $this->validateDeferred();
-        $this->rejects(fn () => DB::statement('TRUNCATE compartments'));
+        // Load history now references compartments; PostgreSQL rejects before row triggers.
+        $this->rejects(fn () => DB::statement('TRUNCATE compartments'), '0A000');
         $this->rejects(fn () => DB::statement('TRUNCATE tractor_units'));
         $this->rejects(fn () => DB::statement('TRUNCATE tankers CASCADE'));
         $this->assertSame(1, $asset->tanker->compartments()->count());

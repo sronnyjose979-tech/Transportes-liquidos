@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Trip extends Model
 {
@@ -94,5 +95,20 @@ class Trip extends Model
     public function assignmentOperations(): HasMany
     {
         return $this->hasMany(TransportAssignmentOperation::class);
+    }
+
+    public function tripLoad(): HasOne
+    {
+        return $this->hasOne(TripLoad::class);
+    }
+
+    public function unload(): HasOne
+    {
+        return $this->hasOne(TripUnload::class);
+    }
+
+    public function odometerReadings(): HasMany
+    {
+        return $this->hasMany(TripOdometerReading::class);
     }
 }

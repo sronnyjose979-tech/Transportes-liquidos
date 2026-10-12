@@ -14,7 +14,7 @@ class TransportAuthorizationApplication extends Model
 
     public $timestamps = false;
 
-    protected $fillable = ['decision_id', 'change_id', 'operation_id', 'applied_by_id'];
+    protected $fillable = ['decision_id', 'change_id', 'operation_id', 'validation_type', 'applied_by_id'];
 
     protected function casts(): array
     {

@@ -317,7 +317,7 @@ u otros contratos aún no definidos; no reabren permisos ya confirmados.
 | ID | Prioridad | Decisión necesaria | Impacto |
 | --- | --- | --- | --- |
 | D01 | Alta, negocio RN-TR-17 | Conducta ante permiso obligatorio ausente, actor y evidencia si corresponde. No elegir bloqueo/aviso/excepción. | Flujo dependiente de permiso. |
-| D02 | Alta | Requisitos completos de carga/descarga/finalización; producto aplicable en pendientes e iniciados sin carga; cancelación de completados; cierre de cancelados resuelto por aclaración posterior. | Estados, snapshot, nulabilidad y confirmaciones. |
+| D02 | Alta | Finalización y cobertura de carga/descarga resueltas por aclaración 5.3 al final de este documento. Siguen pendientes producto aplicable en pendientes/iniciados sin carga y cancelación de completados; cierre de cancelados ya resuelto. | Estados, snapshot, nulabilidad y confirmaciones. |
 | D03 | Alta | Modelo comercial/unidad, moneda, precisión, origen y fecha de efecto de precio acordado; no fórmula fija. | Precio y revisiones, sin facturación. |
 | D04 | Alta, técnica | Aprobar rol driver como identificación de conductor o definición laboral distinta; continuidad tras desactivación. | Elegibilidad sin cambiar regla cuenta/empleado activo. |
 | D05 | Alta | Evidencia y validación de cisterna vacía para sustitución; intervalos efectivos. | RN-TR-13, sin permitir trasvase rutinario. |
@@ -357,3 +357,22 @@ con cinco migraciones nuevas, tres dimensiones de estado y NUMERIC(15,2).
 Ver [etapa-5-2a.md](etapa-5-2a.md) para lo efectivamente implementado y sus límites.
 Las propuestas de asignaciones, conflictos, liberaciones y sustituciones son 5.2B,
 todavía sin autorización; el resto de operaciones futuras no se consideran implementadas.
+
+
+## Aclaración aprobada de D02 — Finalización oficial (etapa 5.3)
+
+La aprobación posterior del usuario resuelve los requisitos de finalización de D02:
+
+- Inicio oficial registrado y asignaciones históricas válidas de conductor, cabezal y cisterna.
+- Una carga y una descarga con fecha, lugar, responsable y cantidades reales en litros.
+- Cada detalle cargado tiene descarga para el mismo compartimento, incluso si entrega cero.
+- Cualquier diferencia exige autorización administrativa específica RN-TR-10; no se exige igualdad.
+- Secretaria o administrador confirma oficialmente con actor, fecha y auditoría.
+- Reporte del conductor opcional; nunca constituye finalización oficial.
+- Finalizar no libera conductor, cabezal ni cisterna.
+- No se agregan documentos obligatorios; se conservan evidencias adjuntas cuando existen.
+- RN-TR-17 permanece pendiente y la sustitución de cisterna continúa bloqueada por D05.
+
+Esta aclaración no resuelve los otros temas que se agrupaban bajo D02 (por ejemplo,
+revisión de producto o cancelación posterior de completados), ni cambia RN-TR-01 a
+RN-TR-39 o RN-SEG-01. Detalles técnicos: [etapa-5-3.md](etapa-5-3.md).
