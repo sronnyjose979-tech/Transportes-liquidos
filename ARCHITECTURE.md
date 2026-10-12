@@ -684,3 +684,34 @@ y git diff --check correctos. Tres suites nuevas cubren reglas, roles, SQL y con
 Fixtures de estados históricos incorporan operaciones reales para respetar D02; el test
 de TRUNCATE de compartimentos conserva rechazo, ahora por FK 0A000. No se migró
 transporte_db ni se modificaron migraciones publicadas o dependencias.
+
+## Etapa 5.4 — API REST de Transporte y Despacho
+
+37 rutas bajo /api/transport reutilizan sesión, CSRF, cuenta activa y auth.session.
+Administrator/secretary gestionan el núcleo; decisiones solo administrator y reportes
+propios solo driver elegible/asignado. Detalle, listados e historias usan Resources con
+campos explícitos y paginación, sin cuentas completas ni referencias privadas de archivos.
+Contratos completos: [docs/etapa-5-4.md](docs/etapa-5-4.md).
+
+TransportAdministration coordina solicitudes, creación, programación, cancelación, cierre
+con advertencias y decisiones. TripOperations y AssignmentAdministration conservan la
+operación de 5.2B/5.3. Versiones obligatorias para modificar raíces, auditoría exacta,
+lock/guard existentes y comprobaciones diferidas son atómicos. Disponibilidad informativa;
+AssignmentAvailability revalida recursos y ocupación efectiva, también al reprogramar.
+No se transforma programación en reserva física ni se reutilizan autorizaciones.
+
+Migración correctiva 000170 refuerza finalización: inicio oficial auditado y vínculo
+correcto de cisterna/carga/operación, evitando usar solo historia antigua liberada.
+No modifica migraciones publicadas, tablas ni producto histórico. Las correcciones de
+finalizaciones anteriores siguen conservándose. Regresiones SQL y HTTP verifican carga
+de otro viaje, consumo único y ausencia de efectos parciales.
+
+HTTP se organiza en Controllers, Requests y Resources del módulo, routes/transport.php y
+middleware TransportApiErrors. bootstrap/app.php limita la representación segura de errores
+PostgreSQL a esta API; 409 para concurrencia/versiones/ocupación, 422 para integridad.
+Fechas HTTP requieren ISO 8601 con offset explícito y se conserva el instante en UTC.
+No se añaden frontend, dependencias, almacenamiento público, facturación o políticas pendientes.
+
+Validación: 189 pruebas y 1.797 aserciones correctas en PostgreSQL 18 aislado (19 nuevas),
+Pint --test y git diff --check correctos. Concurrencia HTTP con dos conexiones reales;
+sin API simulada, nuevas dependencias, migraciones en transporte_db ni avance de etapa.

@@ -94,6 +94,9 @@ class AssignmentAdministration
                 if ($action === 'substitute' && $kind === 'tanker') {
                     throw ValidationException::withMessages(['assignment' => 'La sustitución de cisterna requiere definir cómo comprobar que está vacía.']);
                 }
+                if ($action !== 'release' && ! app(AssignmentAvailability::class)->inspect($kind, $resourceId)['eligible']) {
+                    throw ValidationException::withMessages(['resource_id' => 'El conductor o activo no es elegible para esta función.']);
+                }
                 $column = $kind === 'driver' ? 'employee_id' : 'fleet_asset_id';
                 if ($action === 'substitute' && $previous->{$column} === $resourceId) {
                     throw ValidationException::withMessages(['assignment' => 'El recurso sustituto debe ser distinto.']);
@@ -148,7 +151,7 @@ class AssignmentAdministration
         }
         if ($result['error']) {
             // Persist the detected conflict before reporting the rejected mutation.
-            throw ValidationException::withMessages(['assignment' => 'Recurso ocupado. Conflicto registrado: '.$result['operation']->id]);
+            throw ValidationException::withMessages(['assignment' => 'Recurso ocupado. Conflicto registrado: '.$result['operation']->id])->status(409);
         }
 
         return $result['record'];

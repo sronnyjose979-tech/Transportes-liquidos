@@ -1,7 +1,9 @@
 <?php
 
 use App\Modules\AccessAndPersonnel\Http\Middleware\EnsureActiveAccount;
+use App\Modules\TransportAndDispatch\Http\Middleware\TransportApiErrors;
 use Illuminate\Contracts\Session\Middleware\AuthenticatesSessions;
+use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -21,6 +23,13 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->redirectGuestsTo(fn (Request $request) => $request->is('api/*') ? null : '/');
     })
     ->withExceptions(function (Exceptions $exceptions): void {
+        $exceptions->render(function (QueryException $exception, Request $request) {
+            if ($request->is('api/transport/*')) {
+                return TransportApiErrors::databaseError($exception);
+            }
+
+            return null;
+        });
         $exceptions->shouldRenderJsonWhen(
             fn (Request $request) => $request->is('api/*') || $request->expectsJson(),
         );

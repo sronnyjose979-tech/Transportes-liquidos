@@ -117,6 +117,7 @@ trait TransportFixtures
     protected function closedTrip(): Trip
     {
         $trip = $this->trip($this->request());
+        $this->change($trip, ['execution_status' => 'in_progress', 'officially_started_at' => '2026-10-11T12:00:00Z', 'started_by_id' => $trip->registered_by_id]);
         $this->change($trip, ['execution_status' => 'completed', 'administrative_status' => 'closed',
             'officially_started_at' => '2026-10-11T12:00:00Z', 'started_by_id' => $trip->registered_by_id,
             'officially_completed_at' => '2026-10-12T12:00:00Z', 'completed_by_id' => $trip->registered_by_id,

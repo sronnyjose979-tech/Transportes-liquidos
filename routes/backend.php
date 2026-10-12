@@ -20,6 +20,7 @@ Route::prefix('api')->group(function () {
     Route::get('csrf', fn () => response()->noContent()->header('Cache-Control', 'no-store'));
     Route::post('login', [SessionController::class, 'store'])->middleware('throttle:login');
     Route::middleware(['auth', EnsureActiveAccount::class, 'auth.session'])->group(function () {
+        require __DIR__.'/transport.php';
         Route::get('session', [SessionController::class, 'show']);
         Route::post('logout', [SessionController::class, 'destroy']);
         Route::middleware('can:manage-fleet-documents')->name('fleet.documents.')->group(function () {

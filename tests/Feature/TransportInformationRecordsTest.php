@@ -36,7 +36,7 @@ class TransportInformationRecordsTest extends PostgresTestCase
         $this->change($trip, ['scheduled_start_at' => '2026-10-10T12:00:00Z']);
         $this->checkConstraints();
         $this->assertSame('Información pendiente', $warning->fresh()->evidence['detail']);
-        $this->assertSame(2, $warning->closure_version);
+        $this->assertSame(3, $warning->closure_version);
         $this->assertTrue($resolution->warning->is($warning));
         $this->assertSame(1, $warning->resolutions()->count());
         $this->assertSame('closed', $trip->fresh()->administrative_status);

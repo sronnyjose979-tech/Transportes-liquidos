@@ -35,7 +35,7 @@ class TransportHistoryIntegrityTest extends PostgresTestCase
         $change = $this->change($trip, ['scheduled_start_at' => '2026-10-10T12:00:00Z'], $secretary);
         $this->checkConstraints();
         $this->assertSame('closed', $trip->fresh()->administrative_status);
-        $this->assertSame(2, $trip->changes()->count());
+        $this->assertSame(3, $trip->changes()->count());
         $this->rejected(fn () => DB::table('transport_changes')->where('id', $change->id)->update(['reason' => 'Rewrite']));
         $this->rejected(fn () => DB::table('transport_changes')->where('id', $change->id)->delete());
         $this->expectException(LogicException::class);
