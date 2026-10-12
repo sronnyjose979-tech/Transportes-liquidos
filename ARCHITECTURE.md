@@ -764,3 +764,24 @@ informa la recuperación y nombra el selector de historial; OdometerPanel limpia
 cambiar el tramo. Se conservan estados, asignaciones, permisos, CSRF y estilo actuales.
 Detalles, comandos, resultados y límites en [docs/etapa-5-6.md](docs/etapa-5-6.md).
 RN-TR-17, D05 y demás decisiones pendientes no se resuelven; no se declara aptitud productiva.
+
+## Taller Mecánico — análisis 6.1, sin implementación
+
+Workshop está previsto conceptualmente; todavía no tiene código ni esquema propio.
+[docs/REGLAS_TALLER_MECANICO.md](docs/REGLAS_TALLER_MECANICO.md) conserva las 28 RN
+aprobadas. [docs/etapa-6-1.md](docs/etapa-6-1.md) documenta actores, permisos, estados,
+flujos, aceptación y decisiones abiertas. Prevalece una reparación/servicio por orden
+sobre WorkOrder/WorkTask del borrador histórico. No se aprueban tablas o APIs en 6.1.
+
+La futura integración reutiliza FleetAsset y AssignmentAvailability: ingreso por avería
+bloquea nuevas asignaciones, conserva viajes/recursos existentes y genera advertencias.
+Terminar/cerrar/cancelar órdenes no desbloquea; salida requiere administrador y revisión
+de todos los impedimentos. Service_status aislado no acredita dicha revisión. Diseño
+transaccional/proyección de impedimentos y políticas concretas requieren revisión en 6.2.
+
+User/Employee/Role, SparePart y Supplier son reutilizables. Inventario/Compras solo tienen
+catálogos; no hay movimientos o compras reales para simular. Autorizaciones/auditoría y
+almacenamiento privado de Transporte/Flota sirven como patrones, pero sus clases están
+acopladas a sus entidades y no se presentan como servicios genéricos de Taller.
+No se modifican módulos existentes; cierre versus terminación, ampliaciones, preventivos,
+urgencias y precisiones de actores/disponibilidad continúan documentadas como pendientes.
