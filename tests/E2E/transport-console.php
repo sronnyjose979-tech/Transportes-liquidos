@@ -9,7 +9,9 @@ use App\Modules\TransportAndDispatch\Models\LiquidProduct;
 use App\Modules\TransportAndDispatch\Models\OperationSite;
 use App\Modules\TransportAndDispatch\Models\Route;
 use App\Modules\TransportAndDispatch\Models\Trip;
+use App\Modules\TransportAndDispatch\Models\TripUnload;
 use Illuminate\Contracts\Console\Kernel;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
@@ -21,6 +23,7 @@ $app->make(Kernel::class)->bootstrap();
 $input = json_decode(stream_get_contents(STDIN) ?: '{}', true, flags: JSON_THROW_ON_ERROR);
 $result = match ($argv[1] ?? '') {
     'fixture' => (function (): array {
+        Cache::flush(); // Only the verified temporary E2E file cache, as in the documental fixture.
         $admin = User::where('login', 'e2e-administrator')->firstOrFail();
         $tag = 'E2E-'.Str::uuid();
         $driver = new User;
@@ -36,7 +39,17 @@ $result = match ($argv[1] ?? '') {
         $customer = Customer::create(['name' => $tag.'-Cliente']);
         $product = LiquidProduct::create(['name' => $tag.'-Agua', 'is_active' => true]);
 
-        return ['driver' => $employee->id, 'head' => $head->id, 'tank' => $tank->id, 'customer' => $customer->id, 'product' => $product->id, 'route' => $route->id, 'origin' => $origin->id, 'destination' => $destination->id];
+        return ['driver_login' => $driver->login, 'compartment' => $tank->tanker->compartments->first()->id, 'driver' => $employee->id, 'head' => $head->id, 'tank' => $tank->id, 'customer' => $customer->id, 'product' => $product->id, 'route' => $route->id, 'origin' => $origin->id, 'destination' => $destination->id];
+    })(),
+    'partial-unload' => (function () use ($input): array {
+        $trip = Trip::findOrFail($input['trip_id']);
+        $unload = TripUnload::create([
+            'trip_id' => $trip->id, 'trip_load_id' => $trip->tripLoad->id,
+            'operation_site_id' => $trip->transportRequest->route->destination_site_id,
+            'recorded_by_id' => $trip->registered_by_id, 'occurred_at' => now(), 'reason' => 'Cabecera parcial histórica',
+        ])->refresh();
+
+        return ['id' => $unload->id, 'reason' => $unload->reason];
     })(),
     'snapshot' => (function () use ($input): array {
         $trip = Trip::findOrFail($input['trip_id']);

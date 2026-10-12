@@ -122,14 +122,14 @@ onBeforeUnmount(() => { alive = false; controller?.abort(); });
 </div>
 <CommandForm :key="action" v-if="action" :title="actionLabels[action]!" :fields="fields" :submit="save" :disabled="loading"/>
 <CommandForm v-if="difference!==null&&ready&&trip.execution_status==='in_progress'" title="Solicitar autorización de diferencia" :fields="[{key:'reason',label:'Justificación de la diferencia',type:'textarea',required:true}]" :submit="requestDifference" :disabled="loading"/>
-<p v-if="trip.load&&trip.unload&&!ready" class="notice-error">La operación registrada está incompleta. La API 5.4 no permite agregar detalles a una carga o descarga ya registrada. No puede finalizarse desde esta interfaz.</p>
+<p v-if="trip.load&&trip.unload&&!ready" class="notice-error">La operación registrada está incompleta. Añade los detalles omitidos en Carga y descarga antes de finalizar. Los registros existentes conservan su historial.</p>
 </section>
 <AssignmentPanel v-else-if="tab==='assignments'" :trip="trip" :authorizations="authorizations" :refresh="refresh"/>
 <OperationsPanel v-else-if="tab==='operations'" :trip="trip" :refresh="refresh"/>
 <OdometerPanel v-else-if="tab==='odometer'" :trip="trip" :refresh="refresh"/>
 <AuthorizationPanel v-else-if="tab==='authorizations'" :authorizations="authorizations" :refresh="refresh"/>
 <section v-else class="space-y-4">
-<label>Consultar historial<select v-model="historyKind" class="field mt-2" :disabled="ctx.busy.value">
+<label>Consultar historial<select aria-label="Consultar historial" v-model="historyKind" class="field mt-2" :disabled="ctx.busy.value">
 <option value="history">Cambios y estados</option>
 <option value="assignments">Asignaciones y liberaciones</option>
 <option value="reports">Reportes informativos del conductor</option>

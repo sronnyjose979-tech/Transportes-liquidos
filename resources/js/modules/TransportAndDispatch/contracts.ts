@@ -44,6 +44,10 @@ export interface TransportRequest {
 }
 export interface Item {
     id: string;
+    recorded_by_id?: number;
+    occurred_at?: string;
+    registered_at?: string;
+    reason?: string;
     compartment_id?: string;
     compartment_code_snapshot?: string;
     capacity_liters_snapshot?: string;

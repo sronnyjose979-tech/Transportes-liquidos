@@ -36,8 +36,9 @@ finally {
     loading.value = false;
 } }
 async function save(v: Record<string, string>): Promise<void> { await write(`/trips/${props.trip.id}/odometer${correction.value ? `/${correction.value.id}/corrections` : ''}`, { ...v, occurred_at: instant(v.occurred_at!) }); correction.value = null; measured.value = null; await props.refresh(); await load(); }
-async function measure(): Promise<void> { measuring.value = true; try {
-    measured.value = await distance(props.trip.id, assignment.value);
+async function measure(): Promise<void> { measuring.value = true; measured.value = null; const selected = assignment.value; try {
+    const value = await distance(props.trip.id, selected);
+    if (assignment.value === selected) measured.value = value;
 }
 catch (error) {
     await ctx.report(error);
@@ -46,6 +47,7 @@ finally {
     measuring.value = false;
 } }
 const historical = computed(() => Array.from(new Set([...(result.value?.data ?? []).map(r => String(r.tractor_assignment_id)), ...heads.value.map(a=>a.value)])));
+watch(assignment, () => { measured.value = null; });
 onMounted(() => load());
 watch(() => props.trip.id, () => load());
 </script>

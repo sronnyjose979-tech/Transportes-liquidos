@@ -174,3 +174,7 @@ La publicación se autoriza después de estas verificaciones y revisión de alca
   Tampoco proporciona nombres de todos los usuarios históricos; se muestran los IDs reales.
 - Sin facturación, viáticos, gastos, taller, inventario, compras, estadísticas comerciales,
   compensación de odómetros, PWA/offline ni etapa 5.6.
+
+Actualización posterior: [etapa-5-6.md](etapa-5-6.md) resuelve la captura incompleta
+mediante adición auditada de detalles omitidos. No habilita edición de cantidades
+históricas, cambios de sitio ni correcciones terminales.

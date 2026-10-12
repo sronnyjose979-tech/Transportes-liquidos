@@ -40,12 +40,14 @@ Route::prefix('transport')->name('transport.')->middleware(TransportApiErrors::c
             Route::post('load', [TripOperationController::class, 'store'])->name('operations.load');
             Route::get('unload', [TripOperationController::class, 'show'])->name('operations.show-unload');
             Route::post('unload', [TripOperationController::class, 'store'])->name('operations.unload');
+            Route::post('load/items', [TripOperationController::class, 'addDetails'])->name('operations.load-items');
+            Route::post('unload/items', [TripOperationController::class, 'addDetails'])->name('operations.unload-items');
             Route::get('reports', [TripOperationController::class, 'reports']);
             Route::get('odometer', [TripOperationController::class, 'readings']);
             Route::post('odometer', [TripOperationController::class, 'reading']);
             Route::post('odometer/{readingId}/corrections', [TripOperationController::class, 'correct'])->whereUuid('readingId')->name('odometer.correct');
             Route::get('distance', [TripOperationController::class, 'distance']);
-            Route::get('volume-differences',[TripOperationController::class, 'differences']);
+            Route::get('volume-differences', [TripOperationController::class, 'differences']);
         });
     });
 });

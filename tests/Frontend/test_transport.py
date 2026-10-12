@@ -222,6 +222,9 @@ class TransportBrowserTest(unittest.IsolatedAsyncioTestCase):
         await self.page.get_by_label('Tramo de cabezal',exact=True).select_option(ITEM)
         await self.page.get_by_role('button',name='Consultar distancia',exact=True).click()
         await expect(self.page.get_by_text('Distancia calculada:',exact=False)).to_be_visible()
+        await self.page.get_by_label('Tramo de cabezal',exact=True).select_option('head-assignment')
+        await expect(self.page.get_by_text('Distancia calculada:',exact=False)).to_have_count(0)
+        await expect(self.page.get_by_text('Sin distancia confirmada;',exact=False)).to_be_visible()
 
     async def test_driver_denied_and_tablet_layout(self):
         self.role='driver';await self.page.goto(self.base+'/transporte')

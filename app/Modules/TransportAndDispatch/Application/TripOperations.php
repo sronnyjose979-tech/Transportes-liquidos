@@ -105,6 +105,32 @@ class TripOperations
         });
     }
 
+    /** Append omitted details; existing operation headers and quantities remain immutable. */
+    public function addDetails(User $actor, string $tripId, bool $loading, array $amounts, DateTimeInterface $occurredAt, string $reason, array $evidence = []): TripLoad|TripUnload
+    {
+        return $this->transaction(function () use ($actor, $tripId, $loading, $amounts, $occurredAt, $reason, $evidence): TripLoad|TripUnload {
+            $trip = $this->authorize($actor, $tripId);
+            if (! in_array($trip->execution_status, ['pending', 'in_progress'], true)) {
+                throw ValidationException::withMessages(['trip' => 'La captura de detalles faltantes no corrige operaciones de viajes terminados.']);
+            }
+            $this->requireDetails($amounts);
+            $record = ($loading ? $trip->tripLoad() : $trip->unload())->firstOrFail();
+            if ($loading && ! $trip->assetAssignments()->current()->whereKey($record->tanker_assignment_id)->exists()) {
+                throw ValidationException::withMessages(['trip' => 'La cisterna registrada debe continuar asignada para completar la carga.']);
+            }
+            $data = $this->data($actor, $occurredAt, $reason, $evidence);
+            foreach ($amounts as $id => $liters) {
+                if ($loading) {
+                    LoadItem::create(['trip_load_id' => $record->id, 'compartment_id' => $id, 'loaded_liters' => $liters] + $data);
+                } else {
+                    UnloadItem::create(['trip_unload_id' => $record->id, 'load_item_id' => $id, 'delivered_liters' => $liters] + $data);
+                }
+            }
+
+            return $record->refresh()->load('items');
+        });
+    }
+
     public function report(User $actor, string $tripId, string $type, array $information, DateTimeInterface $occurredAt): TripEvent
     {
         return $this->transaction(function () use ($actor, $tripId, $type, $information, $occurredAt): TripEvent {

@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Modules\TransportAndDispatch\Application\TripOperations;
+use App\Modules\TransportAndDispatch\Models\TripUnload;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -51,6 +52,47 @@ class TripOperationsConcurrencyTest extends PostgresTestCase
             }
             $this->assertSame(1, (int) $other->query('SELECT count(*) FROM trip_loads')->fetchColumn());
             $this->assertSame(1, (int) $other->query('SELECT count(*) FROM load_items')->fetchColumn());
+        });
+    }
+
+    public function test_two_missing_unload_details_wait_and_cannot_duplicate_the_confirmed_item(): void
+    {
+        $this->withOperationalSchema(function (PDO $other): void {
+            $trip = $this->trip($this->request());
+            $this->ensureAssignments($trip);
+            $service = app(TripOperations::class);
+            $tank = $trip->assetAssignments()->current()->where('asset_type', 'tanker')->first();
+            $load = $service->load($trip->registeredBy, $trip->id, $trip->transportRequest->route->origin_site_id,
+                [$tank->fleetAsset->tanker->compartments[0]->id => '100.00'], CarbonImmutable::now(), 'Carga');
+            $item = $load->items[0];
+            $unload = TripUnload::create(['trip_id' => $trip->id, 'trip_load_id' => $load->id,
+                'operation_site_id' => $trip->transportRequest->route->destination_site_id, 'recorded_by_id' => $trip->registered_by_id,
+                'occurred_at' => CarbonImmutable::now(), 'reason' => 'Cabecera parcial']);
+            DB::commit();
+            DB::beginTransaction();
+            $service->addDetails($trip->registeredBy, $trip->id, false, [$item->id => '100.00'], CarbonImmutable::now(), 'Primer detalle');
+            $sql = "INSERT INTO unload_items(id,trip_unload_id,load_item_id,delivered_liters,recorded_by_id,reason,occurred_at) VALUES (?,?,?,100,?,'Detalle concurrente',clock_timestamp())";
+            $values = [(string) Str::uuid(), $unload->id, $item->id, $trip->registered_by_id];
+            $other->beginTransaction();
+            $other->exec("SET LOCAL lock_timeout='100ms'");
+            try {
+                $other->prepare($sql)->execute($values);
+                $this->fail('El detalle rival debe esperar.');
+            } catch (PDOException $exception) {
+                $this->assertSame('55P03', $exception->getCode());
+                $other->rollBack();
+            }
+            DB::commit();
+            $other->beginTransaction();
+            try {
+                $other->prepare($sql)->execute($values);
+                $this->fail('El detalle confirmado no puede duplicarse.');
+            } catch (PDOException $exception) {
+                $this->assertSame('23505', $exception->getCode());
+                $other->rollBack();
+            }
+            $this->assertSame(1, (int) $other->query('SELECT count(*) FROM unload_items')->fetchColumn());
+            $this->assertSame('100.00', $unload->items[0]->fresh()->delivered_liters);
         });
     }
 

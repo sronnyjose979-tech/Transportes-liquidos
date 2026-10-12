@@ -29,6 +29,17 @@ class TripOperationController extends Controller
         return (new TransportRecordResource($record))->response()->setStatusCode(201);
     }
 
+    public function addDetails(OperationWriteRequest $request, TripOperations $service, string $id): JsonResponse
+    {
+        $data = $request->validated();
+        $loading = $request->routeIs('transport.operations.load-items');
+        $amounts = array_column($data['items'], 'liters', $loading ? 'compartment_id' : 'load_item_id');
+        $record = $service->addDetails($request->user(), $id, $loading, $amounts,
+            CarbonImmutable::parse($data['occurred_at']), $data['reason'], $data['evidence'] ?? []);
+
+        return (new TransportRecordResource($record))->response()->setStatusCode(201);
+    }
+
     public function show(TransportQueryRequest $request, string $id): TransportRecordResource
     {
         $trip = Trip::findOrFail($id);
@@ -87,6 +98,6 @@ class TripOperationController extends Controller
         Trip::findOrFail($id);
         $content = DB::selectOne('SELECT trip_volume_content(?)::text AS content', [$id])->content;
 
-        return response()->json(['data' => ['difference' => $content === null ? null : json_decode($content,true)]]);
+        return response()->json(['data' => ['difference' => $content === null ? null : json_decode($content, true)]]);
     }
 }

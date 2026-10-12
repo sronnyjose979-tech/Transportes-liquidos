@@ -744,3 +744,23 @@ Chromium con API simulada (14 previas/10 nuevas) y 2 flujos E2E reales con Larav
 incluyendo respuesta perdida después de commit y kilometrajes de cabezal liberado en viaje
 cerrado. TypeScript, compilación, Pint --test y git diff --check correctos. Sin migrar
 transporte_db, modificar .env, instalar dependencias ni avanzar a otra etapa.
+
+## Estabilización de Transporte y Despacho (5.6)
+
+La integración real se amplía a cuatro escenarios Chromium/Vue/Laravel/sesión/CSRF/
+PostgreSQL 18 aislado: flujo completo con reporte del conductor, kilometrajes y liberación
+manual de todos los recursos; diferencia autorizada; captura incompleta recuperada tras
+respuesta perdida; dos sesiones, conflicto, cancelación y cierre con avisos.
+
+TripOperations::addDetails coordina captura progresiva mediante dos POST de detalles,
+load/items y unload/items, sin cambiar cabeceras ni detalles anteriores. Reutiliza modelos,
+Resources, Gates, bloqueo/guard transaccional y restricciones PostgreSQL existentes.
+Cada nuevo detalle audita actor de sesión, fecha, motivo y evidencia. No requiere esquema
+nuevo; no implementa edición de cantidades históricas ni correcciones terminales. Añadir
+contenido invalida una autorización de diferencia que ya no coincide exactamente.
+
+OperationsPanel ofrece solo registros omitidos y muestra auditoría por detalle; TripDetail
+informa la recuperación y nombra el selector de historial; OdometerPanel limpia distancia al
+cambiar el tramo. Se conservan estados, asignaciones, permisos, CSRF y estilo actuales.
+Detalles, comandos, resultados y límites en [docs/etapa-5-6.md](docs/etapa-5-6.md).
+RN-TR-17, D05 y demás decisiones pendientes no se resuelven; no se declara aptitud productiva.
