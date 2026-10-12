@@ -715,3 +715,32 @@ No se añaden frontend, dependencias, almacenamiento público, facturación o po
 Validación: 189 pruebas y 1.797 aserciones correctas en PostgreSQL 18 aislado (19 nuevas),
 Pint --test y git diff --check correctos. Concurrencia HTTP con dos conexiones reales;
 sin API simulada, nuevas dependencias, migraciones en transporte_db ni avance de etapa.
+
+## Etapa 5.5 — Interfaz web de Transporte y Despacho
+
+/transporte sirve Blade/Vite sin datos privados y monta TransportApp.vue. La navegación
+interna enlaza con documentación de flota, conservando su sesión y funcionalidades.
+Módulo Vue 3 Composition API y TypeScript estricto en resources/js/modules/TransportAndDispatch.
+Tailwind y Pagination/FieldError existentes; sin router/framework/dependencias adicionales.
+Diseño y ejecución: [docs/etapa-5-5.md](docs/etapa-5-5.md).
+
+Panel con meta.total real, solicitudes y viajes paginados, filtro por solicitud/estados,
+formularios y detalle con secciones de recursos, captura, kilometraje, autorizaciones e
+historia. Se utilizan únicamente la API 5.4 y autenticación/CSRF existentes. Administración
+para administrator/secretary; decisiones reservadas a administrator. No se implementa PWA.
+
+Contratos tipados, fetch con same-origin/no-store, fechas Costa Rica, cantidades exactas
+y confirmación/bloqueo durante escrituras. Aprobaciones filtradas por contenido, versión,
+viaje y consumo; el backend sigue autorizando y revalidando operaciones/concurrencia.
+Respuesta perdida, 409 o 500 requieren consulta de estado antes de otra escritura;
+no hay reenvío automático ni datos privados persistidos en almacenamiento del navegador.
+
+No se cambia backend/esquema ni se inventan operaciones sin contrato. Continúan pendientes
+RN-TR-17, D05, producto, idempotencia offline, rutas/evidencias y correcciones de captura.
+Los registros históricos permanecen inmutables y el cierre no libera recursos.
+
+Validación final: 190 pruebas y 1.806 aserciones en PostgreSQL 18 aislado; 24 pruebas
+Chromium con API simulada (14 previas/10 nuevas) y 2 flujos E2E reales con Laravel/CSRF/PG18,
+incluyendo respuesta perdida después de commit y kilometrajes de cabezal liberado en viaje
+cerrado. TypeScript, compilación, Pint --test y git diff --check correctos. Sin migrar
+transporte_db, modificar .env, instalar dependencias ni avanzar a otra etapa.

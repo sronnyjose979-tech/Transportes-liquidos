@@ -65,7 +65,7 @@ async function renewCsrf(): Promise<void> {
     <header class="border-b border-slate-200 bg-white">
         <div class="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-4 py-5 sm:px-6 lg:px-8">
             <div class="flex items-center gap-3"><span aria-hidden="true" class="flex h-11 w-11 items-center justify-center rounded-xl bg-teal-800 text-lg font-bold text-white">TL</span><div><p class="font-semibold">Transporte de Líquidos</p><p class="text-sm text-slate-500">Documentación de flota</p></div></div>
-            <div v-if="session" class="flex flex-wrap items-center gap-3 text-sm"><span class="max-w-48 break-words text-slate-600">{{ session.login ?? 'Cuenta activa' }} · {{ canManageTypes ? 'Administrador' : authorized ? 'Secretaria' : 'Sin acceso documental' }}</span><button class="btn-secondary" :disabled="locked" @click="signOut">Cerrar sesión</button></div>
+            <div v-if="session" class="flex flex-wrap items-center gap-3 text-sm"><a v-if="authorized" href="/transporte" class="btn-text" :aria-disabled="locked" @click="locked && $event.preventDefault()">Transporte y Despacho</a><span class="max-w-48 break-words text-slate-600">{{ session.login ?? 'Cuenta activa' }} · {{ canManageTypes ? 'Administrador' : authorized ? 'Secretaria' : 'Sin acceso documental' }}</span><button class="btn-secondary" :disabled="locked" @click="signOut">Cerrar sesión</button></div>
         </div>
     </header>
     <main id="main-content" class="mx-auto max-w-7xl space-y-6 px-4 py-6 sm:px-6 lg:px-8 lg:py-8" tabindex="-1">

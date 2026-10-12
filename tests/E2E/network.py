@@ -12,6 +12,7 @@ class FaultProxy(ThreadingHTTPServer):
         super().__init__(('127.0.0.1', 0), ForwardRequest)
         self.upstream_port = upstream_port
         self.drop_response_path = None
+        self.drop_response_statuses = (201,)
         self.strip_origin_path = None
         self.missing_download_path = None
         self.committed_uploads = 0
@@ -52,7 +53,7 @@ class ForwardRequest(BaseHTTPRequestHandler):
             connection.request(self.command, path, body=body, headers=headers)
             response = connection.getresponse()
             payload = response.read()  # Real Laravel response after request/transaction completion.
-            if drop_response and response.status == 201:
+            if drop_response and response.status in self.server.drop_response_statuses:
                 with self.server.lock:
                     self.server.committed_uploads += 1
                 self.connection.shutdown(socket.SHUT_RDWR)
