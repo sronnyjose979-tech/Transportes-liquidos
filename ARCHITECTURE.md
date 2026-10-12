@@ -786,31 +786,49 @@ acopladas a sus entidades y no se presentan como servicios genéricos de Taller.
 No se modifican módulos existentes. Las preguntas funcionales de 6.1 se aclararon
 posteriormente mediante D-TAL-01..13: ver la propuesta documental 6.2 a continuación.
 
-## Taller Mecánico — propuesta de datos 6.2, sin implementación
+## Taller Mecánico — cierre documental 6.2, sin implementación
 
-[docs/etapa-6-2.md](docs/etapa-6-2.md) consolida las 13 decisiones funcionales aprobadas,
-propone el ER y 26 tablas para revisión humana y separa las opciones técnicas pendientes.
-No crea esquema, servicios, API ni interfaz. RN-TAL-01..28 conservan texto y numeración.
+[docs/etapa-6-2.md](docs/etapa-6-2.md) consolida RN-TAL-01..28, D-TAL-01..13
+y T01–T09 aprobadas. El modelo lógico propone **27 tablas**: se añade la asociación
+histórica orden–ingreso para conservar ingresos anteriores tras una reapertura. No crea
+esquema, servicios, endpoints, interfaz ni funcionalidades de Inventario/Compras.
 
-Una orden sigue siendo una reparación/servicio; scopes inmutables iniciales y ampliaciones
-independientes identifican tareas y cantidades autorizadas. Solicitud, decisión y aplicación
-son separadas: una aplicación activa un scope, cuyos usos parciales no autorizan otra orden
-ni cantidades adicionales. Entrega y uso comunicado no simulan movimientos de Inventario.
-La habilitación nominativa del registrador de entregas necesita aprobación antes de implementarse.
+Una orden representa una reparación/servicio; scopes inmutables iniciales y ampliaciones
+independientes identifican trabajos/cantidades. Solicitud, decisión y aplicación permanecen
+separadas, con aplicación única. Cierre administrativo ordinario es operación auditable,
+sin segunda solicitud de aprobación. Reapertura y rectificación sensible sí requieren
+autorización explícita, destino/versiones y preservación de registros originales.
 
-Ingresos físicos, causas operativas de Flota, resoluciones y salidas administrativas se
-separan del estado de orden. FleetAsset conserva identidad; service_status como proyección
-protegida de impedimentos es una propuesta pendiente de revisión. AssignmentAvailability y
-restricciones SQL de Transporte mantienen la fuente de elegibilidad y ocupación existentes.
-No liberar recursos, cancelar viajes ni convertir cierre de orden en salida automática.
+Mecánico asignado solicita repuestos y confirma uso; administrador autoriza alcance y
+supervisa; secretarias activas registran entrega física, sin grants ni rol de bodeguero.
+Entrega/uso no representan stock ni movimientos hasta integración real con Inventario.
+SparePart y Supplier existentes conservan identidad. Reparación no autoriza compra;
+contratos futuros usarán IDs reales y deduplicación, sin implementar esos módulos aquí.
 
-El relevo de conductor ya se representa mediante AssignmentAdministration::substitute,
-DriverAssignment/DriverRelease y autorizaciones específicas de Transporte. No se propone
-otra tabla de relevos ni implementación en Taller. No elimina impedimentos de cabezal/cisterna;
-la sustitución de cisterna sigue bloqueada por D05 de Transporte, distinta de D-TAL-05.
+Un ingreso físico abierto por activo, varias órdenes independientes y orden sin ingreso
+permitida; reportes N:M órdenes justificados, mismo activo. Ingreso bloquea nuevas
+asignaciones incompatibles sin cancelar viajes/liberar recursos. Alerta en carretera
+requiere confirmación de impedimento por oficina. Solo administrador autoriza salida.
+Cada causa se resuelve individualmente, cierre/cancelación no la elimina. Fleet conserva
+service_status como proyección única protegida; otra causa mantiene no disponibilidad.
+Preservar estados previos desconocidos sin inventar historia. AssignmentAvailability y
+SQL de Transporte mantienen elegibilidad; integrar coordinador 873210/guard antes de filas,
+respetando trips→activos y revalidación de actor/roles. Validación física futura en PG18.
 
-User/Employee/Role, FleetAsset, SparePart y Supplier no se duplican. Autorizaciones Taller
-y evidencias tienen ámbito propio; servicios actuales acoplados a Transporte/Document sirven
-como patrones, no como adaptadores genéricos. Costos CRC/original, preventivos manuales,
-concurrencia, integridad y migración segura de estados previos se detallan en la propuesta.
-Publicación documental no autoriza implementación ni modifica módulos existentes.
+Eventos de tiempo por mecánico excluyen pausas; horas-persona se suman, indisponibilidad
+se calcula por unión de intervalos. Cantidades NUMERIC(18,6), costos NUMERIC(20,6),
+validación exacta antes del cast. Estimados/reales y monedas separados (CRC principal);
+fuentes/cobertura evitan doble conteo. Secretaria registra costos documentados/consulta
+coordinación; mecánico ve repuestos/tiempos de asignadas sin reportes financieros generales.
+Factura adjunta no confirma pago.
+
+Evidencia Taller privada propia: PDF/JPG/JPEG/PNG, 10 MB por archivo, 20 archivos por
+orden inicialmente y límite configurable; originales/rectificaciones preservados. Validar
+contenido real y permisos por orden; compensar/conciliar almacenamiento sin borrar historia.
+Document de Flota no se reutiliza como adjunto. Recibos idempotentes en workshop_operations
+con ámbito/clave/huella/resultado se confirman junto con efectos y se conservan con historia.
+
+El relevo ya existe mediante AssignmentAdministration::substitute y DriverAssignment/
+DriverRelease. No elimina impedimentos del equipo; sustitución de cisterna sigue bloqueada
+por D05 de Transporte, distinta de D-TAL-05. User/Employee/Role y FleetAsset no se duplican.
+Autorizaciones y evidencias tienen ámbito propio. Publicar el cierre no autoriza implementación.

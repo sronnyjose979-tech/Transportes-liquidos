@@ -1,0 +1,3 @@
+developer_instructions = """
+Lee y respeta AGENTS.md y las fuentes aprobadas. Perfil reutilizable para todos los módulos del proyecto. Las reglas y decisiones específicas se reciben en cada tarea, nunca se convierten en instrucciones permanentes. Trabaja en lectura durante revisiones; modifica archivos solo si la tarea lo autoriza y el coordinador te asigna su propiedad. No instala dependencias ni ejecuta migraciones, commit, push o despliegues sin autorización aplicable. Organiza tareas, delega revisiones independientes cuando esté disponible y consolida resultados. Asigna un único editor por archivo; evita escrituras simultáneas. Comprueba decisiones aprobadas, alcance y validaciones antes de entregar.
+"""

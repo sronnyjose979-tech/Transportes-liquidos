@@ -241,3 +241,19 @@ explícita y revisión de archivos que pueda generar o reemplazar. Después de i
 releer `AGENTS.md` y preservar estas reglas aprobadas. Incorporar únicamente
 instrucciones de Boost compatibles con el alcance, las fuentes de verdad y las
 políticas del proyecto.
+
+## 13. Coordinación y perfiles reutilizables
+
+El agente principal coordina, delega revisiones independientes cuando la sesión lo permite
+y consolida resultados. Asignar un único editor por archivo y no realizar modificaciones
+simultáneas sobre él. Comprobar las decisiones aprobadas antes de entregar.
+
+La configuración local está en `.codex/config.toml`, con perfiles en `.codex/agents/`:
+coordinator, functional_analyst, database_architect, integration_specialist y technical_auditor.
+Usarlos para Transporte, Flota, Taller, Inventario, Compras y Facturación. El analista revisa
+requisitos y contradicciones; el arquitecto revisa ER, integridad, concurrencia e idempotencia;
+el especialista revisa contratos y límites entre módulos; el auditor revisa seguridad,
+permisos, trazabilidad, documentación y alcance. Las reglas específicas se reciben por tarea.
+Si no hay delegación, realizar estas revisiones secuencialmente y conservar sus resultados.
+El perfil coordinator no sustituye automáticamente instrucciones del agente principal:
+estas responsabilidades también se establecen aquí. Ver [configuración y validación](docs/agentes-codex.md).

@@ -1,18 +1,17 @@
-# Etapa 6.2 — Propuesta técnica del modelo de datos del Taller Mecánico
+# Etapa 6.2 — Cierre documental del modelo lógico del Taller Mecánico
 
 ## Estado y fuentes de verdad
 
-Base revisada: main, 861cc2d6b494121540cdd7de254bd00396bc7a5e.
-La etapa 6.1 está publicada en 96338c73619becbb3ae5f32ef40b9de51d30bcf4;
-el avance posterior de main corrige solo package-lock.json y se conserva sin cambios.
-Se revisan AGENTS.md, ARCHITECTURE.md, [RN de Taller](REGLAS_TALLER_MECANICO.md),
-[etapa 6.1](etapa-6-1.md), ER histórico, etapas 4.x y 5.2A–5.6 y el código citado abajo.
+Base documental: etapa 6.2 publicada en main, commit
+`a6bf6867c83e1570e20089d5d0c49721a625f835`. Este cierre se prepara localmente
+sobre esa base. Se revisan AGENTS.md, ARCHITECTURE.md, [RN de Taller](REGLAS_TALLER_MECANICO.md),
+[etapa 6.1](etapa-6-1.md), ER histórico y las entidades/código citados abajo.
 
-**Aprobado funcionalmente:** RN-TAL-01..28 y las aclaraciones D-TAL-01..13 recibidas
-para esta etapa. **Propuesto para revisión humana:** tablas, nombres, precisión numérica,
-índices, triggers, representación de impedimentos, permisos de entrega y orden de trabajo
-que siguen. No se autoriza implementación por publicar este documento. No se crea SQL,
-migración, modelo Laravel, API, interfaz ni prueba de aplicación; no se consulta una base.
+**Aprobado:** RN-TAL-01..28, D-TAL-01..13 y decisiones técnicas T01–T09 del usuario.
+Este documento consolida el modelo lógico final de 6.2; nombres, restricciones y mecanismos
+físicos se describen para la implementación futura y no representan tablas instaladas.
+No se autoriza implementación por publicar el cierre. No se crea SQL, migración, modelo
+Laravel, API, interfaz ni prueba funcional; no se consulta ni modifica una base de datos.
 
 Las decisiones de este documento sustituyen las preguntas correspondientes de 6.1 sin
 renumerar ni alterar las 28 RN. Un detalle todavía no definido se identifica expresamente;
@@ -36,6 +35,10 @@ no se considera rechazada o pendiente una decisión funcional ya aprobada.
 | D-TAL-12 | Fotografías y PDF privados; administrador todo, secretaria según coordinación, mecánico evidencias de asignadas. Factura externa si existe, sin obligatoriedad de cierre no aprobada. Límites de archivos técnicos, no reglas comerciales. |
 | D-TAL-13 | Mecánico solicita, administrador autoriza, persona habilitada registra entrega, mecánico confirma uso real. Hasta Inventario real: sin stock/saldos/movimientos ficticios. Identidad/permisos de entrega **requieren aprobación antes de implementar**. |
 
+T01 resuelve la reserva histórica de D-TAL-13: las secretarias activas registran
+entregas físicas por su rol; no se requieren grants nominativos ni un rol de bodeguero.
+Las trece filas anteriores se conservan íntegramente como antecedente aprobado.
+
 ## Diagnóstico del código y entidades reutilizables
 
 `Workshop` figura en docs/arquitectura.mmd, pero app/Modules/Workshop no existe.
@@ -58,7 +61,7 @@ son pasos de **una** reparación/servicio, no reparaciones independientes dentro
 | Document, DocumentType, DocumentConfigurationSnapshot en FleetAndDocuments | Documentación reglamentaria de activos, no adjuntos de órdenes. No añadir WorkOrder falso a esos modelos ni usar sus snapshots para evidencias. |
 | `app/Providers/AppServiceProvider.php`, `app/Modules/TransportAndDispatch/Policies/TransportCorePolicy.php` | Gates reales y patrón de revalidar cuenta/rol. No hay Gates de Taller instalados. manage-fleet sigue administrativo; permisos Taller propios y acotados. |
 
-## Convenciones técnicas propuestas
+## Convenciones técnicas del modelo lógico
 
 - Nuevas entidades PK UUID; FK a User bigint, a Employee/FleetAsset/SparePart/Supplier UUID.
   Todos los vínculos históricos con ON DELETE RESTRICT; no cascade ni soft-delete para esconder hechos.
@@ -67,8 +70,7 @@ son pasos de **una** reparación/servicio, no reparaciones independientes dentro
   Fechas de programación sin hora, si se añaden después, DATE; no convertirlas en ingreso real.
 - TEXT para descripciones/motivos; CHECK no vacío cuando obligatorio y límites de entrada
   Laravel revisables. Estado/prioridad TEXT + CHECK; no catálogo duplicado para siete estados.
-- Propuesta cantidades NUMERIC(18,6), costos NUMERIC(20,6), precisión a revisar antes de
-  migraciones. No heredar NUMERIC(15,2) de **litros** a unidades de repuestos/mano de obra.
+- Cantidades NUMERIC(18,6) y costos NUMERIC(20,6), aprobados por T05. No heredar NUMERIC(15,2) de **litros** a unidades de repuestos/mano de obra.
   Rechazar NaN/infinito y escala excesiva antes de redondeo implícito. Cantidades efectivas
   positivas, importes no negativos; ausencia de dato NULL, nunca default cero inventado.
 - currency CHAR(3), CRC principal; original explícita cuando corresponda. No persistir
@@ -91,7 +93,8 @@ erDiagram
     fleet_assets ||--o{ workshop_admissions : ingresos
     fleet_assets ||--o{ workshop_reports : averias
     fleet_assets ||--o{ workshop_work_orders : reparacion_unica
-    workshop_admissions o|--o{ workshop_work_orders : ingreso_opcional
+    workshop_admissions ||--o{ workshop_order_admission_links : historia
+    workshop_work_orders ||--o{ workshop_order_admission_links : ingresos_reales
     workshop_admissions ||--o| workshop_admission_exits : salida_independiente
     workshop_reports ||--o{ workshop_report_links : vinculos
     workshop_work_orders ||--o{ workshop_report_links : reportes
@@ -120,21 +123,31 @@ erDiagram
     fleet_operating_impediments ||--o| fleet_impediment_resolutions : resolucion_explicita
     workshop_admissions ||--o{ workshop_warnings : asignacion_existente
     trip_asset_assignments o|--o{ workshop_warnings : referencia_real
+    workshop_work_orders ||--o{ workshop_material_needs : necesidades
+    spare_parts ||--o{ workshop_material_needs : repuesto_real
+    workshop_scope_parts o|--o{ workshop_material_needs : linea_opcional
+    workshop_work_orders o|--o{ workshop_authorization_requests : orden_objetivo
+    workshop_admissions o|--o{ workshop_authorization_requests : salida_objetivo
+    workshop_authorization_applications ||--o| workshop_admission_exits : confirma_salida
+    workshop_operations ||--o{ fleet_impediment_resolutions : trazabilidad
+    workshop_operations ||--o{ workshop_order_admission_links : vinculo_auditable
+    workshop_external_repairs o|--o{ workshop_attachments : factura_opcional
+    workshop_attachments o|--o{ workshop_cost_records : fuente_documental
+    workshop_cost_records o|--o{ workshop_cost_records : cobertura_economica
 ```
 
-FleetAsset 1:N órdenes; **sin UNIQUE activo/orden abierta**. Ingreso 1:N órdenes;
-orden 0..1 ingreso propuesto (externas/en carretera pueden no tener ingreso físico).
+FleetAsset 1:N órdenes; **sin UNIQUE activo/orden abierta**. Ingreso 1:N vínculos con órdenes;
+orden 0..N ingresos históricos mediante #27 (externas/en carretera pueden no tener ingreso físico).
 Una orden puede existir antes de ingresar; no crear ingreso ficticio para completar una FK.
-Tras una reapertura, vincular la misma orden a un segundo ingreso mediante una relación
-histórica requiere revisión T04 abajo; no mover una FK histórica silenciosamente.
-
-Employee N:M órdenes mediante participaciones con historial; un mecánico puede trabajar
-en varias órdenes. Varios reportes de una avería → una orden; política de reutilizar un
-reporte en más de una orden se deja para T04, no se presupone unicidad de report_id.
+Una reapertura puede relacionar la orden con un ingreso posterior mediante #27,
+sin sobrescribir asociaciones previas. Cada activo admite un único ingreso físico abierto.
+Employee N:M órdenes mediante participaciones históricas; sin exclusividad entre órdenes.
+Reportes N:M órdenes mediante #4: cada vínculo conserva justificación, actor y fecha;
+reportes, órdenes e ingresos deben corresponder al mismo activo.
 
 ## Catálogo de tablas nuevas y atributos principales
 
-Son **26 tablas propuestas**, agrupadas por responsabilidades. Cada PK es id UUID salvo
+Son **27 tablas propuestas**, agrupadas por responsabilidades. Cada PK es id UUID salvo
 indicación contraria. “Actor/fechas” significa actor_id bigint FK users, occurred_at y
 registered_at TIMESTAMPTZ(6), reason TEXT; se usan nombres específicos (created_by_id,
 decided_by_id, etc.) al implementar, pendientes de revisión. Cada tabla tiene un motivo
@@ -145,8 +158,8 @@ funcional; no crear todos los grupos en una migración indivisible.
 | # / tabla propuesta | Propósito y atributos/FK principales | Integridad e índices propuestos |
 | --- | --- | --- |
 | 1 workshop_reports | fleet_asset_id FK; trip_event_id UUID FK trip_events NULL para incidente informado por conductor; description TEXT; reporter_id bigint FK NULL si autor conocido, recorded_by_id bigint FK obligatorio; actor/fechas; previous_report_id FK propia NULL para rectificar. Separa comunicador del registrador Taller. | Vínculo trip_event debe corresponder a viaje con ese activo en su historial al hecho, no a otro activo. Índice activo/fecha; cadena de revisión sin ramas. Reporte conductor real se conserva en Transporte, no se le otorga crear reporte oficial Taller. |
-| 2 workshop_admissions | fleet_asset_id FK; kind TEXT correctivo/preventivo; admitted_at; admitted_by_id bigint FK; reason; registered_at; version. No columna status de orden ni released_vehicle boolean. | Índice activo/fecha; actor oficina activo. No aprobar unicidad de ingreso abierto por activo todavía (T04). Estado físico abierto se deriva de ausencia de salida. |
-| 3 workshop_work_orders | fleet_asset_id FK; admission_id FK NULL; kind correctivo/preventivo; description de única reparación/servicio; priority baja/normal/alta/urgente; status siete estados; created_at/created_by_id; version. | FK compuesta ingreso/activo para no vincular a otro vehículo. Índices activo/status, status/created_at. Descripción única reparación no se prueba con SQL semántico: oficina valida y auditoría conserva alcance. |
+| 2 workshop_admissions | fleet_asset_id FK; kind TEXT correctivo/preventivo; admitted_at; admitted_by_id bigint FK; reason; registered_at; version. No columna status de orden ni released_vehicle boolean. | Índice activo/fecha; actor oficina activo. Un único ingreso físico abierto por activo (T04); abierto se deriva de ausencia de salida. Trigger diferido y serialización del activo verifican esta condición entre tablas, incluso en SQL directo; no CHECK con subconsulta ni índice parcial sobre otra tabla. |
+| 3 workshop_work_orders | fleet_asset_id FK; kind correctivo/preventivo; description de única reparación/servicio; priority baja/normal/alta/urgente; status siete estados; created_at/created_by_id; version. | Asociación ingreso/activo mediante #27, sin FK mutable admission_id en la orden. Índices activo/status, status/created_at. Descripción única reparación no se prueba con SQL semántico: oficina valida y auditoría conserva alcance. |
 | 4 workshop_report_links | report_id FK; work_order_id FK; linked_by_id bigint FK; registered_at; motivo. Vincula varios reportes, no copia descripciones. | UNIQUE(report_id,work_order_id), trigger mismo activo. Desvinculación errónea mediante operación rectificativa rastreable, no DELETE oculto. |
 | 5 workshop_mechanic_assignments | work_order_id FK; employee_id FK; starts_at/registered_at; assigned_by_id bigint FK; reason. | Mecánico empleado/cuenta activa con rol mechanic al asignar; índice orden/empleado/fecha; impedir duplicar participación vigente por pareja, permitir otras órdenes. |
 | 6 workshop_mechanic_releases | assignment_id FK UNIQUE; ends_at; recorded_by_id bigint FK; reason; registered_at. Fin de participación, **no libera vehículo**. | ends_at >= starts_at; asignación del mismo ámbito; actor oficina. Serialización pareja para no solapar participaciones vigentes de la misma orden. |
@@ -161,11 +174,11 @@ funcional; no crear todos los grupos en una migración indivisible.
 | 10 workshop_scope_parts | scope_id FK; task_id FK dentro del scope NULL si repuesto general de esa reparación; spare_part_id FK; quantity NUMERIC(18,6); unit_snapshot TEXT; description_snapshot TEXT. | Cantidad concreta positiva al autorizar. Unidad coincide con catálogo al registrar, sin conversión inventada. UNIQUE(scope_id,line_number) con line_number integer adicional. No imponer UNIQUE repuesto: puede tener usos/tareas distintos. |
 | 11 workshop_authorization_requests | work_order_id FK NULL; admission_id FK NULL; scope_id FK NULL; type TEXT reparación/ampliación/rectificación/reapertura/cancelación/salida; previous_request_id FK NULL; content JSONB objeto; target_version bigint cuando afecta raíz; requested_by_id bigint FK; reason; registered_at. | CHECK de combinación de FK según tipo; scope implica orden coincidente, salida implica ingreso/activo. Índice pendiente por tipo/fecha. Contenido reconstruido en servidor con IDs/versiones concretas, no actor o cantidad autorizada libre del cliente. Rechazo corregido = nueva solicitud/predecesor. |
 | 12 workshop_authorization_decisions | request_id FK UNIQUE; decision approved/rejected; decided_by_id bigint FK; reason; registered_at. | Administrador activo exclusivo, inmutable. No UPDATE rejected→approved: nueva solicitud si se modifica; preservar denegación. |
-| 13 workshop_operations | work_order_id/admission_id/report_id FK según raíz; operation_type TEXT; before_values/after_values JSONB; from_version/to_version bigint NULL para eventos sin raíz mutable; actor_id bigint FK; reason; occurred_at/registered_at; request_key UUID NULL; request_fingerprint TEXT NULL. Historial de transiciones/revisiones, recibo de comando y revisión administrativa. | FK explícitas, CHECK ámbito según acción; UNIQUE raíz/to_version y correlación exacta con actualización. Clave/fingerprint son propuesta durable para idempotencia T07, no activada ahora. Referencia a registros afectados se valida en SQL; no log sin relación al cambio. |
-| 14 workshop_authorization_applications | decision_id FK UNIQUE; operation_id FK; applied_by_id bigint FK; registered_at. Activación de un scope o ejecución única de salida/cancelación/cierre autorizado/reapertura/rectificación. | Decisión aprobada, mismo ámbito/tipo/contenido exacto. Scope activo se reconoce por su aplicación una sola vez; no consumir misma decisión en otra operación. Varias decisiones pueden cubrir partes distintas de una operación solo si están explícitamente referidas y validadas. |
+| 13 workshop_operations | work_order_id/admission_id/report_id FK según raíz; operation_type TEXT; before_values/after_values JSONB; from_version/to_version bigint NULL para eventos sin raíz mutable; actor_id bigint FK; reason; occurred_at/registered_at; request_key UUID; request_fingerprint TEXT; idempotency_scope TEXT; confirmed_result JSONB; Historial de transiciones/revisiones, recibo de comando y revisión administrativa. | FK explícitas, CHECK ámbito según acción; UNIQUE raíz/to_version y correlación exacta con actualización. Clave, ámbito, huella y resultado obligatorios en operaciones críticas (T07); UNIQUE(actor_id,idempotency_scope,request_key). Referencia a registros afectados se valida en SQL; no log sin relación al cambio. |
+| 14 workshop_authorization_applications | decision_id FK UNIQUE; operation_id FK; applied_by_id bigint FK; registered_at. Activación de un scope o ejecución única de salida/cancelación/reapertura/rectificación. | Decisión aprobada, mismo ámbito/tipo/contenido exacto. Scope activo se reconoce por su aplicación una sola vez; no consumir misma decisión en otra operación. Varias decisiones pueden cubrir partes distintas de una operación solo si están explícitamente referidas y validadas. |
 
-La revisión normal de cierre por administrador es una operación oficial auditable y no
-necesita por defecto inventar una solicitud de aprobación adicional. Su autorización de rol
+El cierre administrativo ordinario por administrador es una operación oficial auditable
+y no requiere una segunda solicitud, decisión ni aplicación de autorización. Su autorización de rol
 se comprueba en servidor/PostgreSQL. Rectificación sensible y reapertura sí requieren
 solicitud/decisión/aplicación según D-TAL-08.
 
@@ -174,17 +187,17 @@ solicitud/decisión/aplicación según D-TAL-08.
 | # / tabla propuesta | Propósito y atributos/FK principales | Integridad e índices propuestos |
 | --- | --- | --- |
 | 15 workshop_activities | task_id FK; mechanic_assignment_id FK NULL para registro administrador; description, observations TEXT; previous_activity_id FK NULL; revision integer; actor/fechas. | Orden/tarea/participante coherentes; tarea dentro de scope activado para registrar ejecución. Revisiones append-only; no convertirse en reparación distinta ni aprobarse por escribir actividad. |
-| 16 workshop_time_events | work_order_id FK; mechanic_assignment_id FK; event_type start/pause/resume/finish; actor/fechas; previous_event_id FK NULL para rectificación. | Secuencia temporal del mismo participante/orden y revisión sin ramas, serializada. No excluir participación paralela en otras órdenes. Modelo por participante propuesto para revisión T05; no representa nuevos estados de orden. |
-| 17 workshop_part_deliveries | scope_part_id FK; quantity NUMERIC(18,6); delivered_to_assignment_id FK; recorded_by_id bigint FK; occurred_at/registered_at; reason; previous_delivery_id FK NULL. Entrega física comunicada, no movimiento stock. | Cantidad positiva dentro de línea autorizada; destinatario de esa orden. Rol/grant del registrador **pendiente de aprobación T01**. Agregado efectivo de entregas no excede cantidad autorizada; serializar línea y revisiones. |
+| 16 workshop_time_events | work_order_id FK; mechanic_assignment_id FK; event_type start/pause/resume/finish; actor/fechas; previous_event_id FK NULL para rectificación. | Secuencia temporal del mismo participante/orden y revisión sin ramas, serializada. No excluir participación paralela en otras órdenes. Modelo por participante aprobado por T05; no representa nuevos estados de orden. |
+| 17 workshop_part_deliveries | scope_part_id FK; quantity NUMERIC(18,6); delivered_to_assignment_id FK; recorded_by_id bigint FK; occurred_at/registered_at; reason; previous_delivery_id FK NULL. Entrega física comunicada, no movimiento stock. | Cantidad positiva dentro de línea autorizada; destinatario de esa orden. Secretaria activa registra entrega; administrador acceso completo y supervisión (T01), sin grants ni bodeguero. Agregado efectivo de entregas no excede cantidad autorizada; serializar línea y revisiones. |
 | 18 workshop_part_usages | delivery_id FK; quantity NUMERIC(18,6); confirmed_by_id bigint FK; mechanic_assignment_id FK; occurred_at/registered_at; reason; previous_usage_id FK NULL. Uso real confirmado por mecánico. | Mismo ámbito, entrega anterior; uso efectivo <= cantidad entregada y autorizada, sin reutilizar línea para otra reparación. Autor asignado vigente, administrador acceso completo con identidad propia. No columna stock_balance ni supuesto movimiento Inventario. |
 | 19 workshop_external_repairs | work_order_id FK; scope_task_id FK; supplier_id FK; description; performed_at; recorded_by_id bigint FK; registered_at; previous_record_id FK NULL. Hechos externos y proveedor; costo/factura mediante relaciones siguientes. | Scope externo activado y proveedor coincidente con autorizado. Orden propia/una reparación. No crear compras/pagos ni proveedor ficticio; factura puede faltar sin bloquear cierre por sí sola. |
 | 20 workshop_attachments | work_order_id FK; category foto/documento/factura; external_repair_id FK NULL; storage_key TEXT único privado; mime TEXT; extension TEXT; size_bytes bigint; checksum TEXT; uploaded_by_id bigint FK; registered_at; previous_attachment_id FK NULL. | Asociación externa de la misma orden; archivo privado único sin sobrescritura. MIME/tamaño/categoría válidos y checksum técnico; no almacenamiento de bytes en PostgreSQL ni FK hacia Document de flota. Reemplazo enlaza original preservado. |
-| 21 workshop_cost_records | work_order_id FK; scope_task_id/scope_part_id/usage_id/external_repair_id FK según origen; cost_kind labor/part/external; basis estimated/actual; amount NUMERIC(20,6) NULL; currency CHAR(3); description; previous_cost_id FK; actor/fechas. | CHECK combinación de FK, moneda presente si importe; estimated distinto de actual. Índice orden/basis/currency. Categorías fuera de labor/part/external no se habilitan; requieren revisión T06. Sin total convertido o costo pagado inventado. |
+| 21 workshop_cost_records | work_order_id FK; scope_task_id/scope_part_id/usage_id/external_repair_id FK según origen; cost_kind labor/part/external; basis estimated/actual; amount NUMERIC(20,6) NULL; currency CHAR(3); source_attachment_id FK #20 NULL; covered_by_cost_id FK propia NULL; description; previous_cost_id FK; actor/fechas. | CHECK combinación de FK, moneda presente si importe; estimated distinto de actual. Índice orden/basis/currency; cobertura propia acíclica, misma orden/basis/moneda; solo raíces efectivas sumables. Categorías adicionales requieren aprobación futura, no se habilitan en T06. Sin total convertido o costo pagado inventado. |
 
 No duplicar importe de reparación externa en #19 y #21; la relación a costos reales
 responde a RN-TAL-19. No sumar una factura y sus líneas de repuestos otra vez como costo.
 Si la factura solo acredita costo externo global, mostrar cobertura y evitar doble conteo;
-metodología de agregación/scope de costos pendiente T06.
+cada registro #21 identifica cobertura económica y fuente documental; un costo global y sus componentes no son simultáneamente sumables (T06).
 
 Los faltantes se calculan comparando solicitado/autorizado/entregado, pero la **necesidad
 comunicada** y su justificación requieren un hecho propio (#26), no asumir que toda diferencia
@@ -205,6 +218,16 @@ mediante diseño revisado de ese contrato; esta propuesta no sustituye decisione
 por una aprobación de reparación ni da por implementado el flujo de autorización de compra.
 Si se habilita tramitación local previa, revisar tipo purchase_need y contenido de necesidades
 antes de migrar; la regla de aprobación exclusiva administrativa ya está confirmada.
+
+### Asociación histórica orden–ingreso (27)
+
+| # / tabla propuesta | Propósito y atributos/FK principales | Integridad e índices propuestos |
+| --- | --- | --- |
+| 27 workshop_order_admission_links | work_order_id FK; admission_id FK; fleet_asset_id FK; linked_by_id bigint FK users; registered_at; reason; operation_id FK #13. | UNIQUE(work_order_id,admission_id); FK compuestas a orden/activo e ingreso/activo; historial inmutable. Vinculación posterior solo al mismo activo; rectificación auditada en #13 conserva enlace original y su invalidación explícita. |
+
+La tabla #27 es necesaria por T04: una FK única en la orden perdería el ingreso anterior
+al reabrirla con otro ingreso. Se añade una tabla a las 26 originales; no se elimina ninguna
+estructura de autorizaciones, historia o integridad. No supone dos ingresos físicos abiertos.
 
 ### Rectificaciones sin una tabla polimórfica genérica
 
@@ -259,6 +282,7 @@ son eventos/condiciones; no octavo estado aprobado.
 
 | Acción | Responsable confirmado | Regla de aplicación |
 | --- | --- | --- |
+| Reportar avería | Mechanic, secretary o administrator; driver comunica en Transporte | Reporte técnico distinto de creación oficial de orden o ingreso; oficina formaliza el reporte Taller vinculado cuando proviene de viaje. |
 | Crear orden/ingreso; asignar mecánico | Administrator o secretary | Actor actual, mismo activo/ámbito; reporte no prueba ingreso. |
 | Diagnosticar, solicitar reparación/ampliación/repuestos | Mechanic de asignadas; administrator acceso completo | Diagnóstico previo, scope exacto. Oficina coordina solicitud, no aprueba. |
 | Aprobar/rechazar alcance, reparación externa | Administrator exclusivamente | Decisión explícita; preservar rechazo/versiones. |
@@ -266,9 +290,9 @@ son eventos/condiciones; no octavo estado aprobado.
 | Revisar/cerrar terminada | Administrator exclusivamente | Revisión de trabajos, repuestos, tiempos y pendientes conservada en operación; factura no es requisito nuevo. |
 | Solicitar cancelación | Administrator o secretary | Motivo y hechos; no transición por solicitar. |
 | Confirmar cancelación | Administrator exclusivamente | Revisar y documentar trabajos/consumos y su resolución, no devolución/desbloqueo automático. |
-| Rectificar técnica en activa | Mechanic competente/asignado; administrator | Mantener historia. Clasificación concreta de sensibles revisada T03. |
+| Rectificar técnica en activa | Mechanic competente/asignado; administrator | Mantener historia. Trabajos/cantidades autorizados, consumos, costos confirmados y registros cerrados son sensibles (T03). |
 | Rectificar sensible/reabrir terminal | Administrator autoriza; ejecutor según contenido/competencia | Solicitud, decisión y aplicación, estado objetivo explícito, no asumir vuelta a pendiente/in_repair. |
-| Registrar entrega | **Pendiente de aprobación T01** | No conceder por ser mechanic/secretary ni por aprobar reparación. |
+| Registrar entrega | Secretary activa; administrator acceso completo | Entrega física dentro de trabajos/cantidades autorizados, actor/fecha/historial; sin habilitación individual. |
 | Confirmar uso | Mechanic asignado; administrator acceso completo con su actor real | Cantidad efectiva dentro de entrega y autorización; no stock ficticio. |
 | Autorizar/aplicar salida | Administrator exclusivamente | Revisión actual de impedimentos y salida auditable independiente. |
 | Consultar evidencia | Administrator todo; secretary coordinación; mechanic asignadas | Definir acciones de coordinación sin conceder edición técnica ni acceso a otra orden. |
@@ -276,7 +300,7 @@ son eventos/condiciones; no octavo estado aprobado.
 Gates propuestos, **no existentes ni aprobados aún**: record-workshop-intake,
 manage-workshop-orders, assign-workshop-mechanics, work-on-workshop-order,
 authorize-workshop-scope, close-workshop-order, cancel-workshop-order,
-authorize-workshop-exit y record-workshop-part-delivery (solo tras T01).
+authorize-workshop-exit y record-workshop-part-delivery (secretaria activa y administrador, T01).
 Policies por recurso verán rol/cuenta/participación actuales, sin ampliar manage-fleet.
 No introducir Gate::before que omita autorización explícita o integridad a administrador.
 
@@ -284,17 +308,23 @@ Transiciones: creación→pending_diagnosis; diagnóstico/solicitud inicial→pe
 aprobación aplicada→authorized; inicio autorizado→in_repair; terminación técnica→finished;
 revisión administrativa→closed; cancelación confirmada→cancelled según estado permitido.
 Aprobación pendiente de ampliación no cambia in_repair a pending_authorization. Reapertura de
-terminal y cancelación de una orden ya cerrada requieren precisar destino/efectos (T03), no
-conceder transiciones globales por disponer de una decisión administrativa.
+finished/closed/cancelled requiere autorización explícita y destino exacto registrado.
+Destinos válidos de reapertura: pending_diagnosis si falta diagnóstico vigente;
+pending_authorization si falta alcance habilitado para continuar; authorized si existe
+alcance habilitado y no comenzó trabajo del nuevo ciclo; in_repair únicamente con alcance
+habilitado y evento de inicio/reanudación confirmado. No se infiere destino del estado anterior.
+No permite terminal→terminal como reapertura, ni reaplica una autorización ya consumida.
+Una reapertura no devuelve repuestos, no resuelve impedimentos ni desbloquea el activo.
+La cancelación de terminales no se habilita por un permiso genérico: requiere reapertura
+aprobada antes de tramitar otra transición. Se conservan decisiones, hechos y ciclos previos.
 
 ## Impedimentos, ingreso y salida: una fuente de disponibilidad
 
-Propuesta T02: las causas operativas pertenecen a FleetAndDocuments (#22/#23) y
+Decisión T02: las causas operativas pertenecen a FleetAndDocuments (#22/#23) y
 fleet_assets.service_status continúa como **proyección protegida**, no como un segundo
 estado editable de Taller. Fuente lógica: causas no resueltas; available solo sin causa
 impeditiva, out_of_service si persiste una causa de ese efecto, maintenance si solo existen
-causas de taller de ese efecto. Precedencia técnica a revisar, no clasificación de averías
-aprobada ni autorización para sobreescribir un impedimento previo.
+causas de taller de ese efecto. Precedencia técnica del modelo lógico, sin clasificar averías ni autorización para sobreescribir un impedimento previo.
 
 Ocupación se mantiene aparte en Transporte: ausencia de bloqueo mecánico no significa libre
 si hay TripAssetAssignment current. Documentos faltantes/vencidos continúan advertencias.
@@ -302,7 +332,9 @@ Una excepción de ocupación no puede hacer eligible a un equipo maintenance/out
 
 1. Secretaria/administrador registra ingreso físico y causa de bloqueo en **una transacción**;
    captura asignaciones actuales como advertencias. No se escriben TripAssetRelease/Trip.
-2. Se crean/vinculan órdenes independientes del mismo activo. Causas de averías que impiden
+2. Un reporte en carretera genera alerta; secretaria o administrador confirma y registra
+   el impedimento operativo si corresponde. No convierte todo reporte en bloqueo automático.
+   Se crean/vinculan órdenes independientes del mismo activo. Causas de averías que impiden
    operar permanecen identificadas aunque la orden cambie a finished/closed/cancelled.
 3. Mecánico termina; administrador revisa/cierra orden. Esta operación registra revisión,
    no resuelve ingreso ni modifica automáticamente service_status.
@@ -315,8 +347,10 @@ Una excepción de ocupación no puede hacer eligible a un equipo maintenance/out
 
 No exigir todas las órdenes cerradas si el negocio no ha aprobado esa condición: requiere
 resolución de impedimentos y revisión administrativa, no equivalencia estado cerrado=resuelto.
-T02 precisa cómo registrar/verificar resolución técnica y qué causa corresponde a cada orden,
-para no permitir una salida con avería impeditiva sin resolver. Una orden cancelada conserva
+Cada resolución identifica individualmente causa, responsable, fecha, motivo y evidencia,
+para respetar RN-TAL-21: no autorizar salida con reparaciones impeditivas requeridas
+sin resolver. Otros impedimentos independientes pueden persistir tras salida física y
+seguir bloqueando nuevas asignaciones; salida física no equivale a autorización para operar. Una orden cancelada conserva
 su causa hasta resolución explícita; evitar levantar el bloqueo por cancelación.
 
 **Datos previos:** no se consultan aquí. Antes de desplegar, identificar estados maintenance/
@@ -337,9 +371,14 @@ Un snapshot de estado observado puede registrarse como tal, jamás como reparaci
 | Trigger/bloqueo de línea y agregado efectivo: entregado<=autorizado y usado<=entregado; revisions no contadas dos veces | Manejar conflicto sin retry ciego, mostrar cantidades confirmadas. Modificación autorizada con entregas previas debe validar efectos (T03). |
 | UNIQUE recibo de comando en ámbito/clave y rechazo de fingerprint distinto, diseño T07 | No reintentar una mutación no confirmada sin clave segura; recuperar mediante consulta real. |
 
-Bloqueo recomendado para revisar: pg_advisory_xact_lock(873210) existente, escritura de
-transport_assignment_guard existente para invalidar snapshots obsoletos, luego activo,
-raíces de Taller y líneas en orden estable de UUID. Es integración del coordinador existente,
+Orden de integración propuesto para diseño físico: pg_advisory_xact_lock(873210)
+antes de filas, escritura de transport_assignment_guard para invalidar snapshots obsoletos
+y revalidación de actor/roles actuales con sus locks. Transporte obtiene locks de trips
+antes de fleet_assets; Taller lee asignaciones para avisos sin modificar ni bloquear viajes.
+Cuando una unidad futura necesite trips, conservar trips→fleet_assets, jamás invertirlos.
+Después, activo, raíces Taller y líneas en orden estable de UUID. SQL directo requiere
+triggers BEFORE STATEMENT que adquieran el coordinador antes del lock de fila: un trigger
+BEFORE ROW sería tardío y podría invertir locks frente a Transporte. Es integración del coordinador existente,
 no una segunda cerradura que deje escapar asignaciones. READ COMMITTED y versiones para
 raíces; 40001/40P01/55P03 se tratan como conflictos y solo se reintenta comando idempotente.
 
@@ -390,10 +429,12 @@ es dato histórico, no una frecuencia empresarial deducida. Ingreso físico prev
 
 ## Evidencia, costos y reportes
 
-Propuesta técnica de archivos para revisión: PDF, JPEG (.jpg/.jpeg) y PNG, 1..10.000.000 bytes
+T08 aprobado: PDF, JPEG (.jpg/.jpeg) y PNG, 1..10.000.000 bytes
 por archivo, MIME y estructura coherentes, sin rutas libres; nombres UUID internos y checksum
 SHA-256. Fotografías en otros formatos no se convierten automáticamente ni se aceptan por extensión.
-Límite de número de adjuntos/retención requiere T08; no borrar historia por política inventada.
+Máximo inicial 20 archivos por orden, configurable posteriormente. Originales y rectificaciones
+cuentan para el límite; serializar la cuota por orden, incluyendo reservas de cargas en curso.
+No borrar evidencias históricas automáticamente ni inventar una expiración de conservación.
 
 Servicio concreto de evidencia Taller con compensación segura siguiendo PrivateDocumentStorage;
 registro/archivo confirmado no se elimina por una respuesta perdida. Transferencia de archivo
@@ -402,38 +443,119 @@ No modificar el reconciliador Fleet para que borre adjuntos que no conoce. En AP
 storage_key ni URL pública; administrador todo, secretaria coordinación, mecánico asignadas.
 No factura obligatoria ni condición de vencimiento de Document trasladada a órdenes.
 
+Protocolo futuro: reservar cuota bajo lock de orden con identidad idempotente de carga;
+escribir en staging privado y verificar contenido/checksum fuera de la transacción de
+negocio; confirmar adjunto, recibo y referencia de almacenamiento atómicamente tras
+comprobar existencia íntegra. Una respuesta perdida consulta el recibo antes de compensar.
+Si falla commit, reconciliar staging con recibos y FK; solo eliminar un huérfano técnico
+cuando se pruebe ausencia de confirmación y carga activa, nunca evidencia histórica.
+Si falla almacenamiento después de confirmar, conservar registro y evidencia del fallo,
+marcar recuperación técnica y restaurar bytes verificados; no confirmar disponibilidad
+del archivo hasta conciliación. Revocación de rol/cuenta entre carga y commit se revalida.
+
 Costos: vistas por orden/activo/tipo de reparación/SparePart/mano de obra, separando estimado,
 real, moneda original y ausencia de dato. No tasa de cambio ni pago declarado por adjuntar factura.
 Frecuencia inicialmente por descripción/servicio existente y filtros; clasificaciones de averías
 requieren revisar catálogo antes de crearlo. Tiempos por participante y unión de intervalos de
 trabajo no se suman indistintamente con tiempo de indisponibilidad del activo. Varios impedimentos
-simultáneos cuentan una sola vez al medir tiempo fuera de servicio (propuesta de cálculo T05).
+simultáneos cuentan una sola vez al medir tiempo fuera de servicio (T05 aprobado).
 
-## Decisiones técnicas y precisiones residuales para revisar
+## Decisiones técnicas aprobadas — T01–T09
 
-Las D-TAL funcionales anteriores están aprobadas; las preguntas de abajo delimitan el diseño
-físico o un detalle todavía no fijado, sin reabrir las decisiones ya tomadas.
+Las siguientes decisiones están aprobadas por el usuario; no son preguntas pendientes.
 
-| ID / prioridad | Revisión necesaria antes de implementar | Recomendación, no autorización |
-| --- | --- | --- |
-| T01 / bloquea entregas | Identidad y permisos concretos del registrador habilitado (reserva explícita D-TAL-13). | Proponer grant nominativo administrado por administrator para usuarios activos mechanic o secretary; administrator mantiene acceso completo. No conceder por rol automáticamente ni crear warehouse role. Comparar tabla de habilitaciones auditables vs capacidad existente: hoy no hay catálogo de permisos/grants. Requiere aprobación de ese cambio y su revocación. |
-| T02 / bloquea disponibilidad completa | Ownership de causas/proyección, prioridad de efectos, validación de resolución impeditiva, avería remota, datos service_status previos. Salida física con otro impedimento vs autorización para operar. | Mantener fuente Fleet; una salida puede dejar equipo no disponible, sin afirmar permiso para circular. No resolver avería por cerrar/cancelar. Conciliación explícita de estados previos desconocidos antes de migrar. |
-| T03 / bloquea operaciones sensibles | Qué registros/campos son sensibles; reemplazo de scope aprobado con ejecución/entregas; estados destino de reapertura y cancelación de orden ya cerrada; forma de documentar resolución de trabajos/consumos. | Versiones/aprobación exacta; no revocación automática, reducción por debajo del uso, devolución ni reapertura a estado supuesto. Base/ampliación nuevas definidas sí pueden diseñarse independientemente. |
-| T04 / media | ¿Un solo ingreso físicamente abierto por activo? Órdenes externas/previas, reapertura con nuevo ingreso, cardinalidad reportes→órdenes y revisión de enlaces. | Admitir orden sin ingreso físico y FK mismo activo. Antes de exigir unicidad o cambiar FK, revisar si asociación histórica N:M orden/ingreso es necesaria; no imponer la tabla puente sin razón. |
-| T05 / media | Eventos por participante vs orden, escalas exactas de cantidades/costos, cálculo de horas efectivas/indisponibilidad y tiempos corregidos. | NUMERIC propuestos y TIMESTAMPTZ; no reglas de jornada/exclusividad/redondeo laboral. Cálculos explícitos, sin sumar solapes dos veces. |
-| T06 / media | Alcance de consulta económica secretaria/mecánico, registrar costos, categorías y evitar doble conteo factura/partes/mano de obra. | CRC principal y moneda original ya aprobadas; no conversión o fórmula de precio. Mantener datos desconocidos NULL. Revisar accesos de coordinación sin retirar evidencia de órdenes asignadas aprobada. |
-| T07 / alta para mutaciones | Idempotencia durable: ámbito de clave, fingerprint, retención y recuperación; aplicaciones/recibos y orden de locks con código actual. | Una clave por operación lógica y contenido; versiones+UNIQUE; no reintento ciego. Migración y pruebas concurrentes deben aprobarse dentro del diseño físico. |
-| T08 / media | Límite técnico de archivos propuesto, retención y cantidad; servicio concreto de archivos/reconciliación Taller y campos de snapshot. | Reutilizar patrón privado sin acoplar Document a orden. No borrar evidencia original ni exigir factura para cerrar. |
-| T09 / integración futura | Identidad del movement/recepción y entrega autorizada, necesidad aprobada de compra y fallo parcial intermodular. | Contratos reales cuando módulos estén implementados; antes solo hechos diferenciados, sin existencias simuladas. |
+| ID | Decisión incorporada |
+| --- | --- |
+| T01 | Mecánico asignado solicita; administrador autoriza trabajos/cantidades; secretaria activa registra entrega física; mecánico confirma uso. Administrador supervisa con acceso completo. Sin bodeguero, grants, stock ni movimientos ficticios; actor/cantidad/fecha/historial. |
+| T02 | Reporte en carretera genera alerta; oficina confirma impedimento. Ingreso genera bloqueo automático sin cancelar viajes/liberar asignaciones. Solo administrador autoriza salida; resoluciones individuales, otro impedimento mantiene bloqueo; proyección única de service_status e historia previa preservada. |
+| T03 | Técnica activa corregible por mecánico competente con versiones; trabajos/cantidades autorizadas, consumos, costos confirmados, cerrados y reaperturas requieren autorización administrativa. Destino explícito, originales preservados, sin devolución/desbloqueo ni doble aplicación; no reducir cuotas incompatibles con usos confirmados. |
+| T04 | Un ingreso físico abierto por activo; varias órdenes por ingreso; orden sin ingreso permitida. #27 conserva asociaciones históricas; reporte puede vincular varias órdenes justificadas. Todo vínculo exige mismo activo. |
+| T05 | Eventos inicio/pausa/reanudación/fin por mecánico, tiempo efectivo excluye pausas, participantes simultáneos; horas-persona sumables, indisponibilidad por unión de intervalos. Cantidades NUMERIC(18,6), costos NUMERIC(20,6), valores finitos/escala/unidad/límites sin redondeo silencioso ni tarifas/jornadas inventadas. |
+| T06 | Administrador registra/consulta todos los costos; secretaria registra documentados y consulta economía de coordinación; mecánico consulta repuestos/tiempos de asignadas sin reportes financieros generales. Estimado/real separados, CRC principal y original conservada, totales por moneda y sin doble conteo; factura no prueba pago. |
+| T07 | Clave por operación crítica, ámbito y huella canónica verificable; duplicado idéntico recupera resultado, contenido distinto se rechaza. Transacciones, versiones, locks compatibles y restricciones SQL para cuotas/aplicaciones/ingresos/salidas/rectificaciones/transiciones; recuperación durable sin repetición ciega. |
+| T08 | PDF/JPG/JPEG/PNG, máximo 10 MB (10.000.000 bytes) por archivo y 20 por orden inicialmente, cantidad configurable. Contenido/MIME/extensión/tamaño validados, almacenamiento privado y originales preservados, permisos por rol/orden, compensación/conciliación; Document de Flota no es adjunto de Taller. |
+| T09 | Taller conserva necesidad/autorización/entrega/uso con catálogo real SparePart/Supplier. Sin saldos/movimientos/compras ficticias. Reparación no autoriza compra; futuros contratos por IDs reales y deduplicación, sin implementar Inventario/Compras. |
 
-No añadir de forma preventiva tablas de personal, vehículos, almacenes, compras, movimientos,
-planes automáticos, tarifas o facturas. Las 26 tablas propuestas son una descomposición para
-revisión; pueden simplificarse físicamente si conservan FK, auditoría e invariantes, sin mezclar
-solicitud/decisión/aplicación o disponibilidad/cierre de orden.
+### Contrato de idempotencia y recuperación (T07)
+
+#13 conserva el recibo en la misma transacción que cambios de negocio, aplicación y
+auditoría. Ámbito estable: actor autenticado + tipo de operación + raíz real (o activo
+para crear ingreso; tipo de comando sin UUID recién generado para crear orden); clave UUID conservada por todos los reintentos. La huella
+SHA-256 se calcula sobre contenido canónico del servidor, incluyendo IDs, versiones,
+unidades y decimales exactos, excluyendo metadatos de transporte y la propia clave.
+No usar claves o ámbitos calculados con valores distintos en cada reintento.
+
+Inserción concurrente del mismo ámbito/clave espera al ganador bajo UNIQUE; si confirma,
+comparar huella y devolver confirmed_result e IDs originales sin repetir efectos; si
+revierte, el competidor puede ejecutar tras revalidar. Clave con contenido incompatible
+se rechaza. Una respuesta perdida se recupera consultando el recibo con la misma identidad.
+Resultado incierto sin recibo accesible permanece incierto: no emitir otra clave ni repetir
+a ciegas. Actor actualmente autenticado/autorizado para consultar su resultado; revocaciones
+impiden nuevas mutaciones y no deben filtrar resultados privados a otros usuarios.
+
+Operaciones críticas incluyen ingreso, vínculo histórico, decisiones/aplicaciones,
+entrega/uso, costo confirmado, salida/resolución, rectificación y transiciones. Errores
+40001/40P01/55P03 permiten reintentos de la unidad completa con la misma clave, espera
+progresiva y presupuesto limitado; el número/plazos se fijarán en el contrato físico
+antes de implementación. Validación/autorización/conflicto funcional no se reintenta.
+Recibos confirmados y huellas se conservan con la historia; sin expiración automática
+en 6.2. Una política futura puede archivar conservando consulta y unicidad; nunca reutilizar
+claves ni borrar trazabilidad. Recuperación de archivos se coordina con este recibo.
+
+### Precisión, tiempo, economía e integración futura
+
+Por participante: start→pause/finish; pause→resume; resume→pause/finish; finish termina
+el ciclo y otro start abre uno nuevo. Rechazar eventos fuera de secuencia y tiempos
+negativos; rectificar con historia y reconstruir secuencia completa. Tiempo efectivo
+es suma de intervalos start/resume hasta pause/finish; intervalos abiertos se muestran
+provisionales, no finalizados. Horas-persona suman participantes; indisponibilidad usa
+unión de intervalos de impedimentos del activo, sin duplicar solapes y sin equipararla
+a tiempo trabajado. No imponer exclusividad laboral entre órdenes.
+
+Validar decimal como valor exacto antes del cast: escala máxima 6, finito, magnitud
+menor que 10^12 para cantidad y 10^14 para costo; cantidades positivas, importes no
+negativos. Rechazar excesos sin redondear. Unidad procede de catálogo y snapshot;
+no convertir unidades automáticamente. Las restricciones SQL rechazan no finitos y
+valores fuera de rango; NUMERIC con escala por sí solo redondea, por lo que SQL directo
+necesita un punto de escritura controlado que valide escala antes del cast y restrinja
+escritura a columnas tipadas. Esto requiere diseño físico, no una falsa garantía CHECK.
+
+#21 incorpora source_attachment_id FK #20 opcional y covered_by_cost_id FK propia
+opcional: un componente cubierto apunta al costo global que lo incluye. Misma orden,
+basis y moneda; cadena acíclica y referencias a revisiones efectivas. Agregar únicamente
+raíces efectivas con importe conocido: detalle cubierto informa desglose, no otro costo.
+Si no hay global, sumar componentes no cubiertos; no inferir un global de la factura.
+Referencias de origen a tarea/repuesto/uso/externo identifican cobertura real y permiten
+detectar la misma fuente confirmada duplicada, bajo lock de orden y protección SQL.
+Un total global documenta qué componentes cubre; si el alcance documental es ambiguo,
+registrar evidencia/costo pendiente de clasificación y excluirlo del total confirmado
+hasta revisión, sin inventar un desglose. Revisiones y estimados no duplican costos reales.
+Agrupar por moneda; no convertir NULL en cero ni adjunto en pago. Secretaria consulta
+economía de coordinación y registra costos documentados; mecánico consulta repuestos/
+tiempos de asignadas sin reportes financieros generales; administrador acceso completo.
+
+Contrato futuro (sin tablas/FK a operaciones inexistentes): emisor y receptor identifican
+operación real, línea de Taller, SparePart, Supplier cuando corresponde, cantidad/unidad,
+autorización propia, actor y correlación/idempotencia. Receptor confirma su ID de movimiento
+o compra real y guarda vínculo único emisor/operación; reenvío recupera el mismo resultado.
+Entrega/uso histórico no se convierte automáticamente en salida de inventario: conciliación
+explícita del hecho y operación real evita cargar dos movimientos por entrega y consumo.
+La autorización de compra se valida en Purchasing separadamente. Fallo parcial conserva
+estado de integración pendiente y correlación durable, sin marcar movimiento confirmado
+ni llamar servicios externos dentro de una transacción prolongada.
+
+### Riesgos físicos residuales antes de implementar
+
+Las decisiones anteriores permanecen vigentes. Falta validar el mecanismo físico de
+proyección/compatibilidad con triggers y locks de Transporte mediante PostgreSQL 18 aislado;
+resolver estados históricos sin causa conocida con conciliación administrativa; validar
+restricciones de cobertura económica y escritura decimal previa al cast; fijar presupuesto de
+reintentos y protocolo privado de reservas/conciliación de archivos. Nada habilita alterar
+el esquema desplegado o ampliar módulos sin aprobación de la siguiente etapa.
 
 ## Orden de implementación recomendado, después de aprobación expresa
 
-1. Revisar T01–T04/T07 y autorizar modelo físico mínimo. Confirmar semántica de datos previos
+1. Autorizar modelo físico mínimo conforme a T01–T09 ya aprobadas. Confirmar semántica de datos previos
    sin tocar transporte_db; aprobar plan de migraciones nuevas y bloqueo compatible.
 2. Núcleo: reportes, órdenes, vínculos, participantes, diagnósticos y operaciones/auditoría.
    Roles/relaciones/revisiones; sin backend funcional en esta entrega.
@@ -442,7 +564,7 @@ solicitud/decisión/aplicación o disponibilidad/cierre de orden.
 4. Ingresos, impedimentos, advertencias y salida bajo integración Fleet/Transporte; integridad
    de proyección y SQL directo, concurrencia ingreso/asignación/salida antes de habilitar uso.
 5. Actividades/tiempos y revisión/cierre/cancelación/rectificación con efectos aprobados.
-6. Necesidades, entregas (solo T01 autorizado), usos comunicados, costos y externo; no movimientos
+6. Necesidades, entregas conforme a T01, usos comunicados, costos y externo; no movimientos
    stock hasta Inventario real. Evidencias privadas y recuperación de almacenamiento.
 7. API 6.3, frontend 6.4 y E2E 6.5 en autorizaciones separadas. No implementar relevo en Taller;
    verificar compatibilidad con sustitución existente de Transporte cuando se integren avisos.
@@ -466,13 +588,13 @@ Esta entrega no ejecuta migraciones ni pruebas de aplicación.
 | RN-TAL-23, RN-TAL-24, RN-TAL-25, RN-TAL-26, RN-TAL-28 | Historial, preventivos manuales, consultas por rol, costos/tiempos y evidencia de asignadas. Sin scheduler, frontend u offline en esta entrega. |
 
 Verificar antes de publicar: 28 reglas conservadas sin cambios, 13 decisiones presentes,
-referencias reales, catálogo y ER coherentes, enlaces locales y cambios solo Markdown.
-El modelo se entrega para aprobación humana; no iniciar implementación al publicar.
+referencias reales, catálogo y ER coherentes, enlaces locales y cambios solo documentación y configuración de agentes.
+El cierre lógico incorpora T01–T09 aprobadas; no iniciar implementación al publicar.
 
 
-Controles documentales ejecutados: las 26 tablas del catálogo tienen numeración única y
+Controles documentales ejecutados: las 27 tablas del catálogo tienen numeración única y
 propósito explícito; las 13 decisiones funcionales están consolidadas; las 28 RN conservan
 exactamente sus líneas originales y se trazan en esta propuesta. Archivos/clases y enlaces
-locales citados comprobados; cambios limitados a los cuatro documentos de diseño/seguimiento.
+locales citados comprobados; cambios documentales y configuración local de agentes, sin código funcional.
 `git diff --check` correcto. No se ejecutaron pruebas de aplicación ni operaciones de base
 de datos; no se instaló dependencia ni se creó código funcional.

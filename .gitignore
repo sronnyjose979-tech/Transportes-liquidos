@@ -5,7 +5,15 @@
 .env.production
 .phpactor.json
 .phpunit.result.cache
-/.codex
+/.codex/*
+!/.codex/config.toml
+!/.codex/agents/
+/.codex/agents/*
+!/.codex/agents/coordinator.toml
+!/.codex/agents/functional_analyst.toml
+!/.codex/agents/database_architect.toml
+!/.codex/agents/integration_specialist.toml
+!/.codex/agents/technical_auditor.toml
 /.cursor/
 /.idea
 /.nova

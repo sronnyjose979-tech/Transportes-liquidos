@@ -3,8 +3,8 @@
 Fuente: instrucciones aprobadas del usuario para etapa 6.1. Las 28 reglas están
 **confirmadas** y conservan exactamente su numeración. Las precisiones abiertas
 no revocan estas reglas. Las aclaraciones D-TAL-01..13 aprobadas posteriormente
-se consolidan en [etapa-6-2.md](etapa-6-2.md); allí se separan las propuestas
-técnicas todavía sujetas a revisión. [etapa-6-1.md](etapa-6-1.md) conserva el análisis inicial.
+se consolidan en [etapa-6-2.md](etapa-6-2.md); allí se incorporan T01–T09 como decisiones técnicas aprobadas
+en el cierre documental, sin autorizar todavía implementación. [etapa-6-1.md](etapa-6-1.md) conserva el análisis inicial.
 Prevalecen sobre las hipótesis del ER y propuesta técnica históricos.
 
 **RN-TAL-01 — Confirmada. Bloqueo por ingreso al taller.** Cuando un cabezal o cisterna ingresa al taller por una avería, queda automáticamente bloqueado para nuevas asignaciones de transporte. El ingreso no cancela ni libera asignaciones existentes. Registrar advertencias y conservar trazabilidad. Solo el administrador puede autorizar la salida; el vehículo solo estará disponible si no existen otros impedimentos.

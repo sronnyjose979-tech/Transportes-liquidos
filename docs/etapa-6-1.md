@@ -3,7 +3,9 @@
 > Referencia del análisis inicial publicado en 96338c7. Las respuestas funcionales
 > aprobadas posteriormente para D-TAL-01..13 prevalecen sobre las preguntas y
 > celdas pendientes de este documento: ver [etapa-6-2.md](etapa-6-2.md).
-> Las 28 RN permanecen iguales; el diseño físico todavía requiere aprobación.
+> El [cierre documental de 6.2](etapa-6-2.md) incorpora T01–T09 aprobadas y
+> prevalece también sobre las opciones técnicas pendientes de este análisis histórico.
+> Las 28 RN permanecen iguales; la implementación y el diseño físico requieren autorización.
 
 ## Alcance y estado del documento
 

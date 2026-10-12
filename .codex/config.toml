@@ -1,0 +1,26 @@
+# Configuración local; no cambia modelos ni permisos del usuario.
+[features]
+multi_agent = true
+
+[agents]
+max_threads = 3
+
+[agents.coordinator]
+description = "Coordinador principal"
+config_file = "agents/coordinator.toml"
+
+[agents.functional_analyst]
+description = "Analista funcional"
+config_file = "agents/functional_analyst.toml"
+
+[agents.database_architect]
+description = "Arquitecto de base de datos"
+config_file = "agents/database_architect.toml"
+
+[agents.integration_specialist]
+description = "Especialista en integraciones"
+config_file = "agents/integration_specialist.toml"
+
+[agents.technical_auditor]
+description = "Auditor técnico"
+config_file = "agents/technical_auditor.toml"
