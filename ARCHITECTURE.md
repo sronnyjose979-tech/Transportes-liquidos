@@ -854,3 +854,31 @@ sin nuevas escrituras y coordinación de secretaria; costo sin clasificación no
 Diseño preparado para futura autorización de migraciones y pruebas aisladas; garantías
 de concurrencia/durabilidad todavía no comprobadas experimentalmente. Política operativa
 RPO/RTO/retención/frecuencia/responsables y aplicación real requieren aprobación posterior.
+
+## Taller Mecánico — backend fase 1: núcleo de persistencia
+
+Implementación autorizada de las tablas #1–7, #13 y #27 mediante nuevas migraciones
+000180/000190. Módulo `app/Modules/Workshop/Models`: nueve modelos Eloquent y protección
+de historial. Sin servicios, controladores, rutas ni frontend. El diseño físico 6.2
+conserva autoridad; no se alteran RN-TAL ni decisiones T01–T09/F01–F07.
+
+El núcleo conserva UUID, actores bigint, TIMESTAMPTZ(6), revisiones enlazadas, índices,
+FK RESTRICT, ámbitos, participación vigente, auditoría y recibos únicos. Triggers
+de sentencia comparten `transport_assignment_lock` (873210 y guard), con comprobaciones
+diferidas de hechos/versiones y sin disponibilidad alternativa. Estados iniciales
+y cambios de metadatos de órdenes se protegen; transiciones que necesitan autorización
+o ejecución posteriores siguen rechazadas.
+
+Ingresos y vínculos a ingresos están bloqueados explícitamente en PostgreSQL; el
+modelo también rechaza crear ingresos. Faltan #22–25 y la integración atómica de
+impedimentos/proyección para habilitarlos. No se cambian `service_status`, viajes ni
+asignaciones de Transporte. #13 contiene solamente FK a destinos existentes del
+núcleo; columnas/FK y tipos de operación dependientes se incorporarán por migraciones
+nuevas en las fases correspondientes, sin UUID libres hacia tablas inexistentes.
+
+Verificación del núcleo: `bash tests/run-postgres.sh --filter WorkshopCore` usa
+únicamente PostgreSQL 18 temporal con socket privado bajo /tmp. El servidor de pruebas
+fija UTC explícitamente para no depender de la zona del host. Se cubren estructura,
+roles, relaciones, historial, revisiones, recibos, snapshots, ingresos deshabilitados,
+reversión/reaplicación y concurrencia RC/RR con conexiones independientes. No se
+aplican migraciones a la base del proyecto ni se instalan dependencias.

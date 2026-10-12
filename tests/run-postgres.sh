@@ -16,7 +16,7 @@ finish() {
 }
 trap finish EXIT
 "$postgres_bin/initdb" -D "$postgres_workspace/data" -U transport_test --auth=trust --no-locale --encoding=UTF8 >"$postgres_workspace/init.log"
-"$postgres_bin/pg_ctl" -D "$postgres_workspace/data" -l "$postgres_workspace/server.log" -o "-k $postgres_workspace -p 55439 -h ''" start >/dev/null
+"$postgres_bin/pg_ctl" -D "$postgres_workspace/data" -l "$postgres_workspace/server.log" -o "-k $postgres_workspace -p 55439 -h '' -c timezone=UTC" start >/dev/null
 postgres_started=1
 "$postgres_bin/createdb" -h "$postgres_workspace" -p 55439 -U transport_test transporte_test
 export TEST_DB_HOST="$postgres_workspace" TEST_DB_PORT=55439 TEST_DB_USERNAME=transport_test TEST_DB_PASSWORD='' TEST_DB_ISOLATED=1
