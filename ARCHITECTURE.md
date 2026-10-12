@@ -783,5 +783,34 @@ User/Employee/Role, SparePart y Supplier son reutilizables. Inventario/Compras s
 catálogos; no hay movimientos o compras reales para simular. Autorizaciones/auditoría y
 almacenamiento privado de Transporte/Flota sirven como patrones, pero sus clases están
 acopladas a sus entidades y no se presentan como servicios genéricos de Taller.
-No se modifican módulos existentes; cierre versus terminación, ampliaciones, preventivos,
-urgencias y precisiones de actores/disponibilidad continúan documentadas como pendientes.
+No se modifican módulos existentes. Las preguntas funcionales de 6.1 se aclararon
+posteriormente mediante D-TAL-01..13: ver la propuesta documental 6.2 a continuación.
+
+## Taller Mecánico — propuesta de datos 6.2, sin implementación
+
+[docs/etapa-6-2.md](docs/etapa-6-2.md) consolida las 13 decisiones funcionales aprobadas,
+propone el ER y 26 tablas para revisión humana y separa las opciones técnicas pendientes.
+No crea esquema, servicios, API ni interfaz. RN-TAL-01..28 conservan texto y numeración.
+
+Una orden sigue siendo una reparación/servicio; scopes inmutables iniciales y ampliaciones
+independientes identifican tareas y cantidades autorizadas. Solicitud, decisión y aplicación
+son separadas: una aplicación activa un scope, cuyos usos parciales no autorizan otra orden
+ni cantidades adicionales. Entrega y uso comunicado no simulan movimientos de Inventario.
+La habilitación nominativa del registrador de entregas necesita aprobación antes de implementarse.
+
+Ingresos físicos, causas operativas de Flota, resoluciones y salidas administrativas se
+separan del estado de orden. FleetAsset conserva identidad; service_status como proyección
+protegida de impedimentos es una propuesta pendiente de revisión. AssignmentAvailability y
+restricciones SQL de Transporte mantienen la fuente de elegibilidad y ocupación existentes.
+No liberar recursos, cancelar viajes ni convertir cierre de orden en salida automática.
+
+El relevo de conductor ya se representa mediante AssignmentAdministration::substitute,
+DriverAssignment/DriverRelease y autorizaciones específicas de Transporte. No se propone
+otra tabla de relevos ni implementación en Taller. No elimina impedimentos de cabezal/cisterna;
+la sustitución de cisterna sigue bloqueada por D05 de Transporte, distinta de D-TAL-05.
+
+User/Employee/Role, FleetAsset, SparePart y Supplier no se duplican. Autorizaciones Taller
+y evidencias tienen ámbito propio; servicios actuales acoplados a Transporte/Document sirven
+como patrones, no como adaptadores genéricos. Costos CRC/original, preventivos manuales,
+concurrencia, integridad y migración segura de estados previos se detallan en la propuesta.
+Publicación documental no autoriza implementación ni modifica módulos existentes.

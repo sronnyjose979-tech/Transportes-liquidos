@@ -1,5 +1,10 @@
 # Etapa 6.1 — Análisis funcional del Taller Mecánico
 
+> Referencia del análisis inicial publicado en 96338c7. Las respuestas funcionales
+> aprobadas posteriormente para D-TAL-01..13 prevalecen sobre las preguntas y
+> celdas pendientes de este documento: ver [etapa-6-2.md](etapa-6-2.md).
+> Las 28 RN permanecen iguales; el diseño físico todavía requiere aprobación.
+
 ## Alcance y estado del documento
 
 Base inspeccionada: cf7bc8100dc1109c2f5d15d8b775a5dd976d0c47, etapa 5.6 publicada.
