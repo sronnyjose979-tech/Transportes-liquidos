@@ -2,6 +2,16 @@
 
 ## Estado y fuentes de verdad
 
+Complemento vigente: [fase 0 — diseño físico PostgreSQL 18](etapa-6-2-diseno-fisico.md).
+El usuario aprobó las decisiones físicas F01–F07 y completar su documentación:
+decimal SQL controlado, observación histórica, reservas durables en las mismas 27
+tablas, archivos locales con recuperación y respaldo coherente, permisos precisos,
+costos pendientes de clasificación y reintentos configurables. Ese documento
+concreta nombres/columnas/restricciones del catálogo lógico siguiente sin alterar
+RN-TAL, D-TAL ni T01–T09. No autoriza implementar o aplicar migraciones ni acredita
+pruebas experimentales. Sus precisiones resuelven los pendientes físicos de este
+cierre; permanecen las validaciones y política operativa explícitamente indicadas.
+
 Base documental: etapa 6.2 publicada en main, commit
 `a6bf6867c83e1570e20089d5d0c49721a625f835`. Este cierre se prepara localmente
 sobre esa base. Se revisan AGENTS.md, ARCHITECTURE.md, [RN de Taller](REGLAS_TALLER_MECANICO.md),

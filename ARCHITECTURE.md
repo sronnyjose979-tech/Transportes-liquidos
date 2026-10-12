@@ -832,3 +832,25 @@ El relevo ya existe mediante AssignmentAdministration::substitute y DriverAssign
 DriverRelease. No elimina impedimentos del equipo; sustitución de cisterna sigue bloqueada
 por D05 de Transporte, distinta de D-TAL-05. User/Employee/Role y FleetAsset no se duplican.
 Autorizaciones y evidencias tienen ámbito propio. Publicar el cierre no autoriza implementación.
+
+## Taller Mecánico — fase 0, diseño físico documentado
+
+[docs/etapa-6-2-diseno-fisico.md](docs/etapa-6-2-diseno-fisico.md) completa el diccionario
+PostgreSQL 18 de las mismas 27 tablas con decisiones físicas F01–F07 aprobadas.
+Conserva RN-TAL, D-TAL y T01–T09. No hay migraciones ni funcionalidad Taller instaladas.
+
+Decimal exacto se valida desde texto antes del cast mediante escritura SQL controlada
+y privilegios separados. Estados previos desconocidos conservan impedimento observado
+hasta conciliación administrativa. Reservas de archivos son operaciones técnicas
+append-only en workshop_operations; adjuntos solo confirmados. UNIQUE común y validación
+diferida impiden confirmación/liberación dobles y adjuntos con reserva liberada.
+
+Primera versión de almacenamiento: privado local, servidor único, exclusión por carga,
+recuperación de commit incierto y respaldo/restauración de PostgreSQL+archivos coherentes.
+Reintentos configurables: tres intentos y diez segundos iniciales, solo transitorios
+seguros con misma clave. Permisos específicos incluyen lectura histórica del mecánico
+sin nuevas escrituras y coordinación de secretaria; costo sin clasificación no suma.
+
+Diseño preparado para futura autorización de migraciones y pruebas aisladas; garantías
+de concurrencia/durabilidad todavía no comprobadas experimentalmente. Política operativa
+RPO/RTO/retención/frecuencia/responsables y aplicación real requieren aprobación posterior.
