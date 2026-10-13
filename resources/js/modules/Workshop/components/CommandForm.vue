@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { reactive, useId, watch } from 'vue';
+import SearchSelect from './SearchSelect.vue';
 
 export interface Field {
     key: string;
@@ -7,6 +8,7 @@ export interface Field {
     type?: string;
     options?: { value: string; label: string }[];
     required?: boolean;
+    searchable?: boolean;
     value?: string;
 }
 
@@ -14,6 +16,7 @@ const props = defineProps<{
     title: string;
     fields: Field[];
     busy: boolean;
+    cancelDisabled?: boolean;
     errors: Record<string, string[]>;
 }>();
 const emit = defineEmits<{
@@ -51,20 +54,21 @@ function updateInput(key: string, event: Event): void {
         <h2>{{ title }}</h2>
         <fieldset :disabled="busy" class="workshop-form-grid">
             <div v-for="field in fields" :key="field.key" class="workshop-form-field" :class="{ 'workshop-field-wide': field.type === 'textarea' }">
-                <label :for="`${formId}-${field.key}`">{{ field.label }}<span v-if="field.required" aria-hidden="true"> *</span></label>
-                <select v-if="field.options" :id="`${formId}-${field.key}`" v-model="values[field.key]" :required="field.required" :aria-invalid="Boolean(errors[field.key]?.length)" :aria-describedby="errors[field.key]?.length ? `${formId}-${field.key}-error` : undefined">
+                <label v-if="!field.searchable || !field.options" :for="`${formId}-${field.key}`">{{ field.label }}<span v-if="field.required" aria-hidden="true"> *</span></label>
+                <SearchSelect v-if="field.options && field.searchable" :id="`${formId}-${field.key}`" :model-value="values[field.key] ?? ''" @update:model-value="values[field.key] = $event" :options="field.options" :label="field.label" :required="field.required" :errors="errors[field.key]" />
+                <select :aria-label="field.label" v-else-if="field.options" :id="`${formId}-${field.key}`" v-model="values[field.key]" :required="field.required" :aria-invalid="Boolean(errors[field.key]?.length)" :aria-describedby="errors[field.key]?.length ? `${formId}-${field.key}-error` : undefined">
                     <option value="">Seleccionar…</option>
                     <option v-for="option in field.options" :key="option.value" :value="option.value">{{ option.label }}</option>
                 </select>
-                <textarea v-else-if="field.type === 'textarea'" :id="`${formId}-${field.key}`" v-model="values[field.key]" rows="4" :required="field.required" :aria-invalid="Boolean(errors[field.key]?.length)" :aria-describedby="errors[field.key]?.length ? `${formId}-${field.key}-error` : undefined" />
-                <input v-else :id="`${formId}-${field.key}`" :value="values[field.key]" :type="field.type ?? 'text'" :step="field.type === 'number' ? 'any' : undefined" :required="field.required" :aria-invalid="Boolean(errors[field.key]?.length)" :aria-describedby="errors[field.key]?.length ? `${formId}-${field.key}-error` : undefined" @input="updateInput(field.key, $event)">
-                <ul v-if="errors[field.key]?.length" :id="`${formId}-${field.key}-error`" class="workshop-field-errors">
+                <textarea :aria-label="field.label" v-else-if="field.type === 'textarea'" :id="`${formId}-${field.key}`" v-model="values[field.key]" rows="4" :required="field.required" :aria-invalid="Boolean(errors[field.key]?.length)" :aria-describedby="errors[field.key]?.length ? `${formId}-${field.key}-error` : undefined" />
+                <input :aria-label="field.label" v-else :id="`${formId}-${field.key}`" :value="values[field.key]" :type="field.type ?? 'text'" :step="field.type === 'number' ? 'any' : undefined" :required="field.required" :aria-invalid="Boolean(errors[field.key]?.length)" :aria-describedby="errors[field.key]?.length ? `${formId}-${field.key}-error` : undefined" @input="updateInput(field.key, $event)">
+                <ul v-if="errors[field.key]?.length && (!field.searchable || !field.options)" :id="`${formId}-${field.key}-error`" class="workshop-field-errors">
                     <li v-for="message in errors[field.key]" :key="message">{{ message }}</li>
                 </ul>
             </div>
         </fieldset>
         <div class="workshop-form-actions">
-            <button type="button" class="workshop-button-secondary" :disabled="busy" @click="emit('cancel')">Cancelar</button>
+            <button type="button" class="workshop-button-secondary" :disabled="cancelDisabled" @click="emit('cancel')">Cancelar</button>
             <button type="submit" class="workshop-button-primary" :disabled="busy">{{ busy ? 'Guardando…' : 'Guardar' }}</button>
         </div>
     </form>

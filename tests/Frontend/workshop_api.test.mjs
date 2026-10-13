@@ -65,3 +65,17 @@ test('input instants use the approved Costa Rica timezone and exact text stays t
     assert.equal(presentation.instant('2026-10-13T08:30'),'2026-10-13T08:30:00-06:00');
     assert.equal(presentation.text('1.000001'),'1.000001');
 });
+
+test('existing raw employee and catalog pagination is decoded without requiring Resource meta', async () => {
+    const calls=[];
+    globalThis.fetch=async url=>{const number=Number(new URL(url,'https://local.test').searchParams.get('page'));calls.push(number);return Response.json({data:[{id:`employee-${number}`,name:'Mecánico',is_active:true,user_id:'7'}],current_page:number,last_page:2,per_page:100,total:2});};
+    const employees=await api.catalog('/employees');
+    assert.deepEqual(calls,[1,2]);assert.equal(employees.length,2);assert.equal(employees[0].name,'Mecánico');
+});
+
+test('existing Resource catalog pagination remains supported and fails closed for malformed pages', async () => {
+    globalThis.fetch=async()=>Response.json(pagination([{id:'asset-1',code:'CAB-01'}]));
+    assert.equal((await api.catalog('/fleet-assets'))[0].code,'CAB-01');
+    globalThis.fetch=async()=>Response.json({data:[{id:'part-1'}],last_page:'2'});
+    await assert.rejects(api.catalog('/catalogs/spare-parts'));
+});

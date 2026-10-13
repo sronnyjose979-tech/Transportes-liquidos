@@ -2,9 +2,7 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { getSession, login, logout, refreshCsrf } from '../FleetAndDocuments/api';
 import type { Session } from '../FleetAndDocuments/contracts';
-import { page, lookup } from '../TransportAndDispatch/contracts';
-import type { Lookup } from '../TransportAndDispatch/contracts';
-import { all, detail, failure, list, request, write } from './api';
+import { all, detail, failure, list, catalog, catalogAsset, write } from './api';
 import type { RecordRow } from './api';
 import { instant, labels, localInstant, options, states, terminal, text } from './presentation';
 import CommandForm from './components/CommandForm.vue';
@@ -13,6 +11,7 @@ import RecordTable from './components/RecordTable.vue';
 import ScopeForm from './components/ScopeForm.vue';
 import WorkshopIcon from './components/WorkshopIcon.vue';
 import WorkshopDialog from './components/WorkshopDialog.vue';
+import SearchSelect from './components/SearchSelect.vue';
 import ContentSummary from './components/ContentSummary.vue';
 import './workshop.css';
 type View = 'impediment' | 'dashboard' | 'orders' | 'reports' | 'authorizations' | 'impediments' | 'order' | 'authorization' | 'report';
@@ -30,7 +29,9 @@ interface Command {
 const session = ref<Session | null>(null), denied = ref(false), booting = ref(true), username = ref(''), password = ref('');
 const view = ref<View>('dashboard'), loading = ref(false), busy = ref(false), error = ref(''), success = ref(''), fieldErrors = ref<Record<string, string[]>>({}), csrfExpired = ref(false);
 const rows = ref<RecordRow[]>([]), selected = ref<RecordRow | null>(null), related = ref<Record<string, RecordRow[]>>({}), decisions = ref<RecordRow[]>([]), applications = ref<RecordRow[]>([]);
-const counts = ref<Record<string, number | null>>({}), metricsError = ref(''), assets = ref<Lookup[]>([]), employees = ref<Lookup[]>([]);
+const counts = ref<Record<string, number | null>>({}), metricsError = ref(''), assets = ref<RecordRow[]>([]), employees = ref<RecordRow[]>([]);
+const parts = ref<RecordRow[]>([]), suppliers = ref<RecordRow[]>([]), lookupWarning = ref('');
+const linkableReports = ref<RecordRow[]>([]);
 const currentPage = ref(1), lastPage = ref(1), total = ref(0), search = ref(''), status = ref(''), priority = ref(''), assetFilter = ref(''), from = ref(''), to = ref(''), onlyPending = ref(true);
 const originReport = ref<RecordRow | null>(null);
 const command = ref<Command | null>(null), frozen = ref<Record<string, unknown> | null>(null), uncertain = ref(false), stale = ref(false);
@@ -40,24 +41,34 @@ const office = computed(() => session.value?.roles.some(r => ['administrator', '
 const diagnostician = computed(() => admin.value || session.value?.roles.includes('mechanic'));
 const currentAssignments = computed(() => (related.value['mechanic-assignments'] ?? []).filter(a => a.is_current === true && (admin.value || a.is_current_actor === true)));
 const canParticipate = computed(() => admin.value || currentAssignments.value.length > 0);
+const activeNavigation = computed(() => ({order:'orders',report:'reports',authorization:'authorizations',impediment:'impediments'} as Partial<Record<View,View>>)[view.value] ?? view.value);
 const titles: Record<View, string> = { dashboard: 'Inicio de Taller', orders: 'Órdenes de trabajo', reports: 'Reportes de averías', authorizations: 'Autorizaciones', impediments: 'Vehículos con impedimentos', order: 'Detalle de orden', authorization: 'Detalle de autorización', report: 'Detalle de avería', impediment: 'Detalle de impedimento' };
-const visibleRows = computed(() => rows.value.filter(row => !search.value || [row.id, row.description, row.fleet_asset_id].some(v => String(v ?? '').toLocaleLowerCase().includes(search.value.toLocaleLowerCase()))).map(row => ({ ...row, status: labels[String(row.status)] ?? row.status, priority: labels[String(row.priority)] ?? row.priority, type: labels[String(row.type)] ?? row.type, fleet_asset_id: assetName(String(row.fleet_asset_id ?? '')), authorization_state: authorizationState(row) })));
-function assetName(id: string): string { return assets.value.find(a => a.id === id)?.code ?? id; }
+const visibleRows = computed(() => rows.value.filter(row => !search.value || [row.id, row.description, assetName(String(row.fleet_asset_id ?? ''))].some(v => String(v ?? '').toLocaleLowerCase().includes(search.value.toLocaleLowerCase()))).map(row => ({ ...row, status: labels[String(row.status)] ?? row.status, priority: labels[String(row.priority)] ?? row.priority, type: labels[String(row.type)] ?? row.type, fleet_asset_id: assetName(String(row.fleet_asset_id ?? '')), authorization_state: authorizationState(row) })));
+function assetName(id: string): string { return String(assets.value.find(a => a.id === id)?.code ?? id); }
+const assetOptions = computed(() => assets.value.map(a => ({value:a.id,label:String(a.code ?? a.description ?? a.id)})));
+const partOptions = computed(() => parts.value.map(p => ({value:p.id,label:`${p.code ?? ''} ${p.description ?? p.description_snapshot ?? p.id} · ${p.unit ?? p.unit_snapshot ?? ''}`.trim()})));
+const supplierOptions = computed(() => suppliers.value.map(p => ({value:p.id,label:String(p.name ?? p.description ?? p.id)})));
+function rejectedRequests(type?:string): {value:string;label:string}[] {return (related.value['authorization-requests'] ?? []).filter(r => decisionFor(r)?.decision==='rejected' && (!type || r.type===type)).map(r=>({value:r.id,label:`${labels[String(r.type)] ?? r.type} · ${r.reason} · ${r.registered_at}`}));}
+
 function decisionFor(row: RecordRow): RecordRow | undefined { return decisions.value.find(d => d.request_id === row.id); }
 function applied(d: RecordRow): boolean { return applications.value.some(a => a.decision_id === d.id); }
 function authorizationState(row: RecordRow): string { const d = decisionFor(row); return d ? applied(d) ? 'Aplicada' : labels[String(d.decision)] ?? text(d.decision) : 'Pendiente'; }
-function clearPrivate(): void { controller?.abort(); generation++; rows.value = []; related.value = {}; selected.value = null; decisions.value = []; applications.value = []; assets.value = []; employees.value = []; counts.value = {}; command.value = null; frozen.value = null; uncertain.value = false; originReport.value = null; loading.value = false; }
-async function handle(e: unknown): Promise<void> { const f = failure(e); error.value = f.message; fieldErrors.value = f.fields; csrfExpired.value = f.status === 419; if (f.status === 401) {
-    clearPrivate();
-    session.value = null;
-} if (f.status === 403) {
-    clearPrivate();
-    denied.value = true;
-} if (f.status === 404) {
-    selected.value = null;
-    related.value = {};
-} if (f.status === 409 || f.fields.version || f.fields.request_key)
-    stale.value = true; }
+function clearPrivate(): void { controller?.abort(); generation++; rows.value = []; related.value = {}; selected.value = null; decisions.value = []; applications.value = []; assets.value = []; employees.value = []; parts.value=[];suppliers.value=[];linkableReports.value=[];lookupWarning.value=''; counts.value = {}; command.value = null; frozen.value = null; uncertain.value = false; originReport.value = null; loading.value = false; }
+async function handle(e: unknown): Promise<void> {
+    const f = failure(e); error.value = f.message; fieldErrors.value = f.fields; csrfExpired.value = f.status === 419;
+    if (f.status === 401) { clearPrivate(); session.value = null; }
+    if (f.status === 403) {
+        try {
+            const current = await getSession();
+            const changed = !session.value || current.id !== session.value.id || [...current.roles].sort().join(',') !== [...session.value.roles].sort().join(',');
+            if (changed || !current.roles.some(role => ['administrator','secretary','mechanic'].includes(role))) {
+                clearPrivate(); session.value = current; denied.value = !current.roles.some(role => ['administrator','secretary','mechanic'].includes(role)); view.value='dashboard';
+            } else { command.value=null; frozen.value=null; uncertain.value=false; selected.value=null; related.value={}; rows.value=[]; }
+        } catch (sessionError) {const status=failure(sessionError).status;if(status===401){clearPrivate();session.value=null;}else if(status===403){clearPrivate();denied.value=true;} }
+    }
+    if (f.status === 404) { selected.value = null; related.value = {}; }
+    if (f.status === 409 || f.fields.version || f.fields.request_key) stale.value = true;
+}
 async function signIn(): Promise<void> { if (busy.value)
     return; busy.value = true; error.value = ''; try {
     session.value = await login(username.value, password.value);
@@ -88,29 +99,38 @@ finally {
     busy.value = false;
 } }
 async function loadLookups(signal: AbortSignal): Promise<void> {
-    if (!office.value)
+    lookupWarning.value='';
+    if (!office.value) {
+        const orders=await all('orders',{},signal);
+        const ids=[...new Set(orders.map(row=>String(row.fleet_asset_id)))];
+        const values=await Promise.all(ids.map(id=>catalogAsset(id,signal).catch(()=>null)));
+        if(!signal.aborted)assets.value=values.filter((value):value is RecordRow=>value!==null);
         return;
-    const path = admin.value ? '/fleet-assets' : '/transport/lookups/assets';
-    const result: Lookup[] = [];
-    for (let p = 1;; p++) {
-        const batch = page(await request(`${path}?per_page=100&page=${p}`, 'GET', undefined, signal), lookup);
-        result.push(...batch.data);
-        if (p >= batch.meta.last_page)
-            break;
     }
-    if (!signal.aborted)
-        assets.value = result;
-    if (admin.value) {
-        const result: Lookup[] = [];
-        for (let p = 1;; p++) {
-            const batch = page(await request(`/employees?per_page=100&page=${p}`, 'GET', undefined, signal), lookup);
-            result.push(...batch.data);
-            if (p >= batch.meta.last_page)
-                break;
-        }
-        if (!signal.aborted)
-            employees.value = result;
+    const paths=admin.value?['/fleet-assets','/employees','/users','/catalogs/spare-parts','/catalogs/suppliers']:['/fleet-assets'];
+    const batches=await Promise.allSettled(paths.map(path=>catalog(path,signal)));
+    if(signal.aborted)return;
+    const failed=batches.find(b=>b.status==='rejected' && failure(b.reason).status===401);
+    if(failed?.status==='rejected')throw failed.reason;
+    const read=(index:number):RecordRow[]=>{const batch=batches[index];return batch?.status==='fulfilled'?batch.value:[];};
+    assets.value=read(0);
+    if(admin.value){
+        const users=read(2);
+        employees.value=read(1).filter(employee=>employee.is_active===true && users.some(user=>String(user.id)===String(employee.user_id) && user.is_active===true && Array.isArray(user.roles) && user.roles.some(role=>role && typeof role==='object' && 'name' in role && role.name==='mechanic')));
+        parts.value=read(3);suppliers.value=read(4);
+    } else {
+        const assignments=await all('mechanic-assignments',{},signal);
+        if(signal.aborted)return;
+        employees.value=[...new Map(assignments.filter(a=>a.is_current===true).map(a=>[String(a.employee_id),{id:String(a.employee_id),name:a.employee_name}])).values()];
     }
+    if(batches.some(b=>b.status==='rejected'))lookupWarning.value='No se pudieron cargar algunos selectores. Puedes consultar Taller y actualizar para volver a intentarlo.';
+}
+async function loadScopeContext(order:string,signal:AbortSignal):Promise<void>{
+    if(admin.value)return;
+    const [p,t]=await Promise.all([all('scope-parts',{},signal),all('scope-tasks',{},signal)]);
+    if(signal.aborted)return;
+    parts.value=[...new Map(p.map(row=>[String(row.spare_part_id),{...row,id:String(row.spare_part_id)}])).values()];
+    suppliers.value=[...new Map(t.filter(row=>typeof row.supplier_id==='string').map(row=>[String(row.supplier_id),{id:String(row.supplier_id),description:`Proveedor asociado a ${row.description}`}])).values()];
 }
 async function dashboard(signal: AbortSignal): Promise<void> {
     const keys = Object.keys(states);
@@ -131,7 +151,7 @@ async function dashboard(signal: AbortSignal): Promise<void> {
     if (failed?.status === 'rejected')
         throw failed.reason;
 }
-async function refresh(): Promise<void> {
+async function refresh(): Promise<boolean> {
     controller?.abort();
     controller = new AbortController();
     const signal = controller.signal, run = ++generation;
@@ -140,7 +160,7 @@ async function refresh(): Promise<void> {
     try {
         const nextSession = await getSession();
         if (signal.aborted || run !== generation)
-            return;
+            return false;
         if (session.value && (session.value.id !== nextSession.id || [...session.value.roles].sort().join(',') !== [...nextSession.roles].sort().join(','))) {
             rows.value = [];
             related.value = {};
@@ -148,7 +168,7 @@ async function refresh(): Promise<void> {
             decisions.value = [];
             applications.value = [];
             assets.value = [];
-            employees.value = [];
+            employees.value = [];parts.value=[];suppliers.value=[];linkableReports.value=[];lookupWarning.value='';
             counts.value = {};
             originReport.value = null;
             command.value = null;
@@ -161,11 +181,11 @@ async function refresh(): Promise<void> {
         if (!session.value.roles.some(r => ['administrator', 'secretary', 'mechanic'].includes(r))) {
             clearPrivate();
             denied.value = true;
-            return;
+            return false;
         }
         denied.value = false;
-        if (office.value && assets.value.length === 0)
-            await loadLookups(signal);
+        await loadLookups(signal);
+        if(signal.aborted)return false;
         if (view.value === 'dashboard')
             await dashboard(signal);
         else if (['order', 'authorization', 'report', 'impediment'].includes(view.value) && selected.value) {
@@ -175,19 +195,22 @@ async function refresh(): Promise<void> {
                 const kinds = ['diagnoses', 'mechanic-assignments', 'scopes', 'report-links', 'authorization-requests', 'scope-tasks', 'scope-parts'];
                 const values = await Promise.all(kinds.map(k => all(k, { work_order_id: row.id }, signal)));
                 if (signal.aborted)
-                    return;
+                    return false;
                 related.value = Object.fromEntries(kinds.map((k, i) => [k, values[i] ?? []]));
+                const reports=await all('reports',{fleet_asset_id:String(row.fleet_asset_id),effective:1},signal);
+                if(signal.aborted)return false;linkableReports.value=reports;
+                await loadScopeContext(row.id,signal);
             }
             if (['order', 'authorization'].includes(view.value)) {
                 const filter = view.value === 'order' ? { work_order_id: row.id } : {};
                 const [d, a] = await Promise.all([all('authorization-decisions', filter, signal), all('authorization-applications', filter, signal)]);
                 if (signal.aborted)
-                    return;
+                    return false;
                 decisions.value = d;
                 applications.value = a;
             }
             if (signal.aborted)
-                return;
+                return false;
             selected.value = row;
         }
         else {
@@ -213,20 +236,22 @@ async function refresh(): Promise<void> {
             if (view.value === 'authorizations') {
                 const [d, a] = await Promise.all([all('authorization-decisions', {}, signal), all('authorization-applications', {}, signal)]);
                 if (signal.aborted)
-                    return;
+                    return false;
                 decisions.value = d;
                 applications.value = a;
             }
             if (signal.aborted)
-                return;
+                return false;
             rows.value = result.data;
             lastPage.value = result.meta.last_page;
             total.value = result.meta.total;
         }
+        return true;
     }
     catch (e) {
         if (!(e instanceof DOMException && e.name === 'AbortError') && run === generation)
-            await handle(e);
+            {if(['order','report','authorization','impediment'].includes(view.value)){selected.value=null;related.value={};} await handle(e);}
+        return false;
     }
     finally {
         if (run === generation)
@@ -234,13 +259,13 @@ async function refresh(): Promise<void> {
     }
 }
 async function navigate(target: View, row?: RecordRow): Promise<void> { if (busy.value || uncertain.value)
-    return; command.value = null; selected.value = row ?? null; view.value = target; rows.value = []; related.value = {}; search.value = ''; currentPage.value = 1; success.value = ''; await refresh(); }
+    return; command.value = null; originReport.value=null;selected.value = row ?? null; view.value = target; rows.value = []; related.value = {}; search.value = ''; currentPage.value = 1; success.value = ''; await refresh(); }
 const reason: Field = { key: 'reason', label: 'Motivo / información recibida', type: 'textarea', required: true };
 const description = (value = ''): Field => ({ key: 'description', label: 'Descripción de la reparación', type: 'textarea', required: true, value });
 const time = (key: string, label: string): Field => ({ key, label, type: 'datetime-local', required: true, value: localInstant() });
-const assetField = (value = ''): Field => ({ key: 'fleet_asset_id', label: 'Vehículo', required: true, value, ...(assets.value.length ? { options: assets.value.map(a => ({ value: a.id, label: a.code ?? a.id })) } : { type: 'text' }) });
+const assetField = (value = ''): Field => ({ key: 'fleet_asset_id', label: 'Vehículo', required: true, value, options:assetOptions.value,searchable:true });
 const priorityField = (value = 'normal'): Field => ({ key: 'priority', label: 'Prioridad', required: true, value, options: options({ low: 'Baja', normal: 'Normal', high: 'Alta', urgent: 'Urgente' }) });
-function open(title: string, path: string, fields: Field[], extra: Record<string, unknown> = {}, method = 'POST', scope = false): void { error.value = ''; success.value = ''; fieldErrors.value = {}; frozen.value = null; uncertain.value = false; stale.value = false; command.value = { title, path, fields, extra, method, key: crypto.randomUUID(), actor: session.value?.id ?? '', roles: [...(session.value?.roles ?? [])].sort().join(','), scope }; }
+function open(title: string, path: string, fields: Field[], extra: Record<string, unknown> = {}, method = 'POST', scope = false): void { if(loading.value || busy.value)return;error.value = ''; success.value = ''; fieldErrors.value = {}; frozen.value = null; uncertain.value = false; stale.value = false; command.value = { title, path, fields, extra, method, key: crypto.randomUUID(), actor: session.value?.id ?? '', roles: [...(session.value?.roles ?? [])].sort().join(','), scope }; }
 function newReport(): void { open('Registrar avería', 'reports', [assetField(), { ...description(), label: 'Descripción de la avería' }, time('occurred_at', 'Fecha de la avería (Costa Rica)'), reason]); }
 function newOrder(report?: RecordRow): void { originReport.value = report ?? null; open('Crear orden', 'orders', [assetField(report ? String(report.fleet_asset_id) : ''), { key: 'kind', label: 'Tipo de mantenimiento', required: true, value: 'corrective', options: options({ corrective: 'Correctivo', preventive: 'Preventivo' }) }, description(report ? String(report.description) : ''), priorityField(), time('created_at', 'Fecha de creación (Costa Rica)'), reason]); }
 function orderAction(action: string): void {
@@ -251,15 +276,15 @@ function orderAction(action: string): void {
     if (action === 'edit')
         open('Editar orden', base, [description(String(row.description)), priorityField(String(row.priority)), reason], { version: row.version }, 'PATCH');
     if (action === 'assign')
-        open('Asignar mecánico', `${base}/mechanic-assignments`, [{ key: 'employee_id', label: 'Empleado mecánico (UUID)', required: true, ...(employees.value.length ? { options: employees.value.map(e => ({ value: e.id, label: e.name ?? e.id })) } : { type: 'text' }) }, time('starts_at', 'Inicio de asignación (Costa Rica)'), reason]);
+        open('Asignar mecánico', `${base}/mechanic-assignments`, [{ key: 'employee_id', label: 'Empleado mecánico', required: true, options:employees.value.map(e=>({value:e.id,label:String(e.name ?? e.id)})),searchable:true }, time('starts_at', 'Inicio de asignación (Costa Rica)'), reason]);
     if (action === 'link')
-        open('Vincular avería', `${base}/report-links`, [{ key: 'report_id', label: 'Identificador de avería (UUID)', required: true, value: originReport.value?.id ?? '' }, reason]);
+        open('Vincular avería', `${base}/report-links`, [{ key: 'report_id', label: 'Avería', required: true, value: originReport.value?.id ?? '',options:linkableReports.value.map(r=>({value:r.id,label:`${r.description} · ${r.occurred_at}`})),searchable:true }, reason]);
     if (action === 'diagnosis')
-        open('Registrar diagnóstico', `${base}/diagnoses`, [{ key: 'mechanic_assignment_id', label: 'Asignación mecánica vigente', required: !admin.value, options: (related.value['mechanic-assignments'] ?? []).filter(a => a.is_current === true && (admin.value || a.is_current_actor === true)).map(a => ({ value: a.id, label: String(a.employee_name ?? a.employee_id) })) }, { key: 'problem', label: 'Problema encontrado', type: 'textarea', required: true }, { key: 'probable_cause', label: 'Causa probable', type: 'textarea', required: true }, { key: 'proposed_repair', label: 'Reparación propuesta', type: 'textarea', required: true }, time('occurred_at', 'Fecha de diagnóstico (Costa Rica)'), reason]);
+        open('Registrar diagnóstico', `${base}/diagnoses`, [{ key: 'mechanic_assignment_id', label: 'Asignación mecánica vigente',searchable:true, required: !admin.value, options: (related.value['mechanic-assignments'] ?? []).filter(a => a.is_current === true && (admin.value || a.is_current_actor === true)).map(a => ({ value: a.id, label: String(a.employee_name ?? a.employee_id) })) }, { key: 'problem', label: 'Problema encontrado', type: 'textarea', required: true }, { key: 'probable_cause', label: 'Causa probable', type: 'textarea', required: true }, { key: 'proposed_repair', label: 'Reparación propuesta', type: 'textarea', required: true }, time('occurred_at', 'Fecha de diagnóstico (Costa Rica)'), reason]);
     if (action === 'scope')
         open('Solicitar autorización de alcance', `${base}/scopes`, [], {}, 'POST', true);
     if (['cancellation', 'reopening', 'rectification'].includes(action))
-        open(`Solicitar ${labels[action]?.toLowerCase()}`, `${base}/authorization-requests`, [...(action === 'rectification' ? [description(String(row.description)), priorityField(String(row.priority))] : []), { key: 'previous_request_id', label: 'Solicitud anterior rechazada (UUID, opcional)' }, reason], { type: action, version: row.version });
+        open(`Solicitar ${labels[action]?.toLowerCase()}`, `${base}/authorization-requests`, [...(action === 'rectification' ? [description(String(row.description)), priorityField(String(row.priority))] : []), { key: 'previous_request_id', label: 'Solicitud anterior rechazada (opcional)',options:rejectedRequests(action),searchable:true }, reason], { type: action, version: row.version });
 }
 async function submit(values: Record<string, unknown>): Promise<void> {
     if (busy.value || stale.value || !command.value)
@@ -288,7 +313,7 @@ async function submit(values: Record<string, unknown>): Promise<void> {
         uncertain.value = false;
         command.value = null;
         frozen.value = null;
-        success.value = 'Operación confirmada y datos actualizados.';
+        success.value = 'Operación confirmada. Actualizando información…';
         if (typeof result.order_id === 'string' && c.path === 'orders') {
             view.value = 'order';
             selected.value = { id: result.order_id };
@@ -299,7 +324,8 @@ async function submit(values: Record<string, unknown>): Promise<void> {
             view.value = 'report';
             selected.value = { id: result.report_id };
         }
-        await refresh();
+        const updated=await refresh();
+        if(session.value && !denied.value)success.value=updated?'Operación confirmada y datos actualizados.':'Operación confirmada. No se pudo actualizar la información; consulta de nuevo sin repetir el envío.';
     }
     catch (e) {
         const f = failure(e);
@@ -380,7 +406,7 @@ function openRow(row: RecordRow): void { void navigate(view.value === 'orders' ?
 </a>
 <p class="workshop-eyebrow">TALLER MECÁNICO</p>
 <nav aria-label="Navegación Taller">
-<button v-for="item in (['dashboard','orders','reports','authorizations','impediments'] as const)" :key="item" :aria-current="view===item?'page':undefined" :disabled="busy || uncertain || denied" @click="navigate(item)">
+<button v-for="item in (['dashboard','orders','reports','authorizations','impediments'] as const)" :key="item" :aria-current="activeNavigation===item?'page':undefined" :disabled="busy || uncertain || denied" @click="navigate(item)">
 <WorkshopIcon :name="item" /> {{ {dashboard:'Inicio',orders:'Órdenes',reports:'Averías',authorizations:'Autorizaciones',impediments:'Impedimentos'}[item] }}</button>
 </nav>
 <nav v-if="office" aria-label="Otros módulos">
@@ -405,10 +431,10 @@ function openRow(row: RecordRow): void { void navigate(view.value === 'orders' ?
 </div>
 <button v-if="!denied" :disabled="loading || busy || !!command" @click="refresh">Actualizar datos</button>
 </div>
-        <div v-if="error" role="alert" class="workshop-alert">{{ error }}<button v-if="csrfExpired" @click="fixCsrf">Actualizar sesión de seguridad</button>
+        <div v-if="error && !command" role="alert" class="workshop-alert">{{ error }}<button v-if="csrfExpired" @click="fixCsrf">Actualizar sesión de seguridad</button>
 </div>
 <div v-if="success" role="status" class="workshop-success">{{ success }}</div>
-<p v-if="loading" role="status">Cargando información…</p>
+<p v-if="lookupWarning" role="status">{{ lookupWarning }}</p><p v-if="loading" role="status">Cargando información…</p>
         <p v-if="denied">Tu cuenta no tiene acceso vigente a esta operación. Contacta al administrador o cierra sesión.</p>
         <template v-else-if="view==='dashboard'">
             <p v-if="metricsError" role="status">{{ metricsError }}</p>
@@ -432,10 +458,10 @@ function openRow(row: RecordRow): void { void navigate(view.value === 'orders' ?
             <section class="workshop-card">
 <h2>Accesos rápidos</h2>
 <div class="workshop-actions">
-<button @click="newReport">Registrar avería</button>
+<button :disabled="loading || busy" @click="newReport">Registrar avería</button>
 <button @click="navigate('orders')">Consultar órdenes</button>
 <button @click="navigate('authorizations')">Gestionar autorizaciones</button>
-<button v-if="office" @click="newOrder()">Crear orden</button>
+<button v-if="office" :disabled="loading || busy" @click="newOrder()">Crear orden</button>
 </div>
 </section>
 <section class="workshop-card">
@@ -446,22 +472,21 @@ function openRow(row: RecordRow): void { void navigate(view.value === 'orders' ?
         </template>
         <template v-else-if="['orders','reports','authorizations','impediments'].includes(view)">
             <div class="workshop-actions">
-<button v-if="view==='reports'" @click="newReport">Registrar avería</button>
-<button v-if="view==='orders' && office" @click="newOrder()">Crear orden</button>
+<button v-if="view==='reports'" :disabled="loading || busy" @click="newReport">Registrar avería</button>
+<button v-if="view==='orders' && office" :disabled="loading || busy" @click="newOrder()">Crear orden</button>
 </div>
             <form class="workshop-card workshop-filters" aria-label="Filtros" @submit.prevent="currentPage=1;refresh()">
-<label v-if="view==='orders'">Estado<select v-model="status">
+<label v-if="view==='orders'">Estado<select aria-label="Estado" v-model="status">
 <option value="">Todos</option>
 <option v-for="(label,key) in states" :key="key" :value="key">{{ label }}</option>
 </select>
 </label>
-<label v-if="view==='orders'">Prioridad<select v-model="priority">
+<label v-if="view==='orders'">Prioridad<select aria-label="Prioridad" v-model="priority">
 <option value="">Todas</option>
 <option v-for="item in options({low:'Baja',normal:'Normal',high:'Alta',urgent:'Urgente'})" :key="item.value" :value="item.value">{{ item.label }}</option>
 </select>
 </label>
-<label>Vehículo (UUID)<input v-model="assetFilter" placeholder="Filtrar por identificador">
-</label>
+<SearchSelect v-model="assetFilter" label="Vehículo" :options="assetOptions" :disabled="loading" />
 <label v-if="view==='orders'">Desde (Costa Rica)<input v-model="from" type="datetime-local">
 </label>
 <label v-if="view==='orders'">Hasta (Costa Rica)<input v-model="to" type="datetime-local">
@@ -479,7 +504,7 @@ function openRow(row: RecordRow): void { void navigate(view.value === 'orders' ?
 <button :disabled="loading || currentPage>=lastPage" @click="currentPage++;refresh()">Siguiente</button>
 </div>
         </template>
-        <template v-else-if="selected && view==='order'">
+        <template v-else-if="selected && !loading && view==='order'">
             <section v-if="originReport && office" class="workshop-card">
 <h2>Avería de origen</h2>
 <p>{{ originReport.description }}</p>
@@ -494,7 +519,7 @@ function openRow(row: RecordRow): void { void navigate(view.value === 'orders' ?
 <button v-if="office && !terminal(selected)" @click="orderAction('assign')">Asignar mecánico</button>
 <button v-if="office" @click="orderAction('link')">Vincular avería</button>
 <button v-if="diagnostician && canParticipate && !terminal(selected)" @click="orderAction('diagnosis')">Registrar diagnóstico</button>
-<button v-if="(office || canParticipate) && !terminal(selected) && (related.diagnoses ?? []).length" @click="orderAction('scope')">Solicitar autorización de alcance</button>
+<button v-if="(office || canParticipate) && !terminal(selected) && (related.diagnoses ?? []).some(d=>d.is_effective!==false)" @click="orderAction('scope')">Solicitar autorización de alcance</button>
 <button v-if="office && !terminal(selected)" @click="orderAction('cancellation')">Solicitar cancelación</button>
 <button v-if="office && terminal(selected)" @click="orderAction('reopening')">Solicitar reapertura</button>
 <button v-if="office" @click="orderAction('rectification')">Solicitar rectificación</button>
@@ -544,7 +569,7 @@ function openRow(row: RecordRow): void { void navigate(view.value === 'orders' ?
 </section>
             <p>La ejecución de reparaciones, tiempos, inventario, costos y adjuntos corresponde a la segunda entrega. La orden conserva su estado confirmado.</p>
         </template>
-        <template v-else-if="selected && view==='impediment'">
+        <template v-else-if="selected && !loading && view==='impediment'">
 <section class="workshop-card">
 <h2>{{ selected.description }}</h2>
 <p>Vehículo: {{ assetName(String(selected.fleet_asset_id)) }}</p>
@@ -554,7 +579,7 @@ function openRow(row: RecordRow): void { void navigate(view.value === 'orders' ?
 <p>El estado de la orden no libera el vehículo. La salida y la resolución de impedimentos requieren los procesos administrativos del backend.</p>
 </section>
 </template>
-        <template v-else-if="selected && view==='report'">
+        <template v-else-if="selected && !loading && view==='report'">
 <section class="workshop-card">
 <h2>{{ selected.description }}</h2>
 <p>Identificador: {{ selected.id }}</p>
@@ -566,7 +591,7 @@ function openRow(row: RecordRow): void { void navigate(view.value === 'orders' ?
 <p v-else>La oficina debe crear la orden oficial y asignar sus mecánicos.</p>
 </section>
 </template>
-        <template v-else-if="selected && view==='authorization'">
+        <template v-else-if="selected && !loading && view==='authorization'">
 <section class="workshop-card">
 <h2>{{ labels[String(selected.type)] }} · {{ authorizationState(selected) }}</h2>
 <p>Solicitud {{ selected.id }}</p>
@@ -591,14 +616,14 @@ function openRow(row: RecordRow): void { void navigate(view.value === 'orders' ?
 </main>
     </template>
     <WorkshopDialog v-if="command && session && !denied" :title="command.title" @cancel="cancel">
-<div v-if="error" role="alert" class="workshop-alert">{{ error }}<p v-for="(items,key) in fieldErrors" :key="key">{{ key }}: {{ items.join(' ') }}</p>
+<div v-if="error" role="alert" class="workshop-alert">{{ error }}<p v-for="(items,key) in fieldErrors" :key="key">{{ items.join(' ') }}</p>
 </div>
-<p v-if="uncertain">La respuesta no confirmó el resultado. Se conserva la operación exacta y su clave para evitar duplicados.</p>
+<p v-if="!admin && command.scope">Los selectores muestran repuestos y proveedores ya referenciados en tus órdenes accesibles. El catálogo completo requiere acceso administrativo.</p><p v-if="!admin && command.path.endsWith('/mechanic-assignments')">Solo se muestran mecánicos con asignaciones vigentes accesibles. Si falta un empleado, el administrador debe realizar su asignación.</p><p v-if="!office && command.path==='reports'">Puedes seleccionar vehículos de tus órdenes asignadas. Si falta un vehículo, solicita a la oficina registrar la avería.</p><p v-if="uncertain">La respuesta no confirmó el resultado. Se conserva la operación exacta y su clave para evitar duplicados.</p>
 <button v-if="uncertain" :disabled="busy" @click="retry">Reintentar la misma operación</button>
 <button v-if="csrfExpired" @click="fixCsrf">Actualizar sesión de seguridad</button>
 <p v-if="stale">El estado cambió. Cierra este formulario, actualiza los datos y revisa una nueva operación.</p>
-<ScopeForm v-if="command.scope" :diagnoses="related.diagnoses ?? []" :scopes="related.scopes ?? []" :busy="busy || uncertain || stale" :errors="fieldErrors" @submit="submit" @cancel="cancel"/>
-<CommandForm v-else :title="command.title" :fields="command.fields" :busy="busy || uncertain || stale" :errors="fieldErrors" @submit="submit" @cancel="cancel"/>
+<ScopeForm v-if="command.scope" :diagnoses="related.diagnoses ?? []" :scopes="related.scopes ?? []" :parts="partOptions" :suppliers="supplierOptions" :previous-requests="rejectedRequests()" :busy="busy || uncertain || stale" :errors="fieldErrors" :cancel-disabled="busy || uncertain" @submit="submit" @cancel="cancel"/>
+<CommandForm v-else :title="command.title" :fields="command.fields" :busy="busy || uncertain || stale" :errors="fieldErrors" :cancel-disabled="busy || uncertain" @submit="submit" @cancel="cancel"/>
 <button v-if="stale" @click="cancel">Cerrar y revisar estado</button>
 </WorkshopDialog>
 </div>

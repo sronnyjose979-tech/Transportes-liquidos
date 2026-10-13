@@ -2,6 +2,7 @@
 No intercepted API responses. Run bash tests/run-postgres.sh --e2e-transport.
 """
 import asyncio
+import os
 import json
 import subprocess
 import unittest
@@ -21,7 +22,7 @@ class TransportModuleE2E(unittest.IsolatedAsyncioTestCase):
         asyncio.get_running_loop().slow_callback_duration=2.0
         self.fixture=self.command('fixture')
         self.playwright=await async_playwright().start()
-        self.browser=await self.playwright.chromium.launch(executable_path='/usr/bin/chromium',args=['--no-sandbox','--disable-dev-shm-usage'])
+        self.browser=await self.playwright.chromium.launch(executable_path=os.environ.get('CHROMIUM_EXECUTABLE', '/usr/bin/chromium'),args=['--no-sandbox','--disable-dev-shm-usage'])
         self.context=await self.browser.new_context(viewport={'width':1440,'height':1000})
         await self.context.tracing.start(screenshots=True,snapshots=True)
         self.page=await self.context.new_page();self.errors=[]

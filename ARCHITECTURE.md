@@ -937,10 +937,12 @@ La consulta existente de asignaciones añade `employee_name`, `is_current_actor`
 `is_current` (empleado activo, fecha de inicio alcanzada y sin liberación). Permite
 seleccionar participación propia vigente y ocultar acciones mecánicas históricas;
 no concede permisos ni sustituye la autorización del comando. No hay nuevo endpoint.
-Secretaría reutiliza lookup de activos de Transporte; mecánicos pueden introducir
-UUID del vehículo. El catálogo de empleados es exclusivo de administradores;
-secretaría introduce UUID existente. Repuestos/proveedores propuestos admiten UUID
-de catálogos reales sin inventar opciones ni existencias.
+Los selectores con búsqueda consumen consultas existentes: Flota para oficina,
+empleados/cuentas y catálogos para administrador; vehículos de órdenes accesibles
+para mecánico. Secretaría selecciona mecánicos de asignaciones vigentes accesibles.
+Sin acceso a catálogos completos, repuestos y proveedores provienen de referencias
+existentes en órdenes visibles. No hay entrada manual de UUID ni ampliación de permisos;
+un elemento ausente del contexto requiere intervención administrativa.
 
 Las versiones se capturan al abrir el formulario. Respuestas perdidas conservan en
 memoria método, ruta, contenido y `request_key` exactos; solo un reintento explícito
@@ -953,4 +955,35 @@ la página visible y sin formulario activo; el usuario también puede actualizar
 Validación: `npm run typecheck`, `npm run build`, `npm run test:frontend-api`,
 `npm run test:frontend` (requiere Playwright Python y Chromium ya disponibles),
 `bash tests/run-postgres.sh --filter Workshop`, Pint y `git diff --check`.
-La suite de navegador usa API sintética interceptada; no equivale a E2E con DB real.
+La suite de navegador usa API sintética interceptada para fallos deterministas.
+`npm run test:e2e-workshop` cubre además Chromium → Laravel → PostgreSQL 18 temporal
+sin simular respuestas, con comprobación posterior de registros y recibos.
+
+
+### Validación y ajustes de la primera entrega
+
+Se corrige la lectura de paginación de empleados/catálogos: Laravel devuelve un
+paginador directo, mientras los Resources de Taller contienen `meta`. La integración
+soporta ambos contratos y filtra empleados administrativos por cuenta y empleado
+activos con rol mecánico. Las consultas de selectores no impiden mostrar indicadores
+cuando un catálogo falla; se informa su indisponibilidad.
+
+No se muestran acciones de detalle hasta completar su consulta. Los diagnósticos
+históricos no habilitan un selector vacío de alcance. La búsqueda de órdenes incluye
+el código visible del vehículo. Un 403 puntual no revoca el módulo en el navegador:
+se verifica identidad/roles, se retira el registro rechazado y se conserva navegación.
+Revocación efectiva o cuenta bloqueada sí limpian los datos privados. Confirmación
+de comando y éxito de actualización se comunican por separado; el POST confirmado
+no se vuelve a enviar porque falle la consulta posterior.
+
+Las pruebas usan claves, sesiones, cachés, vistas compiladas y configuración propios
+en /tmp. Ignoran el hot file de desarrollo sin modificarlo. El runner acepta
+`PLAYWRIGHT_PYTHON` y `CHROMIUM_EXECUTABLE`; bibliotecas adicionales pueden configurarse
+solo para el proceso con `LD_LIBRARY_PATH`. No se instalan herramientas automáticamente
+al ejecutar pruebas ni se modifican dependencias de aplicación.
+
+La validación E2E detectó además un alias SQL `authorization` sin citar en el filtro
+no administrativo de decisiones/aplicaciones. Se corrige usando el Grammar existente
+para identificar `content`, manteniendo intacta la exclusión de solicitudes económicas.
+Las pruebas cubren consultas mecánicas vacías, decisiones y aplicaciones confirmadas,
+acceso por orden y el recorrido completo con la API y PostgreSQL reales.

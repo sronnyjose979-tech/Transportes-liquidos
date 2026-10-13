@@ -1,12 +1,17 @@
 <script setup lang="ts">
 import { ref, useId, onMounted } from 'vue';
 import type { RecordRow } from '../api';
-const props = defineProps<{
+import SearchSelect from './SearchSelect.vue';
+const props = withDefaults(defineProps<{
     diagnoses: RecordRow[];
     scopes: RecordRow[];
+    parts?: { value: string; label: string }[];
+    suppliers?: { value: string; label: string }[];
+    previousRequests?: { value: string; label: string }[];
     busy: boolean;
+    cancelDisabled?: boolean;
     errors: Record<string, string[]>;
-}>();
+}>(), { parts: () => [], suppliers: () => [], previousRequests: () => [] });
 const emit = defineEmits<{
     submit: [
         values: Record<string, unknown>
@@ -33,46 +38,38 @@ onMounted(() => document.getElementById(`${id}-diagnosis`)?.focus());
 <form aria-label="Solicitar autorización de alcance" @submit.prevent="submit">
 <h2>Solicitar autorización de alcance</h2>
 <p>El alcance registra las tareas y repuestos concretos de esta reparación. El servidor crea la solicitud de autorización.</p>
+<ul v-if="Object.keys(errors).length" class="workshop-field-errors" role="alert">
+<li v-for="(messages, field) in errors" :key="field"><span v-for="message in messages" :key="message">{{ message }} </span></li>
+</ul>
 <fieldset :disabled="busy">
-<label :for="`${id}-diagnosis`">Diagnóstico<select :id="`${id}-diagnosis`" v-model="diagnosis" required>
-<option value="">Seleccionar diagnóstico</option>
-<option v-for="d in diagnoses.filter(d=>d.is_effective!==false)" :key="d.id" :value="d.id">{{ d.problem }}</option>
-</select>
-</label>
-<label>Tipo de alcance<select v-model="kind">
+<SearchSelect :id="`${id}-diagnosis`" v-model="diagnosis" label="Diagnóstico" :options="diagnoses.filter(d => d.is_effective !== false).map(d => ({ value: d.id, label: String(d.problem) }))" required :errors="errors.diagnosis_id" />
+<label>Tipo de alcance<select aria-label="Tipo de alcance" v-model="kind">
 <option value="initial">Inicial</option>
 <option value="extension">Ampliación de la misma reparación</option>
 <option value="revision">Revisión de alcance anterior</option>
 </select>
 </label>
-<label v-if="kind==='revision'">Alcance anterior<select v-model="previous" required>
-<option value="">Seleccionar alcance</option>
-<option v-for="s in scopes" :key="s.id" :value="s.id">{{ s.description }} · revisión {{ s.revision }}</option>
-</select>
-</label>
-<label>Solicitud anterior rechazada (UUID, opcional)<input v-model="previousRequest">
-</label>
-<label>Descripción del alcance<textarea v-model="description" required maxlength="10000">
+<SearchSelect v-if="kind==='revision'" v-model="previous" label="Alcance anterior" :options="scopes.map(s => ({ value: s.id, label: `${s.description} · revisión ${s.revision}` }))" required :errors="errors.previous_scope_id" />
+<SearchSelect v-model="previousRequest" label="Solicitud anterior rechazada (opcional)" :options="previousRequests" :errors="errors.previous_request_id" />
+<label>Descripción del alcance<textarea v-model="description" :aria-invalid="Boolean(errors.description?.length)" required maxlength="10000">
 </textarea>
 </label>
 <h3>Trabajos propuestos</h3>
 <div v-for="(t,i) in tasks" :key="i" class="workshop-card">
-<label>Trabajo {{ i+1 }}<textarea v-model="t.description" required maxlength="10000">
+<label>Trabajo {{ i+1 }}<textarea v-model="t.description" :aria-invalid="Boolean(errors[`tasks.${i}.description`]?.length)" required maxlength="10000">
 </textarea>
 </label>
-<label>Proveedor externo (UUID, opcional)<input v-model="t.supplier">
-</label>
+<SearchSelect v-model="t.supplier" :label="`Proveedor externo ${i+1} (opcional)`" :options="suppliers" :errors="errors[`tasks.${i}.supplier_id`]" />
 <button type="button" :disabled="tasks.length===1 || parts.some(p=>p.task===String(i+1))" @click="removeTask(i)">Retirar trabajo {{ i+1 }}</button>
 </div>
 <button type="button" :disabled="tasks.length>=100" @click="tasks.push({description:'',supplier:''})">Añadir trabajo</button>
 <h3>Repuestos propuestos</h3>
-<p>Usa identificadores del catálogo existente. La cantidad conserva precisión decimal; no representa stock disponible.</p>
+<p>Selecciona repuestos del catálogo existente. La cantidad conserva precisión decimal; no representa stock disponible.</p>
 <div v-for="(p,i) in parts" :key="i" class="workshop-card">
-<label>Repuesto {{ i+1 }} (UUID)<input v-model="p.part" required pattern="[0-9a-fA-F-]{36}">
+<SearchSelect v-model="p.part" :label="`Repuesto ${i+1}`" :options="props.parts" required :errors="errors[`parts.${i}.spare_part_id`]" />
+<label>Cantidad {{ i+1 }}<input v-model="p.quantity" :aria-invalid="Boolean(errors[`parts.${i}.quantity`]?.length)" required inputmode="decimal" pattern="[0-9]+(\.[0-9]{1,6})?">
 </label>
-<label>Cantidad {{ i+1 }}<input v-model="p.quantity" required inputmode="decimal" pattern="[0-9]+(\.[0-9]{1,6})?">
-</label>
-<label>Trabajo asociado {{ i+1 }}<select v-model="p.task">
+<label>Trabajo asociado {{ i+1 }}<select :aria-label="`Trabajo asociado ${i+1}`" v-model="p.task">
 <option value="">General de esta reparación</option>
 <option v-for="(t,n) in tasks" :key="n" :value="String(n+1)">{{ n+1 }}. {{ t.description }}</option>
 </select>
@@ -80,13 +77,13 @@ onMounted(() => document.getElementById(`${id}-diagnosis`)?.focus());
 <button type="button" @click="parts.splice(i,1)">Retirar repuesto {{ i+1 }}</button>
 </div>
 <button type="button" :disabled="parts.length>=100" @click="parts.push({part:'',quantity:'',task:''})">Añadir repuesto</button>
-<label>Motivo / información recibida<textarea v-model="reason" required maxlength="5000">
+<label>Motivo / información recibida<textarea v-model="reason" :aria-invalid="Boolean(errors.reason?.length)" required maxlength="5000">
 </textarea>
 </label>
 </fieldset>
 <div class="workshop-actions">
 <button :disabled="busy">{{ busy?'Procesando…':'Guardar' }}</button>
-<button type="button" :disabled="busy" @click="emit('cancel')">Cancelar</button>
+<button type="button" :disabled="cancelDisabled" @click="emit('cancel')">Cancelar</button>
 </div>
 </form>
 </template>

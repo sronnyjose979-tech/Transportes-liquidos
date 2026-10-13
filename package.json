@@ -6,8 +6,9 @@
         "build": "vite build",
         "dev": "vite",
         "typecheck": "vue-tsc --noEmit",
-        "test:frontend": "python3 -m unittest discover -s tests/Frontend -v",
-        "test:frontend-api": "node tests/Frontend/workshop_api.test.mjs"
+        "test:frontend": "${PLAYWRIGHT_PYTHON:-python3} -m unittest discover -s tests/Frontend -v",
+        "test:frontend-api": "node tests/Frontend/workshop_api.test.mjs",
+        "test:e2e-workshop": "bash tests/run-postgres.sh --e2e-workshop"
     },
     "devDependencies": {
         "@tailwindcss/vite": "^4.0.0",

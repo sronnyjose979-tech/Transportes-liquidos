@@ -40,8 +40,8 @@ class DocumentModuleE2E(unittest.IsolatedAsyncioTestCase):
         cls.workspace = Path(os.environ.get('TRANSPORTE_E2E_ROOT', ''))
         if os.environ.get('TEST_DB_ISOLATED') != '1' or not host.startswith('/tmp/transporte-tests-') or cls.workspace != Path(host) / 'e2e':
             raise RuntimeError('Ejecuta exclusivamente bash tests/run-postgres.sh --e2e.')
-        if not (ROOT / 'public/build/manifest.json').exists() or (ROOT / 'public/hot').exists():
-            raise RuntimeError('Ejecuta npm run build y detén Vite dev antes de la suite E2E.')
+        if not (ROOT / 'public/build/manifest.json').exists():
+            raise RuntimeError('Ejecuta npm run build antes de la suite E2E.')
         cls.artifacts = cls.workspace / 'browser'
         cls.artifacts.mkdir()
         sock = socket.socket()
@@ -91,7 +91,7 @@ class DocumentModuleE2E(unittest.IsolatedAsyncioTestCase):
         self.kind = self.fixture['types'][0]
         self.no_expiration = self.fixture['types'][1]
         self.playwright = await async_playwright().start()
-        self.browser = await self.playwright.chromium.launch(executable_path='/usr/bin/chromium',
+        self.browser = await self.playwright.chromium.launch(executable_path=os.environ.get('CHROMIUM_EXECUTABLE', '/usr/bin/chromium'),
                                                            args=['--no-sandbox', '--disable-dev-shm-usage'])
         self.context = await self.browser.new_context(viewport={'width': 1440, 'height': 1000})
         await self.context.tracing.start(screenshots=True, snapshots=True)

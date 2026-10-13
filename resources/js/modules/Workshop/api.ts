@@ -54,3 +54,17 @@ export async function all(kind: string, filters: Record<string, string | number>
 export async function detail(kind: string, id: string, signal?: AbortSignal): Promise<RecordRow> { return entry(object(await request(`/workshop/${kind}/${encodeURIComponent(id)}`, 'GET', undefined, signal)).data); }
 export async function write(path: string, method: string, body: Record<string, unknown>): Promise<Record<string, unknown>> { return object(object(await request(`/workshop/${path}`, method, body)).data); }
 export function failure(e: unknown): ApiError { return e instanceof ApiError ? e : new ApiError(0, 'No se pudo leer una respuesta válida. Actualiza para consultar el estado confirmado.'); }
+
+/** Existing catalogs use both Resource collections and Laravel's raw paginator. */
+export async function catalog(path: string, signal?: AbortSignal): Promise<RecordRow[]> {
+    const rows: RecordRow[] = [];
+    for (let number = 1;; number++) {
+        const value = object(await request(`${path}?per_page=100&page=${number}`, 'GET', undefined, signal));
+        const result = page(value.meta ? value : { data: value.data, meta: value }, entry);
+        rows.push(...result.data);
+        if (number >= result.meta.last_page) return rows;
+    }
+}
+export async function catalogAsset(id: string, signal?: AbortSignal): Promise<RecordRow> {
+    return entry(object(await request(`/workshop/assets/${encodeURIComponent(id)}/availability`, 'GET', undefined, signal)).data);
+}

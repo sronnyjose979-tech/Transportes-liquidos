@@ -174,7 +174,8 @@ class WorkshopQueryController extends Controller
     private function authorizationVisibility(Builder $query, User $actor, string $alias): void
     {
         if (! $this->access->isOffice($actor)) {
-            $query->whereNotNull($alias.'.work_order_id')->whereRaw("COALESCE({$alias}.content->>'fact_table','') NOT IN ('workshop_cost_records','workshop_external_repairs','workshop_attachments')");
+            $content = $query->getGrammar()->wrap($alias.'.content');
+            $query->whereNotNull($alias.'.work_order_id')->whereRaw("COALESCE({$content}->>'fact_table','') NOT IN ('workshop_cost_records','workshop_external_repairs','workshop_attachments')");
         }
     }
 

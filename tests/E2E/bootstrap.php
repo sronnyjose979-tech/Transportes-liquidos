@@ -4,6 +4,7 @@ use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Bootstrap\BootProviders;
 use Illuminate\Foundation\Bootstrap\LoadConfiguration;
+use Illuminate\Foundation\Vite;
 use Illuminate\Support\Facades\DB;
 
 require_once __DIR__.'/../../vendor/autoload.php';
@@ -49,6 +50,7 @@ $app->afterBootstrapping(LoadConfiguration::class, function (Application $app) u
     ]);
 });
 $app->afterBootstrapping(BootProviders::class, function () use ($workspace): void {
+    app(Vite::class)->useHotFile($workspace.'/absent-vite.hot');
     $identity = DB::selectOne("SELECT current_database() AS db, current_user AS actor, current_setting('server_version_num')::integer AS version");
     if ($identity->db !== 'transporte_test' || $identity->actor !== 'transport_test' || intdiv($identity->version, 10000) !== 18) {
         throw new RuntimeException('Identidad PostgreSQL E2E inválida.');

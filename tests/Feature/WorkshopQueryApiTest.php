@@ -78,11 +78,35 @@ class WorkshopQueryApiTest extends PostgresTestCase
         $this->getJson('/api/workshop/costs')->assertForbidden();
         $this->getJson('/api/workshop/authorization-requests/'.$rectification)->assertForbidden();
         $this->getJson('/api/workshop/authorization-requests')->assertOk()->assertJsonPath('meta.total', 1);
+        $this->getJson('/api/workshop/authorization-decisions?work_order_id='.$f['order'])
+            ->assertOk()->assertJsonPath('meta.total', 0);
+        $this->getJson('/api/workshop/authorization-applications?work_order_id='.$f['order'])
+            ->assertOk()->assertJsonPath('meta.total', 0);
         $this->actingAs($f['admin'])->postJson('/api/workshop/mechanic-assignments/'.$f['assignment'].'/release', ['request_key' => (string) Str::uuid(), 'ends_at' => '2026-10-12T12:00:00Z', 'reason' => 'Fin'])->assertCreated();
         $this->actingAs($f['mechanic'])->getJson('/api/workshop/orders/'.$f['order'].'/diagnoses')->assertOk()->assertJsonPath('meta.total', 1);
         $this->getJson('/api/workshop/orders/'.$f['order'].'/mechanic-assignments')->assertOk()
             ->assertJsonPath('data.0.is_current_actor', true)->assertJsonPath('data.0.is_current', false);
         $this->postJson('/api/workshop/orders/'.$f['order'].'/time-events', ['request_key' => (string) Str::uuid(), 'mechanic_assignment_id' => $f['assignment'], 'event_type' => 'start', 'occurred_at' => '2026-10-12T12:00:00Z', 'reason' => 'Intento'])->assertForbidden();
+    }
+
+    public function test_mechanic_reads_confirmed_decision_and_application_in_assigned_order(): void
+    {
+        $f = $this->fixture();
+        $decision = $this->postJson('/api/workshop/authorization-requests/'.$f['scope']['request_id'].'/decisions', [
+            'request_key' => (string) Str::uuid(), 'decision' => 'approved', 'reason' => 'Revisión sintética',
+        ])->assertOk()->json('data.decision_id');
+        $application = $this->postJson('/api/workshop/decisions/'.$decision.'/apply-scope', [
+            'request_key' => (string) Str::uuid(),
+        ])->assertOk()->json('data.application_id');
+
+        $this->actingAs($f['mechanic']);
+        $this->getJson('/api/workshop/authorization-decisions?work_order_id='.$f['order'])
+            ->assertOk()->assertJsonPath('meta.total', 1)->assertJsonPath('data.0.id', $decision);
+        $this->getJson('/api/workshop/authorization-applications?work_order_id='.$f['order'])
+            ->assertOk()->assertJsonPath('meta.total', 1)->assertJsonPath('data.0.id', $application);
+        $this->getJson('/api/workshop/authorization-decisions/'.$decision)->assertOk();
+        $this->getJson('/api/workshop/authorization-applications/'.$application)->assertOk();
+        $this->getJson('/api/workshop/authorization-decisions?work_order_id='.$f['other'])->assertForbidden();
     }
 
     public function test_filters_pending_status_dates_and_unknown_inputs(): void

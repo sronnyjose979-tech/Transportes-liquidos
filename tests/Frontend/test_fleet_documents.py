@@ -3,6 +3,7 @@ No database connection, migrations, extra dependencies, or persistent browser st
 Run after npm run build: python3 -m unittest discover -s tests/Frontend -v
 """
 import asyncio
+import base64
 from email import policy
 from email.parser import BytesParser
 import os
@@ -42,20 +43,21 @@ class FleetDocumentsBrowserTest(unittest.IsolatedAsyncioTestCase):
     def setUpClass(cls):
         if not (ROOT / 'public/build/manifest.json').exists():
             raise RuntimeError('Ejecuta npm run build antes de las pruebas de navegador.')
-        if (ROOT / 'public/hot').exists():
-            raise RuntimeError('Detén Vite dev para probar los artefactos compilados.')
         sock = socket.socket()
         sock.bind(('127.0.0.1', 0))
         cls.port = sock.getsockname()[1]
         sock.close()
         cls.base = f'http://127.0.0.1:{cls.port}'
         cls.artifacts = Path(tempfile.mkdtemp(prefix='transporte-web-tests-', dir='/tmp'))
+        (cls.artifacts / 'storage/framework/views').mkdir(parents=True)
         cls.log = (cls.artifacts / 'server.log').open('w')
         env = dict(os.environ, APP_ENV='testing', APP_DEBUG='false', SESSION_DRIVER='array',
                    CACHE_STORE='array', DB_CONNECTION='pgsql_testing',
-                   TEST_DB_HOST='/tmp/transporte-tests-browser-no-server')
+                   TEST_DB_HOST='/tmp/transporte-tests-browser-no-server',
+                   TRANSPORTE_BROWSER_ROOT=str(cls.artifacts),
+                   TRANSPORTE_BROWSER_KEY='base64:' + base64.b64encode(os.urandom(32)).decode())
         cls.server = subprocess.Popen(['php', '-S', f'127.0.0.1:{cls.port}',
-                                      str(ROOT / 'vendor/laravel/framework/src/Illuminate/Foundation/resources/server.php')],
+                                      str(ROOT / 'tests/Frontend/server.php')],
                                      cwd=ROOT / 'public', env=env, stdout=cls.log, stderr=cls.log)
         import time
         for _ in range(50):
@@ -78,7 +80,7 @@ class FleetDocumentsBrowserTest(unittest.IsolatedAsyncioTestCase):
 
     async def asyncSetUp(self):
         self.playwright = await async_playwright().start()
-        self.browser = await self.playwright.chromium.launch(executable_path='/usr/bin/chromium',
+        self.browser = await self.playwright.chromium.launch(executable_path=os.environ.get('CHROMIUM_EXECUTABLE', '/usr/bin/chromium'),
                                                            args=['--no-sandbox', '--disable-dev-shm-usage'])
         self.context = await self.browser.new_context(viewport={'width': 1440, 'height': 1000})
         self.page = await self.context.new_page()
