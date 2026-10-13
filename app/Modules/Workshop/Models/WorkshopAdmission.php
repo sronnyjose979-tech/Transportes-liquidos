@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use LogicException;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class WorkshopAdmission extends Model
 {
@@ -17,11 +17,6 @@ class WorkshopAdmission extends Model
     public $timestamps = false;
 
     protected $fillable = ['fleet_asset_id', 'kind', 'admitted_at', 'admitted_by_id', 'reason'];
-
-    protected static function booted(): void
-    {
-        static::creating(fn () => throw new LogicException('El ingreso al taller requiere la integración con Flota y Transporte.'));
-    }
 
     protected function casts(): array
     {
@@ -46,5 +41,15 @@ class WorkshopAdmission extends Model
     public function operations(): HasMany
     {
         return $this->hasMany(WorkshopOperation::class, 'admission_id');
+    }
+
+    public function exit(): HasOne
+    {
+        return $this->hasOne(WorkshopAdmissionExit::class, 'admission_id');
+    }
+
+    public function warnings(): HasMany
+    {
+        return $this->hasMany(WorkshopWarning::class, 'admission_id');
     }
 }

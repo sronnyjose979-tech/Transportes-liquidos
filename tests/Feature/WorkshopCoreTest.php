@@ -320,6 +320,10 @@ class WorkshopCoreTest extends PostgresTestCase
 
     public function test_core_migrations_reverse_and_reapply_without_touching_fleet(): void
     {
+        $extensions = array_map(fn ($path) => require $path, glob(database_path('migrations/2026_10_12_0002*.php')));
+        foreach (array_reverse($extensions) as $extension) {
+            $extension->down();
+        }
         $schema = require database_path('migrations/2026_10_12_000180_create_workshop_core.php');
         $protection = require database_path('migrations/2026_10_12_000190_protect_workshop_core.php');
         $protection->down();
@@ -328,6 +332,9 @@ class WorkshopCoreTest extends PostgresTestCase
         $this->assertNotNull(DB::selectOne("SELECT to_regclass('fleet_assets') AS table_name")->table_name);
         $schema->up();
         $protection->up();
+        foreach ($extensions as $extension) {
+            $extension->up();
+        }
         $this->assertNotNull(DB::selectOne("SELECT to_regclass('workshop_reports') AS table_name")->table_name);
         $this->order();
         $this->checkConstraints();

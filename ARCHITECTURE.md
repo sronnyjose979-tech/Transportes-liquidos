@@ -882,3 +882,29 @@ fija UTC explícitamente para no depender de la zona del host. Se cubren estruct
 roles, relaciones, historial, revisiones, recibos, snapshots, ingresos deshabilitados,
 reversión/reaplicación y concurrencia RC/RR con conexiones independientes. No se
 aplican migraciones a la base del proyecto ni se instalan dependencias.
+
+## Taller Mecánico — backend fases 2 y 3
+
+Las migraciones nuevas 000200/000210 incorporan #8–12 y #14: revisiones de alcances,
+tareas, repuestos, solicitudes, decisiones y aplicación única de autorizaciones.
+000220/000230 incorporan #22–25: impedimentos de Flota, resoluciones, salidas y
+advertencias. Amplían las protecciones anteriores sin editar migraciones desplegadas.
+
+`WorkshopCommands` coordina recibos idempotentes, autorización vigente y reintentos
+transitorios configurables. `WorkshopAuthorizations` compara versiones y contenido
+histórico revisado; `WorkshopAvailability` integra ingreso y salida con la exclusión
+existente de Transporte (873210 y guard). Las asignaciones existentes se conservan;
+las nuevas incompatibles se rechazan. El cierre de una orden no implica salida ni
+resolución de impedimentos. Un estado histórico desconocido requiere observación
+administrativa explícita y conserva su efecto hasta resolución autorizada.
+
+Los ingresos quedan habilitados exclusivamente con causa, proyección, advertencias
+y auditoría atómicas. No se incorporan rutas, interfaces ni ejecución de reparaciones.
+La cantidad exacta de repuestos se valida como texto mediante función SQL controlada.
+El despliegue debe separar propietario de esquema y rol de ejecución: este último
+no recibe escritura directa sobre cantidades y obtiene EXECUTE explícito sobre la
+función aprobada; no se modifican credenciales ni privilegios del entorno del proyecto.
+
+Las pruebas utilizan únicamente `tests/run-postgres.sh` y PostgreSQL 18 temporal;
+incluyen permisos, aplicación única, escrituras SQL incompatibles, reintentos seguros
+y conexiones independientes para conflictos de ingreso, asignación y salida.

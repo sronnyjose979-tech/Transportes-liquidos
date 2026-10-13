@@ -4,6 +4,7 @@ namespace App\Modules\Workshop\Models;
 
 use App\Models\User;
 use App\Modules\FleetAndDocuments\Models\FleetAsset;
+use App\Modules\FleetAndDocuments\Models\FleetOperatingImpediment;
 use App\Modules\Workshop\Models\Concerns\PreservesWorkshopHistory;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
@@ -15,7 +16,7 @@ class WorkshopOperation extends Model
 
     public $timestamps = false;
 
-    protected $fillable = ['work_order_id', 'admission_id', 'report_id', 'fleet_asset_id', 'operation_type', 'before_values', 'after_values', 'from_version', 'to_version', 'actor_id', 'occurred_at', 'reason', 'request_key', 'request_fingerprint', 'idempotency_scope', 'confirmed_result', 'report_link_id', 'mechanic_assignment_id', 'mechanic_release_id', 'diagnosis_id', 'order_admission_link_id', 'reservation_operation_id'];
+    protected $fillable = ['work_order_id', 'admission_id', 'report_id', 'fleet_asset_id', 'operation_type', 'before_values', 'after_values', 'from_version', 'to_version', 'actor_id', 'occurred_at', 'reason', 'request_key', 'request_fingerprint', 'idempotency_scope', 'confirmed_result', 'report_link_id', 'mechanic_assignment_id', 'mechanic_release_id', 'diagnosis_id', 'order_admission_link_id', 'reservation_operation_id', 'scope_id', 'authorization_request_id', 'authorization_decision_id', 'impediment_id', 'warning_id'];
 
     protected function casts(): array
     {
@@ -75,5 +76,30 @@ class WorkshopOperation extends Model
     public function reservationOperation(): BelongsTo
     {
         return $this->belongsTo(WorkshopOperation::class, 'reservation_operation_id');
+    }
+
+    public function scope(): BelongsTo
+    {
+        return $this->belongsTo(WorkshopScope::class, 'scope_id');
+    }
+
+    public function authorizationRequest(): BelongsTo
+    {
+        return $this->belongsTo(WorkshopAuthorizationRequest::class, 'authorization_request_id');
+    }
+
+    public function authorizationDecision(): BelongsTo
+    {
+        return $this->belongsTo(WorkshopAuthorizationDecision::class, 'authorization_decision_id');
+    }
+
+    public function impediment(): BelongsTo
+    {
+        return $this->belongsTo(FleetOperatingImpediment::class, 'impediment_id');
+    }
+
+    public function warning(): BelongsTo
+    {
+        return $this->belongsTo(WorkshopWarning::class, 'warning_id');
     }
 }

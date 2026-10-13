@@ -56,4 +56,14 @@ class WorkshopWorkOrder extends Model
     {
         return $this->hasMany(WorkshopOperation::class, 'work_order_id');
     }
+
+    public function scopes(): HasMany
+    {
+        return $this->hasMany(WorkshopScope::class, 'work_order_id');
+    }
+
+    public function authorizationRequests(): HasMany
+    {
+        return $this->hasMany(WorkshopAuthorizationRequest::class, 'work_order_id');
+    }
 }
