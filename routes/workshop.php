@@ -8,6 +8,7 @@ Route::prefix('workshop')->middleware([WorkshopApiErrors::class, 'can:access-wor
     require __DIR__.'/workshop-core.php';
     require __DIR__.'/workshop-process.php';
     require __DIR__.'/workshop-materials.php';
+    Route::get('lookups/mechanics', [WorkshopQueryController::class, 'mechanics'])->name('workshop.lookups.mechanics');
     foreach (array_keys(WorkshopQueryController::RECORDS) as $kind) {
         Route::get($kind, [WorkshopQueryController::class, 'index'])->defaults('kind', $kind)->name('workshop.query.'.$kind.'.index');
         Route::get($kind.'/{id}', [WorkshopQueryController::class, 'show'])->whereUuid('id')->defaults('kind', $kind)->name('workshop.query.'.$kind.'.show');

@@ -2,10 +2,12 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { getSession, login, logout, refreshCsrf } from '../FleetAndDocuments/api';
 import type { Session } from '../FleetAndDocuments/contracts';
+import { registrationDate } from '../FleetAndDocuments/presentation';
 import { all, detail, failure, list, catalog, catalogAsset, write } from './api';
 import type { RecordRow } from './api';
 import { instant, labels, localInstant, options, states, terminal, text } from './presentation';
 import CommandForm from './components/CommandForm.vue';
+import ExitRequestForm from './components/ExitRequestForm.vue';
 import type { Field } from './components/CommandForm.vue';
 import RecordTable from './components/RecordTable.vue';
 import ScopeForm from './components/ScopeForm.vue';
@@ -22,7 +24,7 @@ import { operationValues } from './operations';
 import { object } from '../TransportAndDispatch/contracts';
 import { request } from './api';
 import './workshop.css';
-type View = 'impediment' | 'dashboard' | 'orders' | 'reports' | 'authorizations' | 'impediments' | 'order' | 'authorization' | 'report';
+type View = 'admissions' | 'admission' | 'impediment' | 'dashboard' | 'orders' | 'reports' | 'authorizations' | 'impediments' | 'order' | 'authorization' | 'report';
 interface Command {
     title: string;
     path: string;
@@ -34,6 +36,7 @@ interface Command {
     roles: string;
     scope?: boolean;
     batch?:boolean;
+    exit?:boolean;
     transform?: (values:Record<string,string>)=>Record<string,unknown>;
 }
 const session = ref<Session | null>(null), denied = ref(false), booting = ref(true), username = ref(''), password = ref('');
@@ -41,7 +44,8 @@ const view = ref<View>('dashboard'), loading = ref(false), busy = ref(false), er
 const rows = ref<RecordRow[]>([]), selected = ref<RecordRow | null>(null), related = ref<Record<string, RecordRow[]>>({}), decisions = ref<RecordRow[]>([]), applications = ref<RecordRow[]>([]);
 const counts = ref<Record<string, number | null>>({}), metricsError = ref(''), assets = ref<RecordRow[]>([]), employees = ref<RecordRow[]>([]);
 const parts = ref<RecordRow[]>([]), suppliers = ref<RecordRow[]>([]), lookupWarning = ref('');
-const linkableReports = ref<RecordRow[]>([]);
+const linkableReports = ref<RecordRow[]>([]), linkableAdmissions = ref<RecordRow[]>([]), vehicle = ref<RecordRow|null>(null);
+const onlyOpen = ref(false);
 const currentPage = ref(1), lastPage = ref(1), total = ref(0), search = ref(''), status = ref(''), priority = ref(''), assetFilter = ref(''), from = ref(''), to = ref(''), onlyPending = ref(true);
 const timeTotals = ref<unknown>(null), costTotals = ref<unknown>(null), summaryWarning=ref(''), evidencePending=ref(false);
 const originReport = ref<RecordRow | null>(null);
@@ -52,9 +56,9 @@ const office = computed(() => session.value?.roles.some(r => ['administrator', '
 const diagnostician = computed(() => admin.value || session.value?.roles.includes('mechanic'));
 const currentAssignments = computed(() => (related.value['mechanic-assignments'] ?? []).filter(a => a.is_current === true && (admin.value || a.is_current_actor === true)));
 const canParticipate = computed(() => admin.value || currentAssignments.value.length > 0);
-const activeNavigation = computed(() => ({order:'orders',report:'reports',authorization:'authorizations',impediment:'impediments'} as Partial<Record<View,View>>)[view.value] ?? view.value);
-const titles: Record<View, string> = { dashboard: 'Inicio de Taller', orders: 'Órdenes de trabajo', reports: 'Reportes de averías', authorizations: 'Autorizaciones', impediments: 'Vehículos con impedimentos', order: 'Detalle de orden', authorization: 'Detalle de autorización', report: 'Detalle de avería', impediment: 'Detalle de impedimento' };
-const visibleRows = computed(() => rows.value.filter(row => !search.value || [row.id, row.description, assetName(String(row.fleet_asset_id ?? ''))].some(v => String(v ?? '').toLocaleLowerCase().includes(search.value.toLocaleLowerCase()))).map(row => ({ ...row, status: labels[String(row.status)] ?? row.status, priority: labels[String(row.priority)] ?? row.priority, type: labels[String(row.type)] ?? row.type, fleet_asset_id: assetName(String(row.fleet_asset_id ?? '')), authorization_state: authorizationState(row) })));
+const activeNavigation = computed(() => ({order:'orders',report:'reports',authorization:'authorizations',impediment:'impediments',admission:'admissions'} as Partial<Record<View,View>>)[view.value] ?? view.value);
+const titles: Record<View, string> = { admissions:'Ingresos y salidas', admission:'Detalle de ingreso', dashboard: 'Inicio de Taller', orders: 'Órdenes de trabajo', reports: 'Reportes de averías', authorizations: 'Autorizaciones', impediments: 'Vehículos con impedimentos', order: 'Detalle de orden', authorization: 'Detalle de autorización', report: 'Detalle de avería', impediment: 'Detalle de impedimento' };
+const visibleRows = computed(() => rows.value.filter(row => !search.value || [row.id, row.description, assetName(String(row.fleet_asset_id ?? ''))].some(v => String(v ?? '').toLocaleLowerCase().includes(search.value.toLocaleLowerCase()))).map(row => ({ ...row, status: labels[String(row.status)] ?? row.status, priority: labels[String(row.priority)] ?? row.priority, type: labels[String(row.type)] ?? row.type, fleet_asset_id: assetName(String(row.fleet_asset_id ?? '')), authorization_state: authorizationState(row), admission_state: row.is_open===true?'En taller':'Salida registrada', admitted_at: row.admitted_at?registrationDate(String(row.admitted_at)):undefined, kind:labels[String(row.kind)] ?? row.kind })));
 function assetName(id: string): string { return String(assets.value.find(a => a.id === id)?.code ?? id); }
 const assetOptions = computed(() => assets.value.map(a => ({value:a.id,label:String(a.code ?? a.description ?? a.id)})));
 const partOptions = computed(() => parts.value.map(p => ({value:p.id,label:`${p.code ?? ''} ${p.description ?? p.description_snapshot ?? p.id} · ${p.unit ?? p.unit_snapshot ?? ''}`.trim()})));
@@ -64,7 +68,7 @@ function rejectedRequests(type?:string): {value:string;label:string}[] {return (
 function decisionFor(row: RecordRow): RecordRow | undefined { return decisions.value.find(d => d.request_id === row.id); }
 function applied(d: RecordRow): boolean { return applications.value.some(a => a.decision_id === d.id); }
 function authorizationState(row: RecordRow): string { const d = decisionFor(row); return d ? applied(d) ? 'Aplicada' : labels[String(d.decision)] ?? text(d.decision) : 'Pendiente'; }
-function clearPrivate(preserveRecovery=false): void { if(!preserveRecovery)clearAttachmentRecovery(session.value?.id);timeTotals.value=null;costTotals.value=null;summaryWarning.value='';evidencePending.value=false; controller?.abort(); generation++; rows.value = []; related.value = {}; selected.value = null; decisions.value = []; applications.value = []; assets.value = []; employees.value = []; parts.value=[];suppliers.value=[];linkableReports.value=[];lookupWarning.value=''; counts.value = {}; command.value = null; frozen.value = null; uncertain.value = false; originReport.value = null; loading.value = false; }
+function clearPrivate(preserveRecovery=false): void { if(!preserveRecovery)clearAttachmentRecovery(session.value?.id);timeTotals.value=null;costTotals.value=null;summaryWarning.value='';evidencePending.value=false; controller?.abort(); generation++; rows.value = []; related.value = {}; selected.value = null; decisions.value = []; applications.value = []; assets.value = []; employees.value = []; parts.value=[];suppliers.value=[];linkableReports.value=[];linkableAdmissions.value=[];vehicle.value=null;lookupWarning.value=''; counts.value = {}; command.value = null; frozen.value = null; uncertain.value = false; originReport.value = null; loading.value = false; }
 async function handle(e: unknown): Promise<void> {
     const f = failure(e); error.value = f.message; fieldErrors.value = f.fields; csrfExpired.value = f.status === 419;
     if (f.status === 401) {const interrupted=evidencePending.value;clearPrivate(true);session.value=null;if(interrupted)error.value+=' La reserva permanece en el servidor. Inicia sesión con la misma cuenta para consultar su recibo y recuperar la carga.';}
@@ -119,22 +123,15 @@ async function loadLookups(signal: AbortSignal): Promise<void> {
         if(!signal.aborted)assets.value=values.filter((value):value is RecordRow=>value!==null);
         return;
     }
-    const paths=admin.value?['/fleet-assets','/employees','/users','/catalogs/spare-parts','/catalogs/suppliers']:['/fleet-assets'];
+    const paths=admin.value?['/fleet-assets','/workshop/lookups/mechanics','/catalogs/spare-parts','/catalogs/suppliers']:['/fleet-assets','/workshop/lookups/mechanics'];
     const batches=await Promise.allSettled(paths.map(path=>catalog(path,signal)));
     if(signal.aborted)return;
     const failed=batches.find(b=>b.status==='rejected' && failure(b.reason).status===401);
     if(failed?.status==='rejected')throw failed.reason;
     const read=(index:number):RecordRow[]=>{const batch=batches[index];return batch?.status==='fulfilled'?batch.value:[];};
     assets.value=read(0);
-    if(admin.value){
-        const users=read(2);
-        employees.value=read(1).filter(employee=>employee.is_active===true && users.some(user=>String(user.id)===String(employee.user_id) && user.is_active===true && Array.isArray(user.roles) && user.roles.some(role=>role && typeof role==='object' && 'name' in role && role.name==='mechanic')));
-        parts.value=read(3);suppliers.value=read(4);
-    } else {
-        const assignments=await all('mechanic-assignments',{},signal);
-        if(signal.aborted)return;
-        employees.value=[...new Map(assignments.filter(a=>a.is_current===true).map(a=>[String(a.employee_id),{id:String(a.employee_id),name:a.employee_name}])).values()];
-    }
+    employees.value=read(1);
+    if(admin.value){parts.value=read(2);suppliers.value=read(3);}
     if(batches.some(b=>b.status==='rejected'))lookupWarning.value='No se pudieron cargar algunos selectores. Puedes consultar Taller y actualizar para volver a intentarlo.';
 }
 async function loadScopeContext(order:string,signal:AbortSignal):Promise<void>{
@@ -181,7 +178,7 @@ async function refresh(): Promise<boolean> {
             decisions.value = [];
             applications.value = [];
             assets.value = [];
-            employees.value = [];parts.value=[];suppliers.value=[];linkableReports.value=[];lookupWarning.value='';
+            employees.value = [];parts.value=[];suppliers.value=[];linkableReports.value=[];linkableAdmissions.value=[];vehicle.value=null;lookupWarning.value='';
             counts.value = {};
             originReport.value = null;
             command.value = null;
@@ -201,11 +198,11 @@ async function refresh(): Promise<boolean> {
         if(signal.aborted)return false;
         if (view.value === 'dashboard')
             await dashboard(signal);
-        else if (['order', 'authorization', 'report', 'impediment'].includes(view.value) && selected.value) {
-            const kind = view.value === 'order' ? 'orders' : view.value === 'report' ? 'reports' : view.value === 'impediment' ? 'impediments' : 'authorization-requests';
+        else if (['order', 'authorization', 'report', 'impediment', 'admission'].includes(view.value) && selected.value) {
+            const kind = view.value === 'order' ? 'orders' : view.value === 'report' ? 'reports' : view.value === 'impediment' ? 'impediments' : view.value === 'admission' ? 'admissions' : 'authorization-requests';
             const row = await detail(kind, selected.value.id, signal);
             if (view.value === 'order') {
-                const kinds = ['diagnoses', 'mechanic-assignments', 'scopes', 'report-links', 'authorization-requests', 'scope-tasks', 'scope-parts','activities','time-events','deliveries','usages','material-needs',...(office.value?['external-repairs','costs']:[])];
+                const kinds = ['diagnoses', 'mechanic-assignments', 'mechanic-releases', 'admission-links', 'scopes', 'report-links', 'authorization-requests', 'scope-tasks', 'scope-parts','activities','time-events','deliveries','usages','material-needs',...(office.value?['external-repairs','costs']:[])];
                 const values = await Promise.all(kinds.map(k => all(k, { work_order_id: row.id }, signal)));
                 if (signal.aborted)
                     return false;
@@ -213,6 +210,8 @@ async function refresh(): Promise<boolean> {
                 const reports=await all('reports',{fleet_asset_id:String(row.fleet_asset_id),effective:1},signal);
                 if(signal.aborted)return false;linkableReports.value=reports;
                 await loadScopeContext(row.id,signal);
+                linkableAdmissions.value=await all('admissions',{fleet_asset_id:String(row.fleet_asset_id)},signal);
+                if(signal.aborted)return false;
                 const summaries=await Promise.allSettled([
                     request(`/workshop/orders/${encodeURIComponent(row.id)}/times`,'GET',undefined,signal),
                     ...(office.value?[request(`/workshop/orders/${encodeURIComponent(row.id)}/cost-totals`,'GET',undefined,signal)]:[]),
@@ -225,7 +224,15 @@ async function refresh(): Promise<boolean> {
                 if(office.value){ const attachmentRows:RecordRow[]=[]; for(let p=1;;p++){const batch=await listAttachments(row.id,p);attachmentRows.push(...batch.data);if(p>=batch.meta.last_page)break;} if(signal.aborted)return false;related.value.attachments=attachmentRows; }
 
             }
-            if (['order', 'authorization'].includes(view.value)) {
+            if (view.value === 'admission' || view.value === 'impediment') {
+                const asset=String(row.fleet_asset_id);
+                const kinds=['orders','admission-links','impediments','impediment-resolutions','warnings','exits','authorization-requests'];
+                const [current,...values]=await Promise.all([catalogAsset(asset,signal),...kinds.map(k=>all(k,{fleet_asset_id:asset},signal))]);
+                if(signal.aborted)return false;
+                vehicle.value=current as RecordRow;
+                related.value=Object.fromEntries(kinds.map((k,i)=>[k,values[i] as RecordRow[]]));
+            }
+            if (['order', 'authorization', 'admission'].includes(view.value)) {
                 const filter = view.value === 'order' ? { work_order_id: row.id } : {};
                 const [d, a] = await Promise.all([all('authorization-decisions', filter, signal), all('authorization-applications', filter, signal)]);
                 if (signal.aborted)
@@ -238,7 +245,7 @@ async function refresh(): Promise<boolean> {
             selected.value = row;
         }
         else {
-            const kind = view.value === 'orders' ? 'orders' : view.value === 'reports' ? 'reports' : view.value === 'impediments' ? 'impediments' : 'authorization-requests';
+            const kind = view.value === 'orders' ? 'orders' : view.value === 'reports' ? 'reports' : view.value === 'impediments' ? 'impediments' : view.value === 'admissions' ? 'admissions' : 'authorization-requests';
             const filters: Record<string, string | number> = { page: currentPage.value };
             if (assetFilter.value)
                 filters.fleet_asset_id = assetFilter.value;
@@ -252,7 +259,7 @@ async function refresh(): Promise<boolean> {
                 if (to.value)
                     filters.to = instant(to.value);
             }
-            if (view.value === 'impediments')
+            if (['impediments','admissions'].includes(view.value) && onlyOpen.value)
                 filters.open = 1;
             if (view.value === 'authorizations' && onlyPending.value)
                 filters.pending = 1;
@@ -274,7 +281,7 @@ async function refresh(): Promise<boolean> {
     }
     catch (e) {
         if (!(e instanceof DOMException && e.name === 'AbortError') && run === generation)
-            {if(['order','report','authorization','impediment'].includes(view.value)){selected.value=null;related.value={};} await handle(e);}
+            {if(['order','report','authorization','impediment','admission'].includes(view.value)){selected.value=null;related.value={};} await handle(e);}
         return false;
     }
     finally {
@@ -283,7 +290,7 @@ async function refresh(): Promise<boolean> {
     }
 }
 async function navigate(target: View, row?: RecordRow): Promise<void> { if (busy.value || uncertain.value || evidencePending.value)
-    return; timeTotals.value=null;costTotals.value=null;command.value = null; originReport.value=null;selected.value = row ?? null; view.value = target; rows.value = []; related.value = {}; search.value = ''; currentPage.value = 1; success.value = ''; await refresh(); }
+    return; timeTotals.value=null;costTotals.value=null;command.value = null; originReport.value=null;selected.value = row ?? null; vehicle.value=null; view.value = target; rows.value = []; related.value = {}; search.value = ''; currentPage.value = 1; success.value = ''; await refresh(); }
 const reason: Field = { key: 'reason', label: 'Motivo / información recibida', type: 'textarea', required: true };
 const description = (value = ''): Field => ({ key: 'description', label: 'Descripción de la reparación', type: 'textarea', required: true, value });
 const time = (key: string, label: string): Field => ({ key, label, type: 'datetime-local', required: true, value: localInstant() });
@@ -292,6 +299,15 @@ const priorityField = (value = 'normal'): Field => ({ key: 'priority', label: 'P
 function open(title: string, path: string, fields: Field[], extra: Record<string, unknown> = {}, method = 'POST', scope = false): void { if(loading.value || busy.value || evidencePending.value)return;error.value = ''; success.value = ''; fieldErrors.value = {}; frozen.value = null; uncertain.value = false; stale.value = false; command.value = { title, path, fields, extra, method, key: crypto.randomUUID(), actor: session.value?.id ?? '', roles: [...(session.value?.roles ?? [])].sort().join(','), scope }; }
 function newReport(): void { open('Registrar avería', 'reports', [assetField(), { ...description(), label: 'Descripción de la avería' }, time('occurred_at', 'Fecha de la avería (Costa Rica)'), reason]); }
 function newOrder(report?: RecordRow): void { originReport.value = report ?? null; open('Crear orden', 'orders', [assetField(report ? String(report.fleet_asset_id) : ''), { key: 'kind', label: 'Tipo de mantenimiento', required: true, value: 'corrective', options: options({ corrective: 'Correctivo', preventive: 'Preventivo' }) }, description(report ? String(report.description) : ''), priorityField(), time('created_at', 'Fecha de creación (Costa Rica)'), reason]); }
+function newOrderForAdmission():void {const asset=selected.value?.fleet_asset_id;if(!asset)return;newOrder();const field=command.value?.fields.find(f=>f.key==='fleet_asset_id');if(field)field.value=String(asset);}
+function newAdmission():void {open('Registrar ingreso','assets/pending/admissions',[assetField(),{key:'kind',label:'Tipo de mantenimiento',required:true,value:'corrective',options:options({corrective:'Correctivo',preventive:'Preventivo'})},time('admitted_at','Fecha de ingreso (Costa Rica)'),reason]);}
+function admissionOrders():RecordRow[]{const row=selected.value;if(!row)return [];return (related.value.orders ?? []).filter(order=>(related.value['admission-links'] ?? []).some(link=>link.admission_id===row.id && link.work_order_id===order.id && link.is_invalidated!==true));}
+function linkAdmissionOrder():void {const row=selected.value;if(!row)return;const linked=(related.value['admission-links'] ?? []).filter(l=>l.admission_id===row.id).map(l=>String(l.work_order_id));open('Vincular orden','orders/pending/admission-links',[{key:'work_order_id',label:'Orden de trabajo',required:true,searchable:true,options:(related.value.orders ?? []).filter(o=>!linked.includes(o.id)).map(o=>({value:o.id,label:String(o.description)}))},reason],{admission_id:row.id});}
+function requestExit():void {if(!selected.value || !admin.value)return;open('Solicitar salida',`admissions/${selected.value.id}/exit-requests`,[]);if(command.value)command.value.exit=true;}
+function resolveImpediment():void {if(!selected.value || !admin.value)return;open('Resolver impedimento',`impediments/${selected.value.id}/resolve`,[reason]);}
+function releaseMechanic(row:RecordRow):void {open('Liberar mecánico',`mechanic-assignments/${row.id}/release`,[time('ends_at','Fecha de liberación (Costa Rica)'),reason]);}
+const exitCauses=computed(()=>(related.value.impediments ?? []).filter(c=>c.is_open===true));
+const exitPrevious=computed(()=>(related.value['authorization-requests'] ?? []).filter(q=>q.admission_id===selected.value?.id && q.type==='exit' && decisionFor(q)?.decision==='rejected').map(q=>({value:q.id,label:String(q.reason)})));
 function orderAction(action: string): void {
     const row = selected.value;
     if (!row)
@@ -301,6 +317,8 @@ function orderAction(action: string): void {
         open('Editar orden', base, [description(String(row.description)), priorityField(String(row.priority)), reason], { version: row.version }, 'PATCH');
     if (action === 'assign')
         open('Asignar mecánico', `${base}/mechanic-assignments`, [{ key: 'employee_id', label: 'Empleado mecánico', required: true, options:employees.value.map(e=>({value:e.id,label:String(e.name ?? e.id)})),searchable:true }, time('starts_at', 'Inicio de asignación (Costa Rica)'), reason]);
+    if (action === 'admission')
+        open('Vincular ingreso', `${base}/admission-links`, [{key:'admission_id',label:'Ingreso al taller',required:true,searchable:true,options:linkableAdmissions.value.filter(a=>!(related.value['admission-links'] ?? []).some(l=>l.admission_id===a.id)).map(a=>({value:a.id,label:`${a.reason} · ${a.admitted_at} · ${a.is_open?'En taller':'Salida registrada'}`}))},reason]);
     if (action === 'link')
         open('Vincular avería', `${base}/report-links`, [{ key: 'report_id', label: 'Avería', required: true, value: originReport.value?.id ?? '',options:linkableReports.value.map(r=>({value:r.id,label:`${r.description} · ${r.occurred_at}`})),searchable:true }, reason]);
     if (action === 'diagnosis')
@@ -316,7 +334,7 @@ async function submit(values: Record<string, unknown>): Promise<void> {
     const c = command.value;
     const payload:Record<string,unknown>={...c.extra};
     if(c.transform) Object.assign(payload,c.transform(Object.fromEntries(Object.entries(values).filter(([,value])=>typeof value==='string')) as Record<string,string>));
-    else for(const [key,value] of Object.entries(values))if(value!=='' && value!==undefined)payload[key]=typeof value==='string' && ['occurred_at','created_at','starts_at','performed_at'].includes(key)?instant(value):value;
+    else for(const [key,value] of Object.entries(values))if(value!=='' && value!==undefined)payload[key]=typeof value==='string' && ['occurred_at','created_at','starts_at','performed_at','admitted_at','ends_at'].includes(key)?instant(value):value;
     if (!frozen.value)
         frozen.value = { ...payload, request_key: c.key };
     busy.value = true;
@@ -332,7 +350,11 @@ async function submit(values: Record<string, unknown>): Promise<void> {
             error.value = 'La identidad o los permisos cambiaron. Revisa los datos e inicia una nueva operación.';
             return;
         }
-        const result = await write(c.path, c.method, frozen.value);
+        let path=c.path;
+        let body=frozen.value;
+        if(path==='assets/pending/admissions'){path=`assets/${encodeURIComponent(String(body.fleet_asset_id))}/admissions`;body={...body};delete body.fleet_asset_id;}
+        if(path==='orders/pending/admission-links'){path=`orders/${encodeURIComponent(String(body.work_order_id))}/admission-links`;body={...body};delete body.work_order_id;}
+        const result = await write(path, c.method, body);
         uncertain.value = false;
         command.value = null;
         frozen.value = null;
@@ -341,6 +363,7 @@ async function submit(values: Record<string, unknown>): Promise<void> {
             view.value = 'order';
             selected.value = { id: result.order_id };
         }
+        if(typeof result.admission_id==='string' && c.path==='assets/pending/admissions'){view.value='admission';selected.value={id:result.admission_id};}
         if (c.path.endsWith('/report-links'))
             originReport.value = null;
         if (typeof result.report_id === 'string' && c.path === 'reports') {
@@ -431,7 +454,7 @@ finally {
 onUnmounted(() => { controller?.abort(); if (timer)
     clearInterval(timer); });
 const orderColumns = [{ key: 'id', label: 'Orden' }, { key: 'fleet_asset_id', label: 'Vehículo' }, { key: 'description', label: 'Reparación' }, { key: 'status', label: 'Estado' }, { key: 'priority', label: 'Prioridad' }];
-function openRow(row: RecordRow): void { void navigate(view.value === 'orders' ? 'order' : view.value === 'reports' ? 'report' : view.value === 'authorizations' ? 'authorization' : 'impediment', { id: row.id }); }
+function openRow(row: RecordRow): void { void navigate(view.value === 'orders' ? 'order' : view.value === 'reports' ? 'report' : view.value === 'authorizations' ? 'authorization' : view.value === 'admissions' ? 'admission' : 'impediment', { id: row.id }); }
 </script>
 
 <template>
@@ -457,8 +480,8 @@ function openRow(row: RecordRow): void { void navigate(view.value === 'orders' ?
 </a>
 <p class="workshop-eyebrow">TALLER MECÁNICO</p>
 <nav aria-label="Navegación Taller">
-<button v-for="item in (['dashboard','orders','reports','authorizations','impediments'] as const)" :key="item" :aria-current="activeNavigation===item?'page':undefined" :disabled="busy || uncertain || evidencePending || denied" @click="navigate(item)">
-<WorkshopIcon :name="item" /> {{ {dashboard:'Inicio',orders:'Órdenes',reports:'Averías',authorizations:'Autorizaciones',impediments:'Impedimentos'}[item] }}</button>
+<button v-for="item in (office?['dashboard','orders','reports','admissions','authorizations','impediments'] as const:['dashboard','orders','reports','authorizations','impediments'] as const)" :key="item" :aria-current="activeNavigation===item?'page':undefined" :disabled="busy || uncertain || evidencePending || denied" @click="navigate(item)">
+<WorkshopIcon :name="item" /> {{ {dashboard:'Inicio',orders:'Órdenes',reports:'Averías',authorizations:'Autorizaciones',impediments:'Impedimentos',admissions:'Ingresos y salidas'}[item] }}</button>
 </nav>
 <nav v-if="office" aria-label="Otros módulos">
 <a v-if="admin" href="/administracion/flota">Administración ↗</a>
@@ -514,6 +537,7 @@ function openRow(row: RecordRow): void { void navigate(view.value === 'orders' ?
 <button @click="navigate('orders')">Consultar órdenes</button><button @click="status='authorized';navigate('orders')">Trabajos autorizados</button><button @click="status='in_repair';navigate('orders')">Continuar ejecución</button>
 <button @click="navigate('authorizations')">Gestionar autorizaciones</button>
 <button v-if="office" :disabled="loading || busy" @click="newOrder()">Crear orden</button>
+<button v-if="office" :disabled="loading || busy" @click="newAdmission">Registrar ingreso</button>
 </div>
 </section>
 <section class="workshop-card">
@@ -522,9 +546,10 @@ function openRow(row: RecordRow): void { void navigate(view.value === 'orders' ?
 <button @click="navigate('reports')">Consultar averías registradas</button>
 </section>
         </template>
-        <template v-else-if="['orders','reports','authorizations','impediments'].includes(view)">
+        <template v-else-if="['orders','reports','authorizations','impediments','admissions'].includes(view)">
             <div class="workshop-actions">
 <button v-if="view==='reports'" :disabled="loading || busy" @click="newReport">Registrar avería</button>
+<button v-if="view==='admissions' && office" :disabled="loading || busy" @click="newAdmission">Registrar ingreso</button>
 <button v-if="view==='orders' && office" :disabled="loading || busy" @click="newOrder()">Crear orden</button>
 </div>
             <form class="workshop-card workshop-filters" aria-label="Filtros" @submit.prevent="currentPage=1;refresh()">
@@ -543,6 +568,7 @@ function openRow(row: RecordRow): void { void navigate(view.value === 'orders' ?
 </label>
 <label v-if="view==='orders'">Hasta (Costa Rica)<input v-model="to" type="datetime-local">
 </label>
+<label v-if="['admissions','impediments'].includes(view)"><input v-model="onlyOpen" type="checkbox"> Solo abiertos</label>
 <label v-if="view==='authorizations'">
 <input v-model="onlyPending" type="checkbox"> Solo pendientes</label>
 <button :disabled="loading">Aplicar filtros</button>
@@ -550,7 +576,7 @@ function openRow(row: RecordRow): void { void navigate(view.value === 'orders' ?
             <label>Buscar en esta página<input v-model="search" type="search" placeholder="Identificador, vehículo o descripción">
 </label>
 <p>{{ total }} registros accesibles · Página {{ currentPage }} de {{ lastPage }}</p>
-<RecordTable selectable :rows="visibleRows" :columns="view==='orders'?orderColumns:view==='reports'?[{key:'id',label:'Avería'},{key:'fleet_asset_id',label:'Vehículo'},{key:'description',label:'Descripción'},{key:'occurred_at',label:'Fecha'}]:view==='authorizations'?[{key:'type',label:'Tipo'},{key:'reason',label:'Motivo'},{key:'authorization_state',label:'Estado'},{key:'registered_at',label:'Solicitada'}]:[{key:'fleet_asset_id',label:'Vehículo'},{key:'description',label:'Impedimento'},{key:'effect',label:'Restricción'}]" @open="openRow"/>
+<RecordTable selectable :rows="visibleRows" :columns="view==='orders'?orderColumns:view==='reports'?[{key:'id',label:'Avería'},{key:'fleet_asset_id',label:'Vehículo'},{key:'description',label:'Descripción'},{key:'occurred_at',label:'Fecha'}]:view==='admissions'?[{key:'fleet_asset_id',label:'Vehículo'},{key:'kind',label:'Tipo'},{key:'reason',label:'Motivo'},{key:'admitted_at',label:'Ingreso'},{key:'admission_state',label:'Estado'}]:view==='authorizations'?[{key:'type',label:'Tipo'},{key:'reason',label:'Motivo'},{key:'authorization_state',label:'Estado'},{key:'registered_at',label:'Solicitada'}]:[{key:'fleet_asset_id',label:'Vehículo'},{key:'description',label:'Impedimento'},{key:'effect',label:'Restricción'}]" @open="openRow"/>
 <div class="workshop-actions">
 <button :disabled="loading || currentPage<=1" @click="currentPage--;refresh()">Anterior</button>
 <button :disabled="loading || currentPage>=lastPage" @click="currentPage++;refresh()">Siguiente</button>
@@ -570,6 +596,7 @@ function openRow(row: RecordRow): void { void navigate(view.value === 'orders' ?
 <button v-if="office && !terminal(selected)" @click="orderAction('edit')">Editar orden</button>
 <button v-if="office && !terminal(selected)" @click="orderAction('assign')">Asignar mecánico</button>
 <button v-if="office" @click="orderAction('link')">Vincular avería</button>
+<button v-if="office" @click="orderAction('admission')">Vincular ingreso</button>
 <button v-if="diagnostician && canParticipate && !terminal(selected)" @click="orderAction('diagnosis')">Registrar diagnóstico</button>
 <button v-if="(office || canParticipate) && !terminal(selected) && (related.diagnoses ?? []).some(d=>d.is_effective!==false)" @click="orderAction('scope')">Solicitar autorización de alcance</button>
 <button v-if="office && !terminal(selected)" @click="orderAction('cancellation')">Solicitar cancelación</button>
@@ -581,8 +608,17 @@ function openRow(row: RecordRow): void { void navigate(view.value === 'orders' ?
 <h2>Mecánicos asignados</h2>
 <p v-if="!admin && !office">El servidor comprueba tu participación vigente al registrar diagnósticos y propuestas.</p>
 <RecordTable :rows="related['mechanic-assignments'] ?? []" :columns="[{key:'employee_name',label:'Empleado'},{key:'starts_at',label:'Desde'},{key:'is_released',label:'Liberado'}]"/>
+<article v-for="assignment in related['mechanic-assignments'] ?? []" :key="assignment.id">
+<p>{{ assignment.employee_name }} · {{ assignment.is_current?'Participación vigente':assignment.is_released?'Liberado · consulta histórica':'Participación no vigente' }}</p>
+<button v-if="office && assignment.is_released===false" :disabled="loading || busy" @click="releaseMechanic(assignment)">Liberar mecánico</button>
+<p v-for="release in (related['mechanic-releases'] ?? []).filter(r=>r.assignment_id===assignment.id)" :key="release.id">Liberación: {{ registrationDate(String(release.ends_at)) }} · {{ release.reason }}</p>
+</article>
 </section>
             <section class="workshop-card">
+<h2>Ingresos vinculados</h2>
+<p v-if="!(related['admission-links'] ?? []).length">Sin ingresos vinculados.</p>
+<p v-for="link in related['admission-links']" :key="link.id">{{ link.reason }} · {{ link.is_invalidated?'Histórico':'Vigente' }} <button @click="navigate('admission',{id:String(link.admission_id)})">Consultar ingreso</button></p>
+</section><section class="workshop-card">
 <h2>Diagnósticos</h2>
 <p v-if="!(related.diagnoses ?? []).length">No hay diagnósticos. Se requiere un diagnóstico antes de proponer el alcance.</p>
 <article v-for="d in related.diagnoses" :key="d.id">
@@ -610,7 +646,7 @@ function openRow(row: RecordRow): void { void navigate(view.value === 'orders' ?
 <article v-for="a in related['authorization-requests']" :key="a.id">
 <h3>{{ labels[String(a.type)] }} · {{ authorizationState(a) }}</h3>
 <p>{{ a.reason }}</p>
-<button @click="navigate('authorization',a)">Revisar autorización</button>
+<button :disabled="loading || busy" @click="navigate('authorization',a)">Revisar autorización</button>
 </article>
 </section>
 <section class="workshop-card">
@@ -625,6 +661,43 @@ function openRow(row: RecordRow): void { void navigate(view.value === 'orders' ?
 <EvidencePanel v-if="session" :key="`evidence:${session.id}:${selected.id}`" :order="selected" :actor="session" :can-write="(office || canParticipate) && !loading && !busy" :approved-corrections="approvedAttachmentCorrections" @changed="evidenceChanged" @error="evidenceError" @pending="evidencePending=$event" @navigate-authorization="navigate('authorization',{id:$event})" />
 <p>Finalizar o cerrar una orden no libera automáticamente el vehículo ni modifica existencias de inventario.</p>
         </template>
+        <template v-else-if="selected && !loading && view==='admission'">
+<section class="workshop-card">
+<h2>{{ assetName(String(selected.fleet_asset_id)) }} · {{ selected.is_open?'En taller':'Salida registrada' }}</h2>
+<p>Ingreso {{ selected.id }} · {{ labels[String(selected.kind)] }} · Versión {{ selected.version }}</p>
+<p>{{ selected.reason }} · {{ registrationDate(String(selected.admitted_at)) }} · Responsable {{ selected.admitted_by_id }}</p>
+<p>Estado actual del vehículo: <strong>{{ vehicle?.service_status==='available'?'Disponible':labels[String(vehicle?.service_status)] ?? vehicle?.service_status ?? 'No disponible para consulta' }}</strong></p>
+<p>El ingreso y la salida no cancelan viajes ni liberan recursos de Transporte.</p>
+<div class="workshop-actions">
+<button v-if="office && selected.is_open===true" :disabled="busy" @click="linkAdmissionOrder">Vincular orden</button>
+<button v-if="office && selected.is_open===true" :disabled="busy" @click="newOrderForAdmission">Crear orden para este ingreso</button>
+<button v-if="admin && selected.is_open===true" :disabled="busy" @click="requestExit">Solicitar salida</button>
+</div>
+</section>
+<section class="workshop-card"><h2>Órdenes relacionadas</h2>
+<p v-if="!admissionOrders().length">Sin órdenes vinculadas. Crear una orden y vincularla son operaciones independientes.</p>
+<article v-for="order in admissionOrders()" :key="order.id"><h3>{{ order.description }}</h3><p>{{ labels[String(order.status)] }} · {{ labels[String(order.priority)] }}</p><button @click="navigate('order',order)">Consultar orden</button></article>
+<h3>Historial de vínculos</h3>
+<RecordTable :rows="(related['admission-links'] ?? []).filter(l=>l.admission_id===selected?.id)" :columns="[{key:'work_order_id',label:'Orden'},{key:'registered_at',label:'Fecha'},{key:'reason',label:'Motivo'},{key:'is_invalidated',label:'Invalidado'}]" />
+</section>
+<section class="workshop-card"><h2>Impedimentos del vehículo</h2>
+<p v-if="!(related.impediments ?? []).length">Sin impedimentos accesibles.</p>
+<article v-for="cause in related.impediments ?? []" :key="cause.id"><h3>{{ cause.description }}</h3><p>{{ cause.is_open?'Abierto':'Resuelto' }} · {{ labels[String(cause.effect)] }}</p><button @click="navigate('impediment',cause)">Consultar impedimento</button></article>
+</section>
+<section class="workshop-card"><h2>Advertencias del ingreso</h2>
+<p v-if="!(related.warnings ?? []).some(w=>w.admission_id===selected?.id)">Sin advertencias registradas.</p>
+<article v-for="warning in (related.warnings ?? []).filter(w=>w.admission_id===selected?.id)" :key="warning.id"><p>Vehículo asignado a un viaje al ingresar. La asignación se conserva.</p><ContentSummary :value="warning.context" /></article>
+</section>
+<section class="workshop-card"><h2>Autorizaciones de salida</h2>
+<p v-if="!(related['authorization-requests'] ?? []).some(q=>q.admission_id===selected?.id)">Sin solicitudes de salida.</p>
+<article v-for="authorization in (related['authorization-requests'] ?? []).filter(q=>q.admission_id===selected?.id)" :key="authorization.id"><h3>{{ authorizationState(authorization) }}</h3><p>{{ authorization.reason }} · {{ authorization.registered_at }}</p><button :disabled="loading || busy" @click="navigate('authorization',authorization)">Revisar autorización</button></article>
+</section>
+<section class="workshop-card"><h2>Historial de salidas</h2>
+<p v-if="!(related.exits ?? []).some(e=>e.admission_id===selected?.id)">Sin salida registrada.</p>
+<article v-for="exit in (related.exits ?? []).filter(e=>e.admission_id===selected?.id)" :key="exit.id"><p>{{ registrationDate(String(exit.exited_at)) }} · {{ exit.reason }} · Responsable {{ exit.recorded_by_id }}</p><ContentSummary :value="exit.reviewed_content" /></article>
+<p>Una salida registrada no equivale a disponibilidad si permanecen impedimentos. Transporte verifica nuevamente las condiciones al asignar.</p>
+</section>
+</template>
         <template v-else-if="selected && !loading && view==='impediment'">
 <section class="workshop-card">
 <h2>{{ selected.description }}</h2>
@@ -632,7 +705,12 @@ function openRow(row: RecordRow): void { void navigate(view.value === 'orders' ?
 <p>Restricción: {{ labels[String(selected.effect)] }} · {{ selected.is_open?'Abierto':'Resuelto' }}</p>
 <p>{{ selected.reason }} · {{ selected.occurred_at }}</p>
 <button v-if="selected.work_order_id" @click="navigate('order',{id:String(selected.work_order_id)})">Consultar orden vinculada</button>
-<p>El estado de la orden no libera el vehículo. La salida y la resolución de impedimentos requieren los procesos administrativos del backend.</p>
+<p>Estado actual del vehículo: {{ labels[String(vehicle?.service_status)] ?? vehicle?.service_status }}</p>
+<button v-if="admin && selected.is_open===true && !(selected.admission_id && !selected.work_order_id)" :disabled="loading || busy" @click="resolveImpediment">Resolver impedimento</button>
+<p v-if="selected.admission_id && !selected.work_order_id">Este impedimento de ingreso solo puede resolverse mediante la salida autorizada.</p>
+<button v-if="selected.admission_id" @click="navigate('admission',{id:String(selected.admission_id)})">Consultar ingreso</button>
+<p v-for="resolution in (related['impediment-resolutions'] ?? []).filter(r=>r.impediment_id===selected?.id)" :key="resolution.id">Resolución: {{ registrationDate(String(resolution.resolved_at)) }} · {{ resolution.reason }} · Responsable {{ resolution.resolved_by_id }}</p>
+<p>Resolver una causa no elimina otros impedimentos ni libera asignaciones.</p>
 </section>
 </template>
         <template v-else-if="selected && !loading && view==='report'">
@@ -654,6 +732,7 @@ function openRow(row: RecordRow): void { void navigate(view.value === 'orders' ?
 <p>{{ selected.reason }}</p>
 <p>Fecha {{ selected.registered_at }} · Solicitante {{ selected.requested_by_id }} · Versión objetivo {{ selected.target_version ?? 'No aplica' }}</p>
 <button v-if="selected.work_order_id" @click="navigate('order',{id:String(selected.work_order_id)})">Consultar orden</button>
+<button v-if="selected.admission_id" @click="navigate('admission',{id:String(selected.admission_id)})">Consultar ingreso</button>
 <h3>Contenido solicitado</h3>
 <ContentSummary :value="selected.content" />
 <button v-if="admin && !decisionFor(selected)" @click="decide">Registrar decisión</button>
@@ -674,11 +753,12 @@ function openRow(row: RecordRow): void { void navigate(view.value === 'orders' ?
     <WorkshopDialog v-if="command && session && !denied" :title="command.title" @cancel="cancel">
 <div v-if="error" role="alert" class="workshop-alert">{{ error }}<p v-for="(items,key) in fieldErrors" :key="key">{{ items.join(' ') }}</p>
 </div>
-<p v-if="!admin && command.scope">Los selectores muestran repuestos y proveedores ya referenciados en tus órdenes accesibles. El catálogo completo requiere acceso administrativo.</p><p v-if="!admin && command.path.endsWith('/mechanic-assignments')">Solo se muestran mecánicos con asignaciones vigentes accesibles. Si falta un empleado, el administrador debe realizar su asignación.</p><p v-if="!office && command.path==='reports'">Puedes seleccionar vehículos de tus órdenes asignadas. Si falta un vehículo, solicita a la oficina registrar la avería.</p><p v-if="uncertain">La respuesta no confirmó el resultado. Se conserva la operación exacta y su clave para evitar duplicados.</p>
+<p v-if="!admin && command.scope">Los selectores muestran repuestos y proveedores ya referenciados en tus órdenes accesibles. El catálogo completo requiere acceso administrativo.</p><p v-if="!office && command.path==='reports'">Puedes seleccionar vehículos de tus órdenes asignadas. Si falta un vehículo, solicita a la oficina registrar la avería.</p><p v-if="uncertain">La respuesta no confirmó el resultado. Se conserva la operación exacta y su clave para evitar duplicados.</p>
 <button v-if="uncertain" :disabled="busy" @click="retry">Reintentar la misma operación</button>
 <button v-if="csrfExpired" @click="fixCsrf">Actualizar sesión de seguridad</button>
 <p v-if="stale">El estado cambió. Cierra este formulario, actualiza los datos y revisa una nueva operación.</p>
 <BatchCorrectionForm v-if="command.batch" :options="batchOptions" :busy="busy || uncertain || stale" :cancel-disabled="busy || uncertain" :errors="fieldErrors" @submit="submit" @cancel="cancel" />
+<ExitRequestForm v-else-if="command.exit" :causes="exitCauses" :previous-requests="exitPrevious" :busy="busy || uncertain || stale" :cancel-disabled="busy || uncertain" :errors="fieldErrors" @submit="submit" @cancel="cancel" />
 <ScopeForm v-else-if="command.scope" :diagnoses="related.diagnoses ?? []" :scopes="related.scopes ?? []" :parts="partOptions" :suppliers="supplierOptions" :previous-requests="rejectedRequests()" :busy="busy || uncertain || stale" :errors="fieldErrors" :cancel-disabled="busy || uncertain" @submit="submit" @cancel="cancel"/>
 <CommandForm v-else :title="command.title" :fields="command.fields" :busy="busy || uncertain || stale" :errors="fieldErrors" :cancel-disabled="busy || uncertain" @submit="submit" @cancel="cancel"/>
 <button v-if="stale" @click="cancel">Cerrar y revisar estado</button>

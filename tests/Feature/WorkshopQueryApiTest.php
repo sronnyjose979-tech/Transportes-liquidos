@@ -50,6 +50,24 @@ class WorkshopQueryApiTest extends PostgresTestCase
         return compact('admin', 'mechanic', 'asset', 'order', 'other', 'assignment', 'diagnosis', 'scope');
     }
 
+    public function test_admission_links_distinguish_history_from_effective_links(): void
+    {
+        $f = $this->fixture();
+        $admission = $this->postJson('/api/workshop/assets/'.$f['asset']->id.'/admissions', [
+            'request_key' => (string) Str::uuid(), 'kind' => 'corrective',
+            'admitted_at' => '2026-10-12T08:00:00Z', 'reason' => 'Ingreso para inspección',
+        ])->assertSuccessful()->json('data.admission_id');
+        $link = $this->postJson('/api/workshop/orders/'.$f['order'].'/admission-links', [
+            'request_key' => (string) Str::uuid(), 'admission_id' => $admission, 'reason' => 'Relacionar ingreso',
+        ])->assertCreated()->json('data.link_id');
+        $this->getJson('/api/workshop/admission-links/'.$link)->assertOk()->assertJsonPath('data.is_invalidated', false);
+        $this->postJson('/api/workshop/admission-links/'.$link.'/invalidate', [
+            'request_key' => (string) Str::uuid(), 'reason' => 'Rectificar vínculo, conservar historial',
+        ])->assertOk();
+        $this->getJson('/api/workshop/orders/'.$f['order'].'/admission-links')->assertOk()
+            ->assertJsonPath('meta.total', 1)->assertJsonPath('data.0.id', $link)->assertJsonPath('data.0.is_invalidated', true);
+    }
+
     public function test_every_read_collection_and_existing_record_has_json_pagination(): void
     {
         $f = $this->fixture();

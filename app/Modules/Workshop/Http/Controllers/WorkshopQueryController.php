@@ -5,7 +5,9 @@ namespace App\Modules\Workshop\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Modules\Workshop\Application\WorkshopAccess;
+use App\Modules\Workshop\Http\Requests\WorkshopMechanicLookupRequest;
 use App\Modules\Workshop\Http\Requests\WorkshopQueryRequest;
+use App\Modules\Workshop\Http\Resources\WorkshopMechanicResource;
 use App\Modules\Workshop\Http\Resources\WorkshopRecordResource;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Http\JsonResponse;
@@ -42,6 +44,23 @@ class WorkshopQueryController extends Controller
     ];
 
     public function __construct(private readonly WorkshopAccess $access) {}
+
+    public function mechanics(WorkshopMechanicLookupRequest $request): JsonResponse
+    {
+        $query = DB::table('employees as employee')
+            ->join('users as account', 'account.id', '=', 'employee.user_id')
+            ->where('employee.is_active', true)->where('account.is_active', true)
+            ->whereExists(fn (Builder $roles) => $roles->selectRaw('1')
+                ->from('user_roles as membership')->join('roles as role', 'role.id', '=', 'membership.role_id')
+                ->whereColumn('membership.user_id', 'account.id')->where('role.name', 'mechanic'))
+            ->select(['employee.id', 'employee.name']);
+        if ($request->filled('search')) {
+            $query->whereRaw('strpos(lower(employee.name), lower(?)) > 0', [$request->validated('search')]);
+        }
+
+        return WorkshopMechanicResource::collection($query->orderBy('employee.name')->orderBy('employee.id')
+            ->paginate($request->integer('per_page', 25)))->response();
+    }
 
     public function index(WorkshopQueryRequest $request, string $kind): JsonResponse
     {
@@ -159,6 +178,9 @@ class WorkshopQueryController extends Controller
         }
         if ($kind === 'scopes') {
             $query->selectRaw('workshop_scope_is_effective(record.id) AS is_effective')->selectRaw('EXISTS(SELECT 1 FROM workshop_authorization_requests ar JOIN workshop_authorization_decisions ad ON ad.request_id=ar.id JOIN workshop_authorization_applications aa ON aa.decision_id=ad.id WHERE ar.scope_id=record.id) AS is_applied');
+        }
+        if ($kind === 'admission-links') {
+            $query->selectRaw("EXISTS(SELECT 1 FROM workshop_operations invalidation WHERE invalidation.order_admission_link_id=record.id AND invalidation.operation_type='order_admission_link_invalidate') AS is_invalidated");
         }
         if ($kind === 'mechanic-assignments') {
             $query->selectRaw('EXISTS(SELECT 1 FROM workshop_mechanic_releases release WHERE release.assignment_id=record.id) AS is_released');

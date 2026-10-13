@@ -1044,3 +1044,23 @@ reales y búsqueda; secretaria conserva uso del lookup sin permisos administrati
 PATCH compara el snapshot esperado bajo bloqueo común 873210/guard. Las rutas referenciadas
 siguen protegidas por transport_preserve_used_route existente: API 409/UI consulta hasta
 resolver D09. Sin eliminación, cambio de historia o nuevos contratos de solicitudes/viajes.
+
+## Taller — circuito operativo de ingresos y salidas
+
+`WorkshopApp.vue` integra la navegación de ingresos, sus vínculos con órdenes,
+impedimentos, resoluciones, advertencias y salidas históricas. `ExitRequestForm.vue`
+selecciona explícitamente causas y fecha para el proceso administrativo existente.
+La decisión y aplicación siguen separadas, con revisión exacta y control transaccional
+del backend. Solo administrador solicita/aplica salida o resuelve causas; oficina
+registra ingreso y asigna/libera mecánicos. La causa canónica se resuelve mediante
+salida autorizada; otros impedimentos pueden mantener el bloqueo. No cambia Transporte.
+
+Nuevo lookup limitado `GET /api/workshop/lookups/mechanics`: oficina consulta únicamente
+ID/nombre de mecánicos elegibles, sin permisos de Personal ni dependencia de asignaciones
+previas. `WorkshopQueryController` identifica vínculos de ingreso invalidados para
+separar historial de relaciones vigentes. Sin cambios de esquema o reglas empresariales.
+
+Ver [circuito, contratos y pruebas](docs/taller-circuito-operativo.md).
+La suite `--e2e-workshop-circuit` usa Chromium, Laravel y PostgreSQL 18 aislado; incluye
+registro de Flota, ingreso, reparación autorizada, resolución, salida y disponibilidad,
+así como respuesta de ingreso perdida y liberación mecánica con historial.
