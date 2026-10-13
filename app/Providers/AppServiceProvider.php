@@ -6,6 +6,9 @@ use App\Models\User;
 use App\Modules\AccessAndPersonnel\Console\BootstrapAdministrator;
 use App\Modules\FleetAndDocuments\Console\ReconcileDocumentStorage;
 use App\Modules\TransportAndDispatch\Policies\TransportCorePolicy;
+use App\Modules\Workshop\Application\WorkshopAccess;
+use App\Modules\Workshop\Models\WorkshopWorkOrder;
+use App\Modules\Workshop\Policies\WorkshopWorkOrderPolicy;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -27,6 +30,12 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        Gate::policy(WorkshopWorkOrder::class, WorkshopWorkOrderPolicy::class);
+        Gate::define('access-workshop', function (User $actor): bool {
+            app(WorkshopAccess::class)->module($actor);
+
+            return true;
+        });
         Gate::define('manage-catalogs', fn (User $user): bool => $user->is_active && $user->roles()->where('name', 'administrator')->exists()
         );
         Gate::define('manage-personnel', fn (User $user): bool => $user->is_active && $user->roles()->where('name', 'administrator')->exists());

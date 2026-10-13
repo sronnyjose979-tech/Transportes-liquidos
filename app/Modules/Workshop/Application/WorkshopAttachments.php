@@ -55,7 +55,7 @@ class WorkshopAttachments
             }, $candidate));
     }
 
-    public function confirm(User $actor, string $reservationId, string $key, string $source): array
+    public function confirm(User $actor, string $reservationId, string $key, ?string $source = null): array
     {
         $this->ownTransaction();
 
@@ -69,7 +69,8 @@ class WorkshopAttachments
             $storageKey = $reservationId.'.'.$expected['extension'];
             $terminal = DB::table('workshop_operations')->where('reservation_operation_id', $reservationId)->first();
             if ($terminal === null) {
-                $this->files->write($source, $storageKey, $expected);
+                // Recovery accepts only a server-derived private path, never a client path.
+                $this->files->write($source ?? $this->files->path($storageKey), $storageKey, $expected);
             }
 
             return $this->commands->run($actor, 'attachment_confirm:'.$reservationId, $key, ['reservation_id' => $reservationId],
