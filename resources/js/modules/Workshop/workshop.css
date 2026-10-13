@@ -1,0 +1,128 @@
+.workshop {
+    --workshop-primary: #1565c0;
+    --workshop-dark: #0d2b52;
+    --workshop-light: #eaf3ff;
+    color: #1e293b;
+    background: #f5f8fc;
+    min-height: 100dvh;
+    font-family: 'Instrument Sans', system-ui, sans-serif;
+    line-height: 1.5;
+}
+.workshop *, .workshop *::before, .workshop *::after { box-sizing: border-box; }
+.workshop h1, .workshop h2, .workshop h3, .workshop p { margin-top: 0; }
+.workshop h1 { font-size: clamp(1.5rem, 3vw, 2rem); font-weight: 700; letter-spacing: -.035em; }
+.workshop h2 { font-size: 1.15rem; font-weight: 700; }
+.workshop h3 { font-size: 1rem; font-weight: 650; }
+.workshop button, .workshop input, .workshop select, .workshop textarea { font: inherit; }
+.workshop button, .workshop a { -webkit-tap-highlight-color: transparent; }
+.workshop button { cursor: pointer; }
+.workshop button:disabled { cursor: wait; opacity: .6; }
+.workshop :focus-visible { outline: 3px solid #1565c0; outline-offset: 3px; }
+.workshop a { color: #1565c0; }
+.workshop-layout, .workshop .app-layout { display: flex; min-height: 100dvh; }
+.workshop-sidebar, .workshop .sidebar { width: 248px; flex-shrink: 0; background: #0d2b52; color: #fff; padding: 28px 18px; }
+.workshop-sidebar h2, .workshop-sidebar .brand { margin: 0 12px 28px; font-size: 1.2rem; }
+.workshop-sidebar nav, .workshop .sidebar nav { display: grid; gap: 8px; }
+.workshop-sidebar button, .workshop-sidebar a, .workshop .sidebar nav button, .workshop .sidebar nav a { display: flex; align-items: center; gap: 12px; text-align: left; width: 100%; padding: 12px 14px; border: 0; border-radius: 8px; background: transparent; color: #fff; text-decoration: none; }
+.workshop-sidebar button:hover, .workshop-sidebar a:hover, .workshop .sidebar nav button:hover { background: #ffffff15; }
+.workshop-sidebar .active, .workshop-sidebar [aria-current='page'], .workshop .sidebar .active { background: #1565c0; font-weight: 650; }
+.workshop-sidebar svg { width: 20px; height: 20px; flex-shrink: 0; }
+.workshop-main, .workshop .main { min-width: 0; flex: 1; }
+.workshop-topbar, .workshop .topbar { min-height: 76px; padding: 16px 32px; background: #fff; border-bottom: 1px solid #e2e8f0; display: flex; gap: 20px; justify-content: space-between; align-items: center; flex-wrap: wrap; }
+.workshop-content, .workshop .content { max-width: 1440px; padding: 32px; margin: 0 auto; }
+.workshop-page-heading, .workshop .page-heading { display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 16px; margin-bottom: 24px; }
+.workshop-muted, .workshop .muted { color: #64748b; font-size: .9rem; }
+.workshop-grid, .workshop .metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 20px; margin-bottom: 24px; }
+.workshop-card, .workshop .card, .workshop .panel { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 24px; margin-bottom: 20px; box-shadow: 0 2px 8px #0d2b5205; }
+.workshop-grid .workshop-card, .workshop .metrics .card { margin-bottom: 0; }
+.workshop-metric-value, .workshop .metric-value { font-size: 2rem; font-weight: 750; color: #0d2b52; }
+.workshop button { border: 1px solid #cbd5e1; border-radius: 7px; background: #fff; color: #1e293b; min-height: 42px; padding: 9px 15px; font-size: .9rem; font-weight: 600; }
+.workshop button:hover:not(:disabled) { background: #eaf3ff; }
+.workshop .workshop-button-primary, .workshop .btn-primary { background: #1565c0; border-color: #1565c0; color: #fff; }
+.workshop .workshop-button-primary:hover:not(:disabled), .workshop .btn-primary:hover:not(:disabled) { background: #104e99; }
+.workshop .workshop-button-secondary, .workshop .btn-secondary { color: #1565c0; border-color: #c9daed; background: #fff; }
+.workshop-actions, .workshop .actions, .workshop-form-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.workshop-form-actions { justify-content: flex-end; margin-top: 24px; }
+.workshop fieldset { padding: 0; margin: 0; border: 0; min-width: 0; }
+.workshop-form-grid, .workshop .filters { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 18px; }
+.workshop .filters { align-items: end; margin-bottom: 22px; }
+.workshop-field-wide { grid-column: 1 / -1; }
+.workshop label { display: block; font-size: .875rem; font-weight: 600; margin-bottom: 6px; }
+.workshop input, .workshop select, .workshop textarea { display: block; width: 100%; min-height: 44px; padding: 10px 12px; border: 1px solid #cbd5e1; background: #fff; color: #1e293b; border-radius: 7px; }
+.workshop textarea { resize: vertical; }
+.workshop [aria-invalid='true'] { border-color: #b91c1c; }
+.workshop-field-errors { color: #b91c1c; font-size: .85rem; margin: 6px 0 0; padding-left: 20px; }
+.workshop-table-scroll { max-width: 100%; overflow-x: auto; border: 1px solid #e2e8f0; border-radius: 9px; background: #fff; }
+.workshop-table, .workshop table { width: 100%; border-collapse: collapse; font-size: .875rem; text-align: left; }
+.workshop th { color: #475569; font-weight: 650; background: #f8fafc; white-space: nowrap; }
+.workshop td, .workshop th { padding: 14px 16px; border-bottom: 1px solid #e2e8f0; vertical-align: middle; }
+.workshop tbody tr:last-child td { border-bottom: 0; }
+.workshop tbody tr:hover { background: #f5f8fc; }
+.workshop td { overflow-wrap: anywhere; }
+.workshop td:last-child { white-space: nowrap; }
+.workshop-empty, .workshop .empty { padding: 36px 20px; color: #64748b; text-align: center; }
+.workshop-error, .workshop .error { padding: 14px 18px; border-radius: 8px; color: #991b1b; background: #fef2f2; border: 1px solid #fecaca; margin-bottom: 20px; }
+.workshop-success, .workshop .success { padding: 14px 18px; border-radius: 8px; color: #166534; background: #f0fdf4; border: 1px solid #bbf7d0; margin-bottom: 20px; }
+.workshop-info, .workshop .info { padding: 14px 18px; border-radius: 8px; color: #0d2b52; background: #eaf3ff; margin-bottom: 20px; }
+.workshop-status, .workshop .badge { display: inline-flex; border-radius: 5px; padding: 3px 9px; color: #0d2b52; background: #eaf3ff; font-size: .8rem; }
+.workshop-status.pending { color: #854d0e; background: #fef9c3; }
+.workshop-status.complete { color: #166534; background: #dcfce7; }
+.workshop-status.blocked { color: #991b1b; background: #fee2e2; }
+.workshop dl { display: grid; grid-template-columns: minmax(140px, 1fr) 2fr; gap: 10px 20px; }
+.workshop dt { color: #64748b; }
+.workshop dd { margin: 0; overflow-wrap: anywhere; }
+.workshop-modal-backdrop, .workshop .modal-backdrop { position: fixed; inset: 0; z-index: 50; display: flex; align-items: center; justify-content: center; padding: 24px; background: #0d2b5280; }
+.workshop-modal, .workshop .modal { width: min(680px, 100%); max-height: calc(100dvh - 48px); overflow-y: auto; background: #fff; border-radius: 14px; padding: 28px; box-shadow: 0 24px 80px #0d2b5233; }
+.workshop-login, .workshop .login { min-height: 100dvh; display: grid; place-items: center; padding: 24px; }
+.workshop-login-card, .workshop .login-card { width: min(440px, 100%); background: #fff; padding: 36px; border-radius: 14px; border: 1px solid #e2e8f0; }
+.workshop-login-card input, .workshop .login-card input { margin-bottom: 18px; }
+.workshop-sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+@media (max-width: 900px) {
+    .workshop-sidebar, .workshop .sidebar { width: 200px; padding: 24px 12px; }
+    .workshop-content, .workshop .content { padding: 24px; }
+    .workshop-topbar, .workshop .topbar { padding: 16px 24px; }
+}
+@media (max-width: 640px) {
+    .workshop-layout, .workshop .app-layout { display: block; }
+    .workshop-sidebar, .workshop .sidebar { width: 100%; padding: 16px; }
+    .workshop-sidebar h2, .workshop-sidebar .brand { margin: 0 0 12px; }
+    .workshop-sidebar nav, .workshop .sidebar nav { display: flex; flex-wrap: wrap; gap: 6px; }
+    .workshop-sidebar nav button, .workshop-sidebar nav a, .workshop .sidebar nav button, .workshop .sidebar nav a { width: auto; padding: 9px 11px; }
+    .workshop-content, .workshop .content { padding: 20px 16px; }
+    .workshop-topbar, .workshop .topbar { padding: 14px 16px; }
+    .workshop-card, .workshop .card, .workshop .panel { padding: 18px; }
+    .workshop-form-grid, .workshop .filters { grid-template-columns: 1fr; }
+    .workshop-modal-backdrop, .workshop .modal-backdrop { padding: 12px; }
+    .workshop-modal, .workshop .modal { max-height: calc(100dvh - 24px); padding: 20px; }
+    .workshop dl { grid-template-columns: 1fr; gap: 4px; }
+    .workshop dd { margin-bottom: 12px; }
+}
+.workshop { display: flex; }
+.workshop-login { flex: 1; }
+.workshop-login > form { width: min(460px,100%); }
+.workshop-login label { margin: 18px 0; }
+.workshop-sidebar { position: sticky; top: 0; height: 100dvh; overflow-y: auto; }
+.workshop-sidebar > small { display: block; margin: 32px 12px 0; color: #c4d5ec; }
+.workshop-sidebar nav + nav { margin-top: 30px; border-top: 1px solid #ffffff20; padding-top: 16px; }
+.workshop-brand { margin-bottom: 28px; font-size: 1.2rem; font-weight: 700; }
+.workshop-brand span { font-size: .9rem; }
+.workshop-brand small { display: block; color: #c4d5ec; font-weight: 400; }
+.workshop-eyebrow { font-size: .7rem; letter-spacing: .13em; font-weight: 700; margin-bottom: 10px; color: #587291; }
+.workshop-sidebar .workshop-eyebrow { margin: 18px 12px 10px; color: #a9c5eb; }
+.workshop-metrics strong { display: block; font-size: 2.25rem; color: #0d2b52; margin: 12px 0; }
+.workshop-metrics span { display: block; min-height: 42px; color: #64748b; font-size: .875rem; }
+.workshop-metrics button { width: 100%; }
+.workshop-filters { display: grid; grid-template-columns: repeat(auto-fit,minmax(180px,1fr)); gap: 16px; align-items: end; }
+.workshop input[type='checkbox'] { display: inline-block; width: 18px; min-height: 18px; vertical-align: middle; }
+.workshop-alert { padding: 16px; border: 1px solid #fecaca; color: #991b1b; background: #fef2f2; border-radius: 8px; margin-bottom: 20px; }
+.workshop-badge { padding: 4px 8px; border-radius: 5px; font-size: .8rem; background: #eaf3ff; color: #0d2b52; }
+.workshop-badge.pending { color: #854d0e; background: #fef9c3; }
+.workshop-badge.complete { color: #166534; background: #dcfce7; }
+.workshop-badge.blocked { color: #991b1b; background: #fee2e2; }
+.workshop article + article { margin-top: 20px; border-top: 1px solid #e2e8f0; padding-top: 20px; }
+.workshop-grid article + article { margin-top: 0; border-top: 1px solid #e2e8f0; padding-top: 24px; }
+.workshop pre { padding: 18px; white-space: pre-wrap; overflow-wrap: anywhere; font-size: .85rem; background: #f5f8fc; border-radius: 8px; }
+.workshop h2, .workshop h3, .workshop p { overflow-wrap: anywhere; }
+.workshop ul { list-style: disc; padding-left: 24px; margin-bottom: 16px; }
+.workshop-modal button { margin-top: 6px; }
+@media (max-width: 640px) { .workshop { display: block; } .workshop-sidebar { position: static; height: auto; } .workshop-sidebar > small { display: none; } .workshop-filters { grid-template-columns: 1fr; } .workshop-grid { grid-template-columns: 1fr; } }

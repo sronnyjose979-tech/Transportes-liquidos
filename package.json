@@ -6,7 +6,8 @@
         "build": "vite build",
         "dev": "vite",
         "typecheck": "vue-tsc --noEmit",
-        "test:frontend": "python3 -m unittest discover -s tests/Frontend -v"
+        "test:frontend": "python3 -m unittest discover -s tests/Frontend -v",
+        "test:frontend-api": "node tests/Frontend/workshop_api.test.mjs"
     },
     "devDependencies": {
         "@tailwindcss/vite": "^4.0.0",

@@ -3,8 +3,10 @@
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
-    return view('welcome');
+    return response()->view('workshop')->header('Cache-Control', 'no-store');
 });
+
+Route::get('/taller', fn () => response()->view('workshop')->header('Cache-Control', 'no-store'))->name('workshop.web');
 
 Route::get('/documentacion', fn () => response()->view('fleet-documents')
     ->header('Cache-Control', 'no-store'))->name('fleet.documents.web');

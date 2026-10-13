@@ -908,3 +908,49 @@ función aprobada; no se modifican credenciales ni privilegios del entorno del p
 Las pruebas utilizan únicamente `tests/run-postgres.sh` y PostgreSQL 18 temporal;
 incluyen permisos, aplicación única, escrituras SQL incompatibles, reintentos seguros
 y conexiones independientes para conflictos de ingreso, asignación y salida.
+
+## Taller Mecánico — frontend, primera entrega
+
+Montaje dentro del frontend existente: `/` y `/taller` sirven
+`resources/views/workshop.blade.php`; `resources/js/app.ts` monta `WorkshopApp`.
+El módulo físico `resources/js/modules/Workshop/` contiene integración HTTP,
+presentación y componentes de formularios, tablas, diálogo accesible y alcance.
+Consume la API JSON existente por sesión/CSRF; no incorpora dependencias,
+migraciones, almacenamiento offline ni un frontend separado.
+
+Incluye inicio con totales por los siete estados reales, solicitudes pendientes y
+conteo de activos distintos con impedimentos abiertos. El conteo recorre toda la
+paginación; los indicadores se limitan al acceso del usuario y no presentan valores
+simulados cuando falla la consulta. La API no ofrece feed consolidado de actividad.
+Órdenes tienen filtros reales de estado, prioridad, vehículo y fechas con offset
+America/Costa_Rica; la búsqueda textual indica expresamente «en esta página».
+
+Flujo: reporte → creación de orden por oficina → vínculo explícito con avería →
+asignación → diagnóstico → alcance con tareas/repuestos → solicitud automática →
+decisión administrativa → aplicación explícita. Cada escritura es independiente y
+actualiza las consultas tras su confirmación. Cancelación, reapertura y rectificación
+usan solicitudes del backend, sin asignar estados desde Vue. No incorpora pantallas
+de ejecución, tiempos, inventario, costos ni adjuntos. Autorizaciones que corresponden
+a esos hechos muestran su dependencia y no se aplican como cambios de orden.
+
+La consulta existente de asignaciones añade `employee_name`, `is_current_actor` e
+`is_current` (empleado activo, fecha de inicio alcanzada y sin liberación). Permite
+seleccionar participación propia vigente y ocultar acciones mecánicas históricas;
+no concede permisos ni sustituye la autorización del comando. No hay nuevo endpoint.
+Secretaría reutiliza lookup de activos de Transporte; mecánicos pueden introducir
+UUID del vehículo. El catálogo de empleados es exclusivo de administradores;
+secretaría introduce UUID existente. Repuestos/proveedores propuestos admiten UUID
+de catálogos reales sin inventar opciones ni existencias.
+
+Las versiones se capturan al abrir el formulario. Respuestas perdidas conservan en
+memoria método, ruta, contenido y `request_key` exactos; solo un reintento explícito
+repite el comando. No hay reenvío automático. 409 o 422 de versión/clave exigen cerrar,
+actualizar y revisar. Errores 401/403 limpian pantallas privadas; cambio de identidad
+o roles detectado en consulta limpia caches y formularios. Cancelación de lecturas y
+generaciones evitan sobrescribir consultas nuevas. Se actualiza cada 30 segundos con
+la página visible y sin formulario activo; el usuario también puede actualizar.
+
+Validación: `npm run typecheck`, `npm run build`, `npm run test:frontend-api`,
+`npm run test:frontend` (requiere Playwright Python y Chromium ya disponibles),
+`bash tests/run-postgres.sh --filter Workshop`, Pint y `git diff --check`.
+La suite de navegador usa API sintética interceptada; no equivale a E2E con DB real.

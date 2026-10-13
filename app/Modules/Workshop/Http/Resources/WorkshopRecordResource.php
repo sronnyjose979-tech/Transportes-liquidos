@@ -14,6 +14,11 @@ class WorkshopRecordResource extends JsonResource
     {
         $values = $this->resource instanceof Model ? $this->resource->attributesToArray() : (array) $this->resource;
         $result = array_intersect_key($values, array_flip(self::FIELDS));
+        foreach (['employee_name', 'is_current_actor', 'is_current'] as $field) {
+            if (array_key_exists($field, $values)) {
+                $result[$field] = $values[$field];
+            }
+        }
         foreach (['content', 'evidence', 'reviewed_content', 'context'] as $field) {
             if (isset($result[$field]) && is_string($result[$field])) {
                 $result[$field] = self::decode($result[$field]);

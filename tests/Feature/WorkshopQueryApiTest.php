@@ -71,12 +71,17 @@ class WorkshopQueryApiTest extends PostgresTestCase
         $rectification = $this->postJson('/api/workshop/facts/cost/'.$cost.'/rectifications', ['request_key' => (string) Str::uuid(), 'version' => 2, 'executor_id' => $f['admin']->id, 'changes' => ['description' => 'Detalle'], 'reason' => 'Prueba'])->assertSuccessful()->json('data.request_id');
         $this->getJson('/api/workshop/authorization-requests/'.$rectification)->assertOk()->assertJsonPath('data.content.before.amount', '99999999999999.123456');
         $this->actingAs($f['mechanic'])->getJson('/api/workshop/orders')->assertOk()->assertJsonPath('meta.total', 1)->assertJsonPath('data.0.id', $f['order']);
+        $this->getJson('/api/workshop/orders/'.$f['order'].'/mechanic-assignments')->assertOk()
+            ->assertJsonPath('data.0.is_current_actor', true)->assertJsonPath('data.0.is_current', true)
+            ->assertJsonPath('data.0.employee_name', 'Mecánico sintético');
         $this->getJson('/api/workshop/orders/'.$f['other'])->assertForbidden();
         $this->getJson('/api/workshop/costs')->assertForbidden();
         $this->getJson('/api/workshop/authorization-requests/'.$rectification)->assertForbidden();
         $this->getJson('/api/workshop/authorization-requests')->assertOk()->assertJsonPath('meta.total', 1);
         $this->actingAs($f['admin'])->postJson('/api/workshop/mechanic-assignments/'.$f['assignment'].'/release', ['request_key' => (string) Str::uuid(), 'ends_at' => '2026-10-12T12:00:00Z', 'reason' => 'Fin'])->assertCreated();
         $this->actingAs($f['mechanic'])->getJson('/api/workshop/orders/'.$f['order'].'/diagnoses')->assertOk()->assertJsonPath('meta.total', 1);
+        $this->getJson('/api/workshop/orders/'.$f['order'].'/mechanic-assignments')->assertOk()
+            ->assertJsonPath('data.0.is_current_actor', true)->assertJsonPath('data.0.is_current', false);
         $this->postJson('/api/workshop/orders/'.$f['order'].'/time-events', ['request_key' => (string) Str::uuid(), 'mechanic_assignment_id' => $f['assignment'], 'event_type' => 'start', 'occurred_at' => '2026-10-12T12:00:00Z', 'reason' => 'Intento'])->assertForbidden();
     }
 

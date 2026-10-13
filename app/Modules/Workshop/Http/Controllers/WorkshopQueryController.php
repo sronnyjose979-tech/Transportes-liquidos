@@ -162,6 +162,10 @@ class WorkshopQueryController extends Controller
         }
         if ($kind === 'mechanic-assignments') {
             $query->selectRaw('EXISTS(SELECT 1 FROM workshop_mechanic_releases release WHERE release.assignment_id=record.id) AS is_released');
+            $query->join('employees as member', 'member.id', '=', 'record.employee_id')
+                ->addSelect('member.name as employee_name')
+                ->selectRaw('member.user_id = ? AS is_current_actor', [$actor->id])
+                ->selectRaw('member.is_active AND record.starts_at <= CURRENT_TIMESTAMP AND NOT EXISTS(SELECT 1 FROM workshop_mechanic_releases release WHERE release.assignment_id=record.id) AS is_current');
         }
 
         return $query;
