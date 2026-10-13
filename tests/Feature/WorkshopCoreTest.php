@@ -320,23 +320,27 @@ class WorkshopCoreTest extends PostgresTestCase
 
     public function test_core_migrations_reverse_and_reapply_without_touching_fleet(): void
     {
-        $extensions = array_map(fn ($path) => require $path, glob(database_path('migrations/2026_10_12_0002*.php')));
-        foreach (array_reverse($extensions) as $extension) {
-            $extension->down();
-        }
+        // Verify the phase-1 reversal in its own empty schema. Later phases protect
+        // history with forward recovery and must not be rolled back by this test.
+        $namespace = 'workshop_core_'.str_replace('-', '', (string) Str::uuid());
+        DB::statement('CREATE SCHEMA '.$namespace);
+        DB::statement('SET search_path TO '.$namespace.',public');
         $schema = require database_path('migrations/2026_10_12_000180_create_workshop_core.php');
         $protection = require database_path('migrations/2026_10_12_000190_protect_workshop_core.php');
-        $protection->down();
-        $schema->down();
-        $this->assertNull(DB::selectOne("SELECT to_regclass('workshop_reports') AS table_name")->table_name);
-        $this->assertNotNull(DB::selectOne("SELECT to_regclass('fleet_assets') AS table_name")->table_name);
-        $schema->up();
-        $protection->up();
-        foreach ($extensions as $extension) {
-            $extension->up();
+        try {
+            $schema->up();
+            $protection->up();
+            $protection->down();
+            $schema->down();
+            $this->assertNull(DB::selectOne('SELECT to_regclass(?) AS table_name', [$namespace.'.workshop_reports'])->table_name);
+            $this->assertNotNull(DB::selectOne("SELECT to_regclass('public.fleet_assets') AS table_name")->table_name);
+            $schema->up();
+            $protection->up();
+            $this->assertNotNull(DB::selectOne('SELECT to_regclass(?) AS table_name', [$namespace.'.workshop_reports'])->table_name);
+            $this->order();
+            $this->checkConstraints();
+        } finally {
+            DB::statement('SET search_path TO public');
         }
-        $this->assertNotNull(DB::selectOne("SELECT to_regclass('workshop_reports') AS table_name")->table_name);
-        $this->order();
-        $this->checkConstraints();
     }
 }

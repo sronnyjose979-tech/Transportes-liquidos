@@ -66,4 +66,29 @@ class WorkshopWorkOrder extends Model
     {
         return $this->hasMany(WorkshopAuthorizationRequest::class, 'work_order_id');
     }
+
+    public function timeEvents(): HasMany
+    {
+        return $this->hasMany(WorkshopTimeEvent::class, 'work_order_id');
+    }
+
+    public function externalRepairs(): HasMany
+    {
+        return $this->hasMany(WorkshopExternalRepair::class, 'work_order_id');
+    }
+
+    public function attachments(): HasMany
+    {
+        return $this->hasMany(WorkshopAttachment::class, 'work_order_id');
+    }
+
+    public function costRecords(): HasMany
+    {
+        return $this->hasMany(WorkshopCostRecord::class, 'work_order_id');
+    }
+
+    public function materialNeeds(): HasMany
+    {
+        return $this->hasMany(WorkshopMaterialNeed::class, 'work_order_id');
+    }
 }

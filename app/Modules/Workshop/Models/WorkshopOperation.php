@@ -16,7 +16,7 @@ class WorkshopOperation extends Model
 
     public $timestamps = false;
 
-    protected $fillable = ['work_order_id', 'admission_id', 'report_id', 'fleet_asset_id', 'operation_type', 'before_values', 'after_values', 'from_version', 'to_version', 'actor_id', 'occurred_at', 'reason', 'request_key', 'request_fingerprint', 'idempotency_scope', 'confirmed_result', 'report_link_id', 'mechanic_assignment_id', 'mechanic_release_id', 'diagnosis_id', 'order_admission_link_id', 'reservation_operation_id', 'scope_id', 'authorization_request_id', 'authorization_decision_id', 'impediment_id', 'warning_id'];
+    protected $fillable = ['work_order_id', 'admission_id', 'report_id', 'fleet_asset_id', 'operation_type', 'before_values', 'after_values', 'from_version', 'to_version', 'actor_id', 'occurred_at', 'reason', 'request_key', 'request_fingerprint', 'idempotency_scope', 'confirmed_result', 'report_link_id', 'mechanic_assignment_id', 'mechanic_release_id', 'diagnosis_id', 'order_admission_link_id', 'reservation_operation_id', 'scope_id', 'authorization_request_id', 'authorization_decision_id', 'impediment_id', 'warning_id', 'activity_id', 'time_event_id', 'delivery_id', 'usage_id', 'external_repair_id', 'attachment_id', 'cost_record_id', 'material_need_id'];
 
     protected function casts(): array
     {
@@ -101,5 +101,45 @@ class WorkshopOperation extends Model
     public function warning(): BelongsTo
     {
         return $this->belongsTo(WorkshopWarning::class, 'warning_id');
+    }
+
+    public function activity(): BelongsTo
+    {
+        return $this->belongsTo(WorkshopActivity::class, 'activity_id');
+    }
+
+    public function timeEvent(): BelongsTo
+    {
+        return $this->belongsTo(WorkshopTimeEvent::class, 'time_event_id');
+    }
+
+    public function delivery(): BelongsTo
+    {
+        return $this->belongsTo(WorkshopPartDelivery::class, 'delivery_id');
+    }
+
+    public function usage(): BelongsTo
+    {
+        return $this->belongsTo(WorkshopPartUsage::class, 'usage_id');
+    }
+
+    public function externalRepair(): BelongsTo
+    {
+        return $this->belongsTo(WorkshopExternalRepair::class, 'external_repair_id');
+    }
+
+    public function attachment(): BelongsTo
+    {
+        return $this->belongsTo(WorkshopAttachment::class, 'attachment_id');
+    }
+
+    public function costRecord(): BelongsTo
+    {
+        return $this->belongsTo(WorkshopCostRecord::class, 'cost_record_id');
+    }
+
+    public function materialNeed(): BelongsTo
+    {
+        return $this->belongsTo(WorkshopMaterialNeed::class, 'material_need_id');
     }
 }

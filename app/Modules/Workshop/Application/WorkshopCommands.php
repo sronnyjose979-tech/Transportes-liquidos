@@ -14,7 +14,7 @@ use LogicException;
 /** Durable command receipts and bounded retries for Workshop transactions only. */
 class WorkshopCommands
 {
-    public function run(User $actor, string $scope, string $key, array $payload, Closure $authorize, Closure $execute): array
+    public function run(User $actor, string $scope, string $key, array $payload, Closure $authorize, Closure $execute, ?string $operationId = null): array
     {
         if (DB::transactionLevel() !== 0) {
             throw new LogicException('Los comandos de Taller requieren una transacción propia.');
@@ -23,11 +23,18 @@ class WorkshopCommands
             throw ValidationException::withMessages(['request_key' => 'Clave UUID y ámbito estable requeridos.']);
         }
         $fingerprint = $this->fingerprint($payload);
-        $operationId = (string) Str::uuid();
+        $operationId ??= (string) Str::uuid();
+        if (! Str::isUuid($operationId)) {
+            throw new LogicException('Identidad de operación inválida.');
+        }
         $attempts = (int) config('workshop.max_attempts');
         $budget = (int) config('workshop.transaction_budget_ms');
         $lockTimeout = (int) config('workshop.lock_timeout_ms');
         $waits = config('workshop.retry_wait_ms');
+        $attachmentLimit = config('workshop.attachment_limit');
+        if (! is_int($attachmentLimit) || $attachmentLimit < 1) {
+            throw new LogicException('Límite de adjuntos de Taller inválido.');
+        }
         if ($attempts < 1 || $budget < 1 || $lockTimeout < 1 || ! is_array($waits) || $waits === []) {
             throw new LogicException('Configuración de reintentos de Taller inválida.');
         }
@@ -39,9 +46,10 @@ class WorkshopCommands
         $deadline = hrtime(true) + $budget * 1000000;
         for ($attempt = 1; ; $attempt++) {
             try {
-                return DB::transaction(function () use ($actor, $scope, $key, $payload, $authorize, $execute, $fingerprint, $operationId, $deadline, $lockTimeout): array {
+                return DB::transaction(function () use ($actor, $scope, $key, $payload, $authorize, $execute, $fingerprint, $operationId, $deadline, $lockTimeout, $attachmentLimit): array {
                     $remaining = $this->remaining($deadline);
                     DB::statement('SET TRANSACTION ISOLATION LEVEL READ COMMITTED');
+                    DB::select("SELECT set_config('workshop.attachment_limit', ?, true)", [(string) $attachmentLimit]);
                     DB::select("SELECT set_config('transaction_timeout', ?, true), set_config('statement_timeout', ?, true), set_config('lock_timeout', ?, true)", [(string) $remaining, (string) $remaining, (string) min($lockTimeout, $remaining)]);
                     DB::select('SELECT pg_advisory_xact_lock(873210)');
                     DB::table('transport_assignment_guard')->where('id', 1)->increment('version');
@@ -103,7 +111,13 @@ class WorkshopCommands
             if (array_key_exists($column, $row) && $row[$column] !== null) {
                 $value = $row[$column];
                 if (is_string($value)) {
-                    $value = json_decode($value, true, flags: JSON_THROW_ON_ERROR);
+                    // Validate shape, then retain PostgreSQL's exact NUMERIC JSON text.
+                    // Decoding and encoding it would pass large decimals through float.
+                    if (! is_object(json_decode($value, flags: JSON_THROW_ON_ERROR))) {
+                        throw new LogicException('Snapshot de Taller debe ser un objeto JSON.');
+                    }
+
+                    continue;
                 }
                 $row[$column] = json_encode((object) $value, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
             }
