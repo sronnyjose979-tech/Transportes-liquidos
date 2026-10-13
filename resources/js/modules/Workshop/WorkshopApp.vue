@@ -461,6 +461,7 @@ function openRow(row: RecordRow): void { void navigate(view.value === 'orders' ?
 <WorkshopIcon :name="item" /> {{ {dashboard:'Inicio',orders:'Órdenes',reports:'Averías',authorizations:'Autorizaciones',impediments:'Impedimentos'}[item] }}</button>
 </nav>
 <nav v-if="office" aria-label="Otros módulos">
+<a v-if="admin" href="/administracion/flota">Administración ↗</a>
 <a href="/transporte">Transporte y despacho ↗</a>
 <a href="/documentacion">Flota y documentos ↗</a>
 </nav>

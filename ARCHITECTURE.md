@@ -1014,3 +1014,23 @@ con `Y-m-d H:i:s.uP`, sin cambio de esquema ni reparación automática de datos 
 Las pruebas PostgreSQL comprueban el instante UTC y un intervalo de `1.000001` segundos.
 Pruebas: tipos/build, contratos frontend, Chromium aislado y
 `npm run test:e2e-workshop-execution` sobre PostgreSQL 18 temporal.
+
+## Administración visual de recursos operativos
+
+Tres rutas `/administracion/flota`, `/administracion/personal`, `/administracion/catalogos`
+montan AdminApp mediante Blade/Vite. UI transversal en resources/js/modules/Administration,
+con FleetPanel, PersonnelPanel y CatalogPanel; no nuevo módulo de dominio/persistencia.
+Reutiliza APIs de FleetAndDocuments, AccessAndPersonnel y catálogos de TransportAndDispatch.
+No cambian migraciones, contratos JSON, permisos ni lógica histórica de esos módulos.
+
+Solo administrator consulta/opera, con sesión/CSRF existentes y Gates del backend.
+Las interfaces actuales incorporan únicamente un enlace condicionado por rol. Búsqueda
+local sobre todas las páginas cargadas y selectores reutilizados, sin stock/datos ficticios,
+almacenamiento privado en navegador o autenticación alternativa. Alta de cuenta y empleado
+son pasos independientes, con elegibilidad de chofer validada nuevamente en Transporte.
+
+Los recursos confirmados aparecen al consultar los lookups vigentes de Transporte/Taller
+y Documentación; no se agrega sincronización en tiempo real. El estado de servicio y
+configuración estructural de cisternas no reciben operaciones nuevas. La gestión de rutas
+sigue bloqueada por ausencia de contrato de alta/edición, no por ausencia de modelo Route.
+Detalles y verificaciones en [docs/administracion-recursos.md](docs/administracion-recursos.md).

@@ -11,3 +11,7 @@ if (transportRoot) createApp(TransportApp).mount(transportRoot);
 import WorkshopApp from './modules/Workshop/WorkshopApp.vue';
 const workshopRoot = document.getElementById('workshop-app');
 if (workshopRoot) createApp(WorkshopApp).mount(workshopRoot);
+
+import AdminApp from './modules/Administration/AdminApp.vue';
+const administrationRoot = document.getElementById('administration-app');
+if (administrationRoot) createApp(AdminApp).mount(administrationRoot);
