@@ -12,7 +12,7 @@ class WorkshopTimeEvent extends Model
 
     public $timestamps = false;
 
-    protected $dateFormat = 'Y-m-d H:i:s.u';
+    protected $dateFormat = 'Y-m-d H:i:s.uP';
 
     protected $fillable = ['work_order_id', 'mechanic_assignment_id', 'event_type', 'previous_event_id', 'actor_id', 'occurred_at', 'reason', 'root_record_id', 'revision'];
 

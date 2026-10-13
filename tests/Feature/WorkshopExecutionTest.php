@@ -66,6 +66,23 @@ class WorkshopExecutionTest extends PostgresTestCase
         return app(WorkshopExecution::class)->recordTime($f['mechanic'], (string) Str::uuid(), $extra + ['work_order_id' => $f['order'], 'mechanic_assignment_id' => $f['assignment'], 'event_type' => $type, 'occurred_at' => '2026-10-12T'.$at.'Z', 'reason' => 'Trabajo']);
     }
 
+    public function test_offset_dates_preserve_the_instant_and_fractional_time_in_postgres(): void
+    {
+        $f = $this->fixture();
+        $service = app(WorkshopExecution::class);
+        $activity = $service->recordActivity($f['mechanic'], (string) Str::uuid(), [
+            'task_id' => $f['task'], 'mechanic_assignment_id' => $f['assignment'],
+            'description' => 'Verificación de huso horario', 'reason' => 'Prueba sintética', 'version' => 3,
+            'occurred_at' => '2026-10-12T03:00:00.100001-06:00',
+        ]);
+        $base = ['work_order_id' => $f['order'], 'mechanic_assignment_id' => $f['assignment'], 'reason' => 'Prueba sintética'];
+        $start = $service->recordTime($f['mechanic'], (string) Str::uuid(), $base + ['event_type' => 'start', 'occurred_at' => '2026-10-12T03:00:00.100001-06:00']);
+        $service->recordTime($f['mechanic'], (string) Str::uuid(), $base + ['event_type' => 'finish', 'occurred_at' => '2026-10-12T03:00:01.100002-06:00']);
+        $this->assertSame('1.000001', $service->times($f['mechanic'], $f['order'])['person_seconds']);
+        $this->assertSame('2026-10-12 09:00:00.100001', DB::selectOne("SELECT to_char(occurred_at AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS.US') AS instant FROM workshop_activities WHERE id=?", [$activity['activity_id']])->instant);
+        $this->assertSame('2026-10-12 09:00:00.100001', DB::selectOne("SELECT to_char(occurred_at AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS.US') AS instant FROM workshop_time_events WHERE id=?", [$start['time_event_id']])->instant);
+    }
+
     public function test_pause_resume_finish_and_idempotent_start_exclude_pauses(): void
     {
         $f = $this->fixture();

@@ -61,7 +61,7 @@ function updateInput(key: string, event: Event): void {
                     <option v-for="option in field.options" :key="option.value" :value="option.value">{{ option.label }}</option>
                 </select>
                 <textarea :aria-label="field.label" v-else-if="field.type === 'textarea'" :id="`${formId}-${field.key}`" v-model="values[field.key]" rows="4" :required="field.required" :aria-invalid="Boolean(errors[field.key]?.length)" :aria-describedby="errors[field.key]?.length ? `${formId}-${field.key}-error` : undefined" />
-                <input :aria-label="field.label" v-else :id="`${formId}-${field.key}`" :value="values[field.key]" :type="field.type ?? 'text'" :step="field.type === 'number' ? 'any' : undefined" :required="field.required" :aria-invalid="Boolean(errors[field.key]?.length)" :aria-describedby="errors[field.key]?.length ? `${formId}-${field.key}-error` : undefined" @input="updateInput(field.key, $event)">
+                <input :aria-label="field.label" v-else :id="`${formId}-${field.key}`" :value="values[field.key]" :type="field.type ?? 'text'" :step="field.type === 'number' ? 'any' : field.type === 'datetime-local' ? '1' : undefined" :required="field.required" :aria-invalid="Boolean(errors[field.key]?.length)" :aria-describedby="errors[field.key]?.length ? `${formId}-${field.key}-error` : undefined" @input="updateInput(field.key, $event)">
                 <ul v-if="errors[field.key]?.length && (!field.searchable || !field.options)" :id="`${formId}-${field.key}-error`" class="workshop-field-errors">
                     <li v-for="message in errors[field.key]" :key="message">{{ message }}</li>
                 </ul>

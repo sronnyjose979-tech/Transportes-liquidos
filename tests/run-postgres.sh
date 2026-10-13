@@ -32,7 +32,7 @@ trap finish EXIT
 postgres_started=1
 "$postgres_bin/createdb" -h "$postgres_workspace" -p 55439 -U transport_test transporte_test
 export TEST_DB_HOST="$postgres_workspace" TEST_DB_PORT=55439 TEST_DB_USERNAME=transport_test TEST_DB_PASSWORD='' TEST_DB_ISOLATED=1
-if [[ "${1:-}" == '--e2e' || "${1:-}" == '--e2e-transport' || "${1:-}" == '--e2e-workshop' ]]; then
+if [[ "${1:-}" == '--e2e' || "${1:-}" == '--e2e-transport' || "${1:-}" == '--e2e-workshop' || "${1:-}" == '--e2e-workshop-execution' ]]; then
     postgres_suite="$1"
     shift
     export APP_ENV=e2e TRANSPORTE_E2E_ROOT="$postgres_workspace/e2e"
@@ -40,7 +40,9 @@ if [[ "${1:-}" == '--e2e' || "${1:-}" == '--e2e-transport' || "${1:-}" == '--e2e
     export TRANSPORTE_E2E_KEY
     mkdir -p "$TRANSPORTE_E2E_ROOT/storage/framework/"{cache/data,views,sessions} "$TRANSPORTE_E2E_ROOT/storage/app"
     php tests/E2E/console.php prepare </dev/null
-    if [[ "$postgres_suite" == '--e2e-workshop' ]]; then
+    if [[ "$postgres_suite" == '--e2e-workshop-execution' ]]; then
+        "${PLAYWRIGHT_PYTHON:-python3}" tests/E2E/test_workshop_execution.py "$@"
+    elif [[ "$postgres_suite" == '--e2e-workshop' ]]; then
         "${PLAYWRIGHT_PYTHON:-python3}" tests/E2E/test_workshop_module.py "$@"
     elif [[ "$postgres_suite" == '--e2e-transport' ]]; then
         "${PLAYWRIGHT_PYTHON:-python3}" tests/E2E/test_transport_module.py "$@"

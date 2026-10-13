@@ -132,3 +132,7 @@
 .workshop .workshop-sidebar nav a { font-size: .875rem; }
 .workshop-form-field { min-width: 0; }
 .workshop select { max-width: 100%; }
+.workshop-panel { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 24px; margin-bottom: 20px; }
+.workshop-panel > nav { margin: 14px 0 24px; }
+.workshop-panel article { margin-top: 24px; }
+@media (max-width: 640px) { .workshop-panel { padding: 18px; } }

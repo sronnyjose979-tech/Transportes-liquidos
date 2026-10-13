@@ -49,6 +49,9 @@ class WorkshopBrowserTest(unittest.IsolatedAsyncioTestCase):
         if method=='GET' and path==f'/api/workshop/orders/{ORDER}' and self.delay_order: await asyncio.sleep(.5)
         segments=path.removeprefix('/api/workshop/').split('/');kind=segments[0]
         if method=='GET':
+            if len(segments)>2 and segments[-1]=='times': return await route.fulfill(json={'data':{'participants':{},'person_seconds':0}})
+            if len(segments)>2 and segments[-1]=='cost-totals': return await route.fulfill(json={'data':[]})
+            if len(segments)>2 and segments[-1]=='attachments': return await route.fulfill(json=self.pagination([],query))
             rows=self.data.get(kind,[])
             if len(segments)>1:
                 row=next((r for r in rows if r['id']==segments[1]),None)

@@ -987,3 +987,30 @@ no administrativo de decisiones/aplicaciones. Se corrige usando el Grammar exist
 para identificar `content`, manteniendo intacta la exclusión de solicitudes económicas.
 Las pruebas cubren consultas mecánicas vacías, decisiones y aplicaciones confirmadas,
 acceso por orden y el recorrido completo con la API y PostgreSQL reales.
+
+## Taller Mecánico — frontend, segunda entrega
+
+La orden integra `OrderOperations` (ejecución, tiempos, materiales y costos) y
+`EvidencePanel` (archivos privados). Reutiliza sesión/CSRF, diálogos, selectores y
+recibos idempotentes existentes. Las actividades y eventos de tiempo inician la
+reparación únicamente mediante la transición del backend con versión vigente.
+Las correcciones técnicas y las rectificaciones administrativas conservan originales;
+las decisiones se aplican por el endpoint correspondiente, incluido el lote atómico.
+Los resúmenes de segundos-persona y costos por base/moneda provienen del servidor;
+no se calcula stock, conversión monetaria ni doble contabilización en el navegador.
+
+Las evidencias usan SHA-256, reserva, transferencia, confirmación y consulta de recibo.
+El progreso representa bytes enviados; no acredita commit. Las operaciones interrumpidas
+conservan metadatos mínimos, versión de recuperación y claves en sessionStorage por
+actor/orden, sin bytes de archivo ni tokens. Recargar consulta el recibo y exige volver
+a seleccionar el mismo archivo cuando corresponda; no repite POST automáticamente.
+El cierre de sesión requiere resolver el pendiente; la expiración oculta datos y permite
+recuperar con la misma cuenta. Cambiar de cuenta limpia descriptores de otros usuarios.
+La cuota de 20 incluye originales, revisiones y reservas; el backend sigue como autoridad.
+
+La validación real detectó que los dos modelos de ejecución descartaban el offset al
+serializar fechas. WorkshopActivity y WorkshopTimeEvent conservan microsegundos y offset
+con `Y-m-d H:i:s.uP`, sin cambio de esquema ni reparación automática de datos históricos.
+Las pruebas PostgreSQL comprueban el instante UTC y un intervalo de `1.000001` segundos.
+Pruebas: tipos/build, contratos frontend, Chromium aislado y
+`npm run test:e2e-workshop-execution` sobre PostgreSQL 18 temporal.

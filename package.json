@@ -7,8 +7,9 @@
         "dev": "vite",
         "typecheck": "vue-tsc --noEmit",
         "test:frontend": "${PLAYWRIGHT_PYTHON:-python3} -m unittest discover -s tests/Frontend -v",
-        "test:frontend-api": "node tests/Frontend/workshop_api.test.mjs",
-        "test:e2e-workshop": "bash tests/run-postgres.sh --e2e-workshop"
+        "test:frontend-api": "node tests/Frontend/workshop_api.test.mjs && node tests/Frontend/workshop_attachments.test.mjs && node tests/Frontend/workshop_operations.test.mjs",
+        "test:e2e-workshop": "bash tests/run-postgres.sh --e2e-workshop",
+        "test:e2e-workshop-execution": "bash tests/run-postgres.sh --e2e-workshop-execution"
     },
     "devDependencies": {
         "@tailwindcss/vite": "^4.0.0",
