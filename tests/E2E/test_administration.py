@@ -16,6 +16,7 @@ class AdministrationE2E(unittest.IsolatedAsyncioTestCase):
     def tearDownClass(cls): support.DocumentModuleE2E.tearDownClass.__func__(cls)
     async def asyncSetUp(self):
         asyncio.get_running_loop().slow_callback_duration = 2.0
+        support.DocumentModuleE2E.command('clear-case-cache')
         self.playwright = await async_playwright().start()
         self.browser = await self.playwright.chromium.launch(executable_path=os.environ.get('CHROMIUM_EXECUTABLE','/usr/bin/chromium'),args=['--no-sandbox','--disable-dev-shm-usage'])
         self.context = await self.browser.new_context(viewport={'width':1440,'height':1000})
@@ -191,5 +192,68 @@ class AdministrationE2E(unittest.IsolatedAsyncioTestCase):
         for section in ['flota','personal','catalogos']:
             await self.page.goto(self.base+'/administracion/'+section)
             await expect(self.page.get_by_role('heading',name='Acceso no autorizado')).to_be_visible()
+
+    async def test_sites_route_and_secretary_request_keep_history(self):
+        await self.login()
+        await self.page.goto(self.base+'/administracion/catalogos')
+        await self.page.get_by_label('Catálogo',exact=True).select_option('operation-sites')
+        sites=[]
+        for suffix in ['Origen','Destino']:
+            await self.page.get_by_role('button',name='Registrar sitio',exact=True).click()
+            form=self.page.get_by_role('form',name='Registro de catálogo')
+            await form.get_by_label('Nombre',exact=True).fill(self.tag+'-'+suffix)
+            await form.get_by_label('Dirección',exact=True).fill('Sitio sintético '+suffix)
+            sites.append(await self.save(form.get_by_role('button',name='Guardar catálogo'),'/catalogs/operation-sites'))
+        await self.page.get_by_label('Catálogo',exact=True).select_option('routes')
+        await self.page.get_by_role('button',name='Registrar ruta',exact=True).click()
+        form=self.page.get_by_role('form',name='Registro de ruta')
+        await form.get_by_label('Nombre de ruta',exact=True).fill(self.tag+'-Ruta')
+        await form.get_by_label('Buscar Origen',exact=True).fill(self.tag+'-Origen')
+        await form.get_by_label('Origen',exact=True).select_option(sites[0]['id'])
+        await form.get_by_label('Buscar Destino',exact=True).fill(self.tag+'-Destino')
+        await form.get_by_label('Destino',exact=True).select_option(sites[1]['id'])
+        route=await self.save(form.get_by_role('button',name='Guardar ruta'),'/catalogs/routes')
+        await self.page.get_by_label('Buscar rutas').fill(self.tag)
+        await self.page.get_by_role('row').filter(has_text=self.tag+'-Ruta').get_by_role('button',name='Consultar / editar',exact=True).click()
+        await form.get_by_label('Nombre de ruta',exact=True).fill(self.tag+'-Ruta revisada')
+        changed=await self.save(form.get_by_role('button',name='Guardar ruta'),'/catalogs/routes/'+route['id'],'PATCH',200)
+        self.assertEqual(sites[0]['id'],changed['origin_site_id']);self.assertEqual(sites[1]['id'],changed['destination_site_id'])
+        # Create actual client/product through existing admin screens, not synthetic selectors.
+        records={}
+        for kind,label in [('customers','cliente'),('liquid-products','producto')]:
+            await self.page.get_by_label('Catálogo',exact=True).select_option(kind)
+            await self.page.get_by_role('button',name='Registrar '+label,exact=True).click()
+            catalog=self.page.get_by_role('form',name='Registro de catálogo')
+            await catalog.get_by_label('Nombre',exact=True).fill(self.tag+'-'+label)
+            records[kind]=await self.save(catalog.get_by_role('button',name='Guardar catálogo'),'/catalogs/'+kind)
+        await self.page.get_by_role('button',name='Cerrar sesión',exact=True).click()
+        await self.login('secretary')
+        await self.page.get_by_role('link',name='Transporte y despacho',exact=False).click()
+        await self.page.get_by_role('button',name='Solicitudes',exact=True).click()
+        await self.page.get_by_role('button',name='Registrar solicitud',exact=True).click()
+        request=self.page.get_by_role('form',name='Registrar solicitud')
+        await request.get_by_label('Cliente',exact=True).select_option(records['customers']['id'])
+        await request.get_by_label('Producto líquido',exact=True).select_option(records['liquid-products']['id'])
+        await request.get_by_label('Ruta',exact=True).select_option(route['id'])
+        await request.get_by_label('Litros solicitados',exact=True).fill('100.25')
+        async with self.page.expect_response(lambda r:r.request.method=='POST' and r.url.endswith('/api/transport/requests')) as event:
+            await request.get_by_role('button',name='Guardar',exact=True).click()
+        response=await event.value;self.assertEqual(201,response.status,await response.text());record=(await response.json())['data']
+        self.assertEqual(route['id'],record['route_id'])
+        await expect(self.page.get_by_role('row').filter(has_text=record['id'])).to_be_visible()
+        await self.page.get_by_role('button',name='Cerrar sesión',exact=True).click()
+        # Keep the real login rate limiter; each independent case has isolated cache.
+        await self.login()
+        await self.page.goto(self.base+'/administracion/catalogos')
+        await self.page.get_by_label('Catálogo',exact=True).select_option('routes')
+        await self.page.get_by_label('Buscar rutas').fill(self.tag)
+        await self.page.get_by_role('row').filter(has_text=self.tag+'-Ruta revisada').get_by_role('button',name='Consultar',exact=True).click()
+        form=self.page.get_by_role('form',name='Registro de ruta')
+        await expect(form.get_by_label('Nombre de ruta',exact=True)).to_be_disabled()
+        await expect(form.get_by_role('button',name='Guardar ruta')).to_have_count(0)
+        await expect(form.get_by_label('Origen',exact=True)).to_have_value(sites[0]['id'])
+        await expect(form.get_by_label('Destino',exact=True)).to_have_value(sites[1]['id'])
+        await self.page.set_viewport_size({'width':768,'height':1024})
+        self.assertTrue(await self.page.evaluate('document.documentElement.scrollWidth<=innerWidth'))
 
 if __name__=='__main__': unittest.main(verbosity=2)

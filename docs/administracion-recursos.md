@@ -54,18 +54,28 @@ La búsqueda recorre las páginas permitidas (100 por solicitud), filtra todos l
 cargados y presenta páginas locales. No se finge que el backend ofrece búsqueda por nombre.
 Con volúmenes elevados conviene revisar un contrato de búsqueda servidor; no se añade ahora.
 
-## Bloqueo de rutas de Transporte
+## Administración de rutas
 
-Route ya existe en TransportAndDispatch: UUID, name, origin_site_id y destination_site_id
-FK de operation_sites, referenciada por TransportRequest. El frontend consume el lookup
-`/api/transport/lookups/routes`, pero no existe contrato de alta/edición de rutas.
-Crear sitios **no crea rutas**. Se conserva la necesidad de rutas previamente configuradas.
-Antes de implementar su API hay que revisar permisos, cambios históricos de origen/destino
-y contratos de solicitudes/viajes; esta entrega no inventa ese proceso ni crea rutas falsas.
+En Catálogos, seleccionar Rutas de transporte. Registrar sitios primero y crear la ruta
+mediante selectores reales con búsqueda de origen/destino. El administrador administra;
+la secretaria utiliza el lookup vigente al crear solicitudes. No se crean rutas por registrar sitios.
+
+API nueva: GET/POST `/api/catalogs/routes`, GET/PATCH `/api/catalogs/routes/{id}`.
+Nombre y FK a sitios existentes; PATCH exige `expected` con los tres valores originales
+para detectar edición obsoleta bajo el coordinador transaccional de Transporte. Auditoría
+administrativa en logs con actor real y antes/después, como el patrón existente de Personal.
+No se implementan eliminaciones ni se imponen origen≠destino o unicidad de pares no aprobada.
+
+La restricción PostgreSQL existente `transport_preserve_used_route` impide modificar/eliminar
+rutas con solicitudes, incluso por SQL directo. La API devuelve 409 y la UI las ofrece en
+consulta. Se mantienen solicitudes/viajes anteriores; no se modifican sus contratos.
+D09 sigue pendiente para edición histórica: definir versionado o sustitución por otra ruta,
+conservando las referencias anteriores. Esta entrega no decide esa política.
 
 Otros límites: no crear roles nuevos; no modificar/añadir/eliminar compartimentos o su
 activación después del alta; no gestionar Inventario, Compras o datos fiscales inexistentes.
-Las APIs de administración actuales no exponen ETag/versiones para edición optimista;
+Salvo rutas, que comprueban los valores originales mediante `expected`, las APIs de
+administración actuales no exponen ETag/versiones para edición optimista;
 la UI respeta sus bloqueos y validaciones, sin afirmar protección adicional contra todas
 las ediciones obsoletas entre pestañas. Cuenta/empleado no se guardan en transacción conjunta.
 
@@ -95,13 +105,16 @@ y presentación tablet. Los datos y trazas temporales quedan fuera del repositor
 Resultados ejecutados:
 
 - TypeScript y build: correctos; conserva el aviso preexistente de fontaine opcional.
-- Backend completo PostgreSQL 18: **304 pruebas y 2.797 aserciones correctas**;
-  /tmp/transporte-tests-byZWHk, detenido al terminar.
+- Backend completo PostgreSQL 18: **309 pruebas y 2.873 aserciones correctas**;
+  /tmp/transporte-tests-XEQqHn, detenido al terminar. Tras añadir la regresión de comparación
+  estricta, la suite afectada pasó nuevamente: **5 pruebas y 79 aserciones**
+  (/tmp/transporte-tests-Unklge).
 - Frontend Chromium con API simulada: **43 pruebas correctas**, regresiones de los módulos
   existentes y sus nuevos accesos. No se presentan como pruebas E2E reales.
 - Contratos frontend existentes: **22 pruebas correctas** (9 API, 7 adjuntos, 6 operaciones).
-- Administración E2E real: **2 recorridos correctos** en 33,978 s;
-  /tmp/transporte-tests-zqgPzN/e2e/browser. Incluyen alta/edición de flota, personal/cuentas/roles,
+- Administración E2E real: **3 recorridos correctos** en 47,264 s;
+  /tmp/transporte-tests-2AcpmX/e2e/browser. El tercero verifica sitio → ruta → solicitud
+  por secretaria y consulta de la ruta histórica sin edición. Incluyen alta/edición de flota, personal/cuentas/roles,
   activación y catálogos, selectores reales de Documentación/Transporte/Taller, errores 422,
   sesión y permisos, pérdida de respuesta confirmada y disposición tablet sin desbordamiento.
 - Pint --test y git diff --check: correctos.

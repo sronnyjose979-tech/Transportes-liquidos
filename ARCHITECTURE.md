@@ -1031,6 +1031,16 @@ son pasos independientes, con elegibilidad de chofer validada nuevamente en Tran
 
 Los recursos confirmados aparecen al consultar los lookups vigentes de Transporte/Taller
 y Documentación; no se agrega sincronización en tiempo real. El estado de servicio y
-configuración estructural de cisternas no reciben operaciones nuevas. La gestión de rutas
-sigue bloqueada por ausencia de contrato de alta/edición, no por ausencia de modelo Route.
+configuración estructural de cisternas no reciben operaciones nuevas. La gestión administrativa de rutas se incorpora después mediante el contrato descrito abajo.
 Detalles y verificaciones en [docs/administracion-recursos.md](docs/administracion-recursos.md).
+
+
+### Rutas administrativas
+
+RouteController/RouteWriteRequest/RouteResource y RouteAdministration ofrecen GET/POST
+catalogs/routes y GET/PATCH catalogs/routes/{id}, bajo manage-catalogs. Reutilizan Route y
+OperationSite, sin nuevas tablas/migraciones. RoutesPanel se integra en Catálogos con sitios
+reales y búsqueda; secretaria conserva uso del lookup sin permisos administrativos.
+PATCH compara el snapshot esperado bajo bloqueo común 873210/guard. Las rutas referenciadas
+siguen protegidas por transport_preserve_used_route existente: API 409/UI consulta hasta
+resolver D09. Sin eliminación, cambio de historia o nuevos contratos de solicitudes/viajes.

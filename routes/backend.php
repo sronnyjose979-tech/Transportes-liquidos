@@ -14,6 +14,7 @@ use App\Modules\Purchasing\Http\Controllers\SupplierController;
 use App\Modules\TransportAndDispatch\Http\Controllers\CustomerController;
 use App\Modules\TransportAndDispatch\Http\Controllers\LiquidProductController;
 use App\Modules\TransportAndDispatch\Http\Controllers\OperationSiteController;
+use App\Modules\TransportAndDispatch\Http\Controllers\RouteController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('api')->group(function () {
@@ -63,6 +64,10 @@ Route::prefix('api')->group(function () {
             Route::patch('employees/{id}', [$employees, 'update'])->whereUuid('id');
         });
         Route::middleware('can:manage-catalogs')->group(function () {
+            Route::get('catalogs/routes', [RouteController::class, 'index']);
+            Route::post('catalogs/routes', [RouteController::class, 'store']);
+            Route::get('catalogs/routes/{id}', [RouteController::class, 'show'])->whereUuid('id');
+            Route::patch('catalogs/routes/{id}', [RouteController::class, 'update'])->whereUuid('id');
             foreach (['customers' => CustomerController::class, 'liquid-products' => LiquidProductController::class, 'operation-sites' => OperationSiteController::class, 'suppliers' => SupplierController::class, 'spare-parts' => SparePartController::class] as $catalog => $controller) {
                 Route::get('catalogs/'.$catalog, [$controller, 'index']);
                 Route::post('catalogs/'.$catalog, [$controller, 'store']);

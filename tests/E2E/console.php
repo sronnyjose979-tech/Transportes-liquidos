@@ -24,6 +24,11 @@ $command = $argv[1] ?? '';
 $input = json_decode(stream_get_contents(STDIN) ?: '{}', true, flags: JSON_THROW_ON_ERROR);
 $workspace = getenv('TRANSPORTE_E2E_ROOT');
 $result = match ($command) {
+    'clear-case-cache' => (function (): array {
+        Cache::flush(); // Verified temporary E2E cache only, between independent test cases.
+
+        return ['cleared' => true];
+    })(),
     'prepare' => (function (): array {
         if (Artisan::call('migrate', ['--database' => 'pgsql_testing', '--force' => true]) !== 0) {
             throw new RuntimeException('No se completaron las migraciones del clúster E2E.');
