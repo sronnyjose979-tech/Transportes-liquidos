@@ -1,0 +1,2 @@
+export interface Expense {id:string;trip_id:string|null;concept:string;category:string;amount:string;currency:'CRC'|'USD';occurred_at:string;description:string|null;created_by_id:string|number;registered_at:string;status:'pending'|'approved'|'rejected';current_revision_id:string;versions:Record<string,unknown>[];decisions:Record<string,unknown>[];receipts:{id:string;mime_type:string;size_bytes:number;registered_at:string}[]}
+export const labels={pending:'Pendiente',approved:'Aprobado',rejected:'Rechazado'};

@@ -53,7 +53,7 @@ $app->instance('request', Request::capture());
 $app->make(Kernel::class)->bootstrap();
 $pages = ['/documentacion' => ['fleet-documents', []], '/transporte' => ['transport', []], '/taller' => ['workshop', []],
     '/inventario' => ['supply', ['section' => 'inventory']], '/compras' => ['supply', ['section' => 'purchasing']],
-    '/login' => ['system-home', ['section' => 'login']], '/dashboard' => ['system-home', ['section' => 'dashboard']],
+    '/gastos' => ['system-home', ['section' => 'expenses']], '/login' => ['system-home', ['section' => 'login']], '/dashboard' => ['system-home', ['section' => 'dashboard']],
     '/mis-viajes' => ['system-home', ['section' => 'driver']], '/facturacion' => ['system-home', ['section' => 'billing']]];
 foreach (['flota', 'personal', 'catalogos', 'compras'] as $section) {
     $pages['/administracion/'.$section] = ['administration', compact('section')];

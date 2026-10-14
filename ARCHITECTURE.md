@@ -1148,3 +1148,37 @@ ni crédito automático. Las anulaciones, correcciones posteriores a facturació
 y reversiones de pagos quedan fuera hasta aprobar compensaciones. El medio de
 pago es texto administrativo opcional, sin inventar requisitos bancarios.
 Véase [contratos, integridad y pruebas](docs/facturacion-administrativa-y-pagos.md).
+
+
+## Gastos administrativos y portal operativo del conductor
+
+`Expenses` incorpora `/gastos` para oficina y APIs privadas bajo `/api/expenses`:
+registro general o asociado a viaje, consulta, comprobantes, correcciones por
+versiones y decisiones exclusivas del administrador. La migración 000370 crea
+cinco tablas inmutables con precisión exacta, auditoría e idempotencia. Reutiliza
+`Money`, el disco privado `fleet_documents` y los Gates de roles existentes;
+ningún gasto modifica facturas, pagos ni saldos de clientes.
+
+`DriverTripRecords` coordina registros idempotentes en los modelos existentes
+`TripEvent` y `TripOdometerReading`; 000380 añade únicamente recibos de operación
+y adapta integridad SQL de lecturas originales. `/mis-viajes` usa las APIs reales
+para reportes, kilometraje, gastos pendientes y comprobantes, con interfaz móvil.
+El conductor solo escribe con asignación efectiva y cuenta/empleado habilitados;
+los registros propios siguen consultables tras la liberación. Las transiciones
+oficiales y correcciones de kilometraje mantienen permisos de oficina.
+
+La actualización aprobada de RN-TR-18/19 permite captura directa del conductor;
+la descripción de 5.1 corresponde a la etapa histórica previa. No se duplican
+lecturas ni gastos. La categoría del gasto es texto administrativo y todas las
+versiones requieren decisión del administrador antes de considerarse aprobadas.
+
+Escrituras transaccionales, guardia de asignaciones, bloqueo 873210 y restricciones
+PostgreSQL protegen reintentos, concurrencia y relaciones. Comprobantes locales
+privados con marcadores permiten compensación y reconciliación conservadoras.
+Vue conserva las intenciones inciertas únicamente en memoria y exige reintento
+manual con clave y contenido originales; no implementa captura offline.
+
+Véase [contratos, recuperación y verificación](docs/gastos-y-portal-conductor.md).
+E2E real: `bash tests/run-postgres.sh --e2e-expenses-driver`, con Chromium, Laravel
+y PostgreSQL 18 aislado. El entorno validado utiliza PHP 8.4.24, compatible con las
+dependencias; PHP 8.5 continúa siendo el objetivo no validado en este entorno.

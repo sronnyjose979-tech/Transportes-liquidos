@@ -53,6 +53,9 @@ class AppServiceProvider extends ServiceProvider
         foreach (['manage-transport-core', 'request-transport-authorization', 'correct-transport-record', 'record-transport-information', 'resolve-transport-warning'] as $ability) {
             Gate::define($ability, [TransportCorePolicy::class, 'manage']);
         }
+        Gate::define('access-expenses', fn (User $user): bool => $user->is_active && $user->roles()->whereIn('name', ['administrator', 'secretary', 'driver'])->exists());
+        Gate::define('manage-expenses', [TransportCorePolicy::class, 'manage']);
+        Gate::define('approve-expenses', [TransportCorePolicy::class, 'decide']);
         Gate::define('manage-billing', [TransportCorePolicy::class, 'manage']);
         Gate::define('approve-trip-amount', [TransportCorePolicy::class, 'decide']);
         Gate::define('decide-transport-authorization', [TransportCorePolicy::class, 'decide']);

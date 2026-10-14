@@ -1,6 +1,7 @@
 <?php
 
 use App\Modules\TransportAndDispatch\Http\Controllers\AssignedTripController;
+use App\Modules\TransportAndDispatch\Http\Controllers\DriverTripRecordController;
 use App\Modules\TransportAndDispatch\Http\Controllers\TransportAuthorizationController;
 use App\Modules\TransportAndDispatch\Http\Controllers\TransportLookupController;
 use App\Modules\TransportAndDispatch\Http\Controllers\TransportRequestController;
@@ -12,7 +13,10 @@ use Illuminate\Support\Facades\Route;
 
 Route::prefix('transport')->name('transport.')->middleware(TransportApiErrors::class)->group(function () {
     Route::middleware('can:view-assigned-trips')->group(function () {
+        Route::get('my-records', [DriverTripRecordController::class, 'history']);
         Route::get('my-trips', [AssignedTripController::class, 'index']);
+        Route::post('my-trips/{id}/reports', [DriverTripRecordController::class, 'store'])->whereUuid('id')->name('driver.report');
+        Route::post('my-trips/{id}/odometer', [DriverTripRecordController::class, 'store'])->whereUuid('id')->name('driver.odometer');
         Route::get('my-trips/{id}', [AssignedTripController::class, 'show'])->whereUuid('id');
     });
     Route::post('trips/{id}/reports', [TripOperationController::class, 'report'])->whereUuid('id')->name('operations.report');

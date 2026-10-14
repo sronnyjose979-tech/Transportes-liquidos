@@ -24,6 +24,7 @@ final class SystemNavigation
             ['inventory', 'Inventario', '/inventario', 'access-inventory'],
             ['purchasing', 'Compras', '/compras', 'access-purchasing'],
             ['billing', 'Facturación', '/facturacion', 'manage-billing'],
+            ['expenses', 'Gastos', '/gastos', 'manage-expenses'],
         ];
         $links = [];
         foreach ($definitions as [$key, $label, $href, $ability]) {

@@ -13,9 +13,9 @@ class AssignedTripController extends Controller
 {
     private function query(AssignedTripQueryRequest $request): Builder
     {
-        $query = Trip::query()->with(['transportRequest.route.originSite', 'transportRequest.route.destinationSite', 'assetAssignments' => fn ($q) => $q->current()->with('fleetAsset')]);
+        $query = Trip::query()->with(['transportRequest.route.originSite', 'transportRequest.route.destinationSite', 'assetAssignments' => fn ($q) => $q->current()->whereRaw('starts_at <= clock_timestamp()')->with('fleetAsset')]);
         if (! $request->user()->can('manage-personnel')) {
-            $query->whereHas('driverAssignments', fn ($q) => $q->current()->whereHas('employee', fn ($e) => $e->where('user_id', $request->user()->id)->where('is_active', true)));
+            $query->whereHas('driverAssignments', fn ($q) => $q->current()->whereRaw('starts_at <= clock_timestamp()')->whereHas('employee', fn ($e) => $e->where('user_id', $request->user()->id)->where('is_active', true)));
         }
 
         return $query;
@@ -28,6 +28,6 @@ class AssignedTripController extends Controller
 
     public function show(AssignedTripQueryRequest $request, string $id): AssignedTripResource
     {
-        return new AssignedTripResource($this->query($request)->with(['events' => fn ($q) => $q->where('created_by_id', $request->user()->id)->orderByDesc('registered_at')->limit(100)])->findOrFail($id));
+        return new AssignedTripResource($this->query($request)->with(['events' => fn ($q) => $q->where('created_by_id', $request->user()->id)->orderByDesc('registered_at')->limit(100), 'odometerReadings' => fn ($q) => $q->where('recorded_by_id', $request->user()->id)->orderByDesc('registered_at')->limit(100)])->findOrFail($id));
     }
 }

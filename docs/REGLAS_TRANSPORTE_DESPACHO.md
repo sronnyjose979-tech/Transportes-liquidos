@@ -46,9 +46,9 @@
 
 **RN-TR-17 — PENDIENTE, NO APROBADA.** No está definido qué debe hacer el sistema cuando falta un permiso de salida que el sitio exige. No asumir bloqueo, simple advertencia ni autorización excepcional; pedir decisión antes de implementar ese comportamiento.
 
-**RN-TR-18 — Confirmada.** La secretaria o el administrador registra lecturas de odómetro/kilometraje del cabezal a partir de información del conductor. Registrar lecturas inicial/final, distancia calculada y correcciones con historial y responsable.
+**RN-TR-18 — Confirmada.** La secretaria o el administrador registra lecturas de odómetro/kilometraje del cabezal a partir de información del conductor. Conforme al avance del Portal del Conductor aprobado, el conductor también puede registrar directamente lecturas originales de sus viajes con asignación vigente; oficina conserva las correcciones auditadas. Registrar lecturas inicial/final, distancia calculada cuando existan datos suficientes, historial y responsable. El registro del conductor no constituye una transición oficial del viaje.
 
-**RN-TR-19 — Confirmada.** La secretaria o el administrador registra gastos del viaje informados por el conductor, vinculados al viaje y auditados. Evitar duplicación al integrar el futuro módulo de gastos.
+**RN-TR-19 — Confirmada.** La secretaria o el administrador registra gastos del viaje informados por el conductor, vinculados al viaje y auditados. Conforme al avance de Gastos y Portal del Conductor aprobado, el conductor también registra directamente gastos de sus viajes con asignación vigente, siempre pendientes de aprobación del administrador. Conservar comprobantes privados cuando existan, idempotencia e historial; no duplicar gastos al reenviar una operación. Registrar gastos no modifica facturas, pagos ni saldos de clientes.
 
 **RN-TR-20 — Confirmada.** Los gastos sin comprobante requieren autorización exclusiva del administrador. La secretaria puede registrarlos como pendientes. Auditar monto, motivo, autorización y fecha.
 

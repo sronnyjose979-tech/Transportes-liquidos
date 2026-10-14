@@ -25,6 +25,7 @@ Route::prefix('api')->group(function () {
         Route::get('navigation', [SystemController::class, 'navigation']);
         Route::get('dashboard', [SystemController::class, 'dashboard'])->middleware('can:manage-personnel');
         require __DIR__.'/billing.php';
+        require __DIR__.'/expenses.php';
         require __DIR__.'/transport.php';
         require __DIR__.'/workshop.php';
         require __DIR__.'/purchasing.php';

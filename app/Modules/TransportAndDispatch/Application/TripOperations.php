@@ -145,7 +145,9 @@ class TripOperations
     public function reading(User $actor, string $tripId, string $assignmentId, string $type, string $value, DateTimeInterface $occurredAt, string $reason, array $evidence = []): TripOdometerReading
     {
         return $this->transaction(function () use ($actor, $tripId, $assignmentId, $type, $value, $occurredAt, $reason, $evidence): TripOdometerReading {
-            $this->authorize($actor, $tripId);
+            $this->lock();
+            $trip = Trip::query()->lockForUpdate()->findOrFail($tripId);
+            Gate::forUser($actor)->authorize('report-trip-information', $trip);
             $this->validateReading($value);
 
             return TripOdometerReading::create(['trip_id' => $tripId, 'tractor_assignment_id' => $assignmentId, 'reading_type' => $type, 'reading_value' => $value]

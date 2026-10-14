@@ -24,6 +24,7 @@ class TransportCorePolicy
         }
 
         return $this->hasRole($user, ['driver']) && $trip->driverAssignments()->current()
+            ->whereRaw('starts_at <= clock_timestamp()')
             ->whereHas('employee', fn ($query) => $query->where('user_id', $user->id)->where('is_active', true))->exists();
     }
 

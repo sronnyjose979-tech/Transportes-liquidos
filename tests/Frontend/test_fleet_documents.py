@@ -109,7 +109,8 @@ class FleetDocumentsBrowserTest(unittest.IsolatedAsyncioTestCase):
                  ('catalogs','Catálogos','/administracion/catalogos',['administrator']),
                  ('inventory','Inventario','/inventario',['administrator','secretary','mechanic']),
                  ('purchasing','Compras','/compras',['administrator','secretary']),
-                 ('billing','Facturación','/facturacion',['administrator','secretary'])]
+                 ('billing','Facturación','/facturacion',['administrator','secretary']),
+                 ('expenses','Gastos','/gastos',['administrator','secretary'])]
         if not self.role:
             await route.fulfill(status=401, json={'message':'Sesión expirada'})
             return
