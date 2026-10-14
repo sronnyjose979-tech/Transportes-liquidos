@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import SharedNavigation from '../System/SharedNavigation.vue';
 import { computed, onMounted, provide, ref } from 'vue';
 import { getSession, logout, refreshCsrf } from '../FleetAndDocuments/api';
 import type { Session } from '../FleetAndDocuments/contracts';
@@ -44,7 +45,7 @@ onMounted(loadSession);
 <div class="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-4 py-5">
 <div><p class="font-semibold text-blue-950">Transportes Líquidos</p><p class="text-sm text-blue-700">{{titles[section]}}</p></div>
 <nav class="flex flex-wrap items-center gap-4" aria-label="Navegación interna">
-<a href="/taller" :aria-disabled="busy||uncertain" @click="(busy||uncertain)&&$event.preventDefault()">Taller</a><a href="/transporte" :aria-disabled="busy||uncertain" @click="(busy||uncertain)&&$event.preventDefault()">Transporte</a><a href="/inventario" :aria-disabled="busy||uncertain" @click="(busy||uncertain)&&$event.preventDefault()">Inventario</a><a href="/compras" :aria-disabled="busy||uncertain" @click="(busy||uncertain)&&$event.preventDefault()">Compras</a><a href="/documentacion" :aria-disabled="busy||uncertain" @click="(busy||uncertain)&&$event.preventDefault()">Documentación</a>
+<SharedNavigation :session="session" :disabled="busy||uncertain"/>
 <button v-if="session" class="btn-secondary" :disabled="busy" @click="signOut">Cerrar sesión</button>
 </nav></div>
 </header>
@@ -52,7 +53,7 @@ onMounted(loadSession);
 <div v-if="message" class="notice-info" role="alert"><p>{{message}}</p><ul v-for="(values,key) in errors" :key="key"><li v-for="value in values" :key="value">{{value}}</li></ul><button v-if="uncertain&&allowed" class="btn-secondary mt-3" :disabled="busy" @click="recover">Consultar estado confirmado</button><button v-if="csrfExpired" class="btn-secondary mt-3" :disabled="busy" @click="csrf">Actualizar sesión de seguridad</button></div>
 <p v-if="success" class="notice-success" role="status">{{success}}</p>
 <p v-if="checking" class="panel" role="status">Comprobando sesión…</p>
-<section v-else-if="!session" class="panel"><h1 class="text-xl font-semibold">Acceso a Administración</h1><p class="my-3">Inicia sesión con una cuenta administrativa en el acceso existente.</p><a class="btn-primary" href="/taller">Iniciar sesión</a></section>
+<section v-else-if="!session" class="panel"><h1 class="text-xl font-semibold">Acceso a Administración</h1><p class="my-3">Inicia sesión con una cuenta administrativa en el acceso existente.</p><a class="btn-primary" href="/login">Iniciar sesión</a></section>
 <section v-else-if="!allowed" class="panel"><h1 class="text-xl font-semibold">Acceso no autorizado</h1><p>Solo el administrador puede gestionar estos recursos.</p></section>
 <template v-else>
 <h1 class="text-2xl font-semibold text-blue-950">{{titles[section]}}</h1>

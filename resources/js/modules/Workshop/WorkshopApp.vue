@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import SharedNavigation from '../System/SharedNavigation.vue';
 import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { getSession, login, logout, refreshCsrf } from '../FleetAndDocuments/api';
 import type { Session } from '../FleetAndDocuments/contracts';
@@ -483,14 +484,7 @@ function openRow(row: RecordRow): void { void navigate(view.value === 'orders' ?
 <button v-for="item in (office?['dashboard','orders','reports','admissions','authorizations','impediments'] as const:['dashboard','orders','reports','authorizations','impediments'] as const)" :key="item" :aria-current="activeNavigation===item?'page':undefined" :disabled="busy || uncertain || evidencePending || denied" @click="navigate(item)">
 <WorkshopIcon :name="item" /> {{ {dashboard:'Inicio',orders:'Órdenes',reports:'Averías',authorizations:'Autorizaciones',impediments:'Impedimentos',admissions:'Ingresos y salidas'}[item] }}</button>
 </nav>
-<nav v-if="office" aria-label="Otros módulos">
-<a v-if="admin" href="/administracion/flota">Administración ↗</a>
-<a href="/transporte">Transporte y despacho ↗</a>
-<a href="/inventario">Inventario ↗</a>
-<a href="/compras">Compras ↗</a>
-<a href="/documentacion">Flota y documentos ↗</a>
-</nav>
-<nav v-if="!office && session.roles.includes('mechanic')" aria-label="Repuestos asignados"><a href="/inventario">Mis repuestos ↗</a></nav>
+<SharedNavigation :session="session" :disabled="busy||uncertain||evidencePending||denied"/>
 <small>Una reparación por orden.<br>Autorización antes de ejecución.</small>
 </aside>
         <main class="workshop-main">

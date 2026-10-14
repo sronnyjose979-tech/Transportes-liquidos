@@ -1,5 +1,6 @@
 <?php
 
+use Illuminate\Contracts\Http\Kernel;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Bootstrap\BootProviders;
 use Illuminate\Foundation\Bootstrap\LoadConfiguration;
@@ -45,4 +46,21 @@ $app->afterBootstrapping(LoadConfiguration::class, function (Application $app) u
 $app->afterBootstrapping(BootProviders::class, function () use ($workspace): void {
     Vite::useHotFile($workspace.'/absent.hot');
 });
-$app->handleRequest(Request::capture());
+// Isolated UI-contract harness renders only the real Blade shells. It intentionally
+// bypasses page authorization here, because API/session responses are intercepted
+// and no database exists. Server authorization is tested separately on PostgreSQL.
+$app->instance('request', Request::capture());
+$app->make(Kernel::class)->bootstrap();
+$pages = ['/documentacion' => ['fleet-documents', []], '/transporte' => ['transport', []], '/taller' => ['workshop', []],
+    '/inventario' => ['supply', ['section' => 'inventory']], '/compras' => ['supply', ['section' => 'purchasing']],
+    '/login' => ['system-home', ['section' => 'login']], '/dashboard' => ['system-home', ['section' => 'dashboard']],
+    '/mis-viajes' => ['system-home', ['section' => 'driver']], '/facturacion' => ['system-home', ['section' => 'billing']]];
+foreach (['flota', 'personal', 'catalogos', 'compras'] as $section) {
+    $pages['/administracion/'.$section] = ['administration', compact('section')];
+}
+if (isset($pages[$uri])) {
+    [$view, $data] = $pages[$uri];
+    response()->view($view, $data)->header('Cache-Control', 'private, no-store')->header('Set-Cookie', 'XSRF-TOKEN=browser-contract-only; Path=/; SameSite=Lax')->send();
+} else {
+    $app->handleRequest(Request::capture());
+}

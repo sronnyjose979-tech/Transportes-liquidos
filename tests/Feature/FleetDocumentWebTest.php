@@ -21,9 +21,10 @@ class FleetDocumentWebTest extends PostgresTestCase
         return $user;
     }
 
-    public function test_web_shell_is_public_without_private_data_and_is_not_cached(): void
+    public function test_web_shell_is_authorized_without_private_data_and_is_not_cached(): void
     {
         $this->withoutVite();
+        $this->actingAs($this->account());
         $response = $this->get('/documentacion')->assertOk()->assertViewIs('fleet-documents')
             ->assertSee('lang="es"', false)->assertSee('fleet-documents-app')->assertSee('viewport');
         $this->assertStringContainsString('no-store', $response->headers->get('Cache-Control'));

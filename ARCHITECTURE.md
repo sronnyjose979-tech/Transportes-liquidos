@@ -1105,3 +1105,21 @@ por actor en memoria, sin reenvío automático ni navegación que descarte su cl
 Ver [contratos, flujos, pruebas y límites concretos](docs/inventario-compras-operativo.md).
 Los casos excepcionales e históricos indicados allí permanecen pendientes; el avance
 no se presenta como completo para todos esos procedimientos.
+
+## Inicio compartido por roles y preparación de facturación
+
+`SystemNavigation` en AccessAndPersonnel utiliza los Gates existentes para
+construir el menú y elegir el inicio. `/` dirige a `/dashboard`, `/transporte`,
+`/taller` o `/mis-viajes`, según rol/permisos. `/login` integra la autenticación
+Laravel existente. Todas las páginas operativas ahora exigen sesión, cuenta
+activa y autorización de servidor. `SharedNavigation` se reutiliza en los
+módulos sin alterar sus operaciones ni desbloquear comandos inciertos.
+
+El dashboard administrativo consulta conteos reales. Transporte ofrece una
+proyección limitada de asignaciones vigentes para conductores mediante
+`AssignedTripController`; no expone el detalle administrativo general.
+BillingAndPayments contiene exclusivamente `BillingReviewController`, consulta
+de viajes y clientes. `/facturacion` no crea facturas, pagos ni documentos
+fiscales: moneda/precisión, precio autorizado, conceptos, elegibilidad y demás
+contratos comerciales siguen pendientes. No se crean migraciones monetarias.
+Véase [alcance y bloqueos](docs/inicio-y-facturacion-administrativa.md).

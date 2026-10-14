@@ -376,3 +376,12 @@ La aprobación posterior del usuario resuelve los requisitos de finalización de
 Esta aclaración no resuelve los otros temas que se agrupaban bajo D02 (por ejemplo,
 revisión de producto o cancelación posterior de completados), ni cambia RN-TR-01 a
 RN-TR-39 o RN-SEG-01. Detalles técnicos: [etapa-5-3.md](etapa-5-3.md).
+
+### Actualización posterior: pagos parciales
+
+La instrucción del usuario del 2026-10-14 sustituye el contrato anterior de
+RN-TR-33: se permiten pagos parciales o totales. Las menciones anteriores de
+este diseño 5.1 sobre pago único describen la decisión histórica y ya no
+constituyen la regla vigente. La implementación sigue pendiente de moneda,
+precisión, importes/conceptos autorizados y elegibilidad comercial; véase
+[inicio y preparación de facturación](inicio-y-facturacion-administrativa.md).

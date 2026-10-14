@@ -19,3 +19,7 @@ if (administrationRoot) createApp(AdminApp).mount(administrationRoot);
 import SupplyApp from './modules/Supply/SupplyApp.vue';
 const supplyRoot = document.getElementById('supply-app');
 if (supplyRoot) createApp(SupplyApp).mount(supplyRoot);
+
+import SystemApp from './modules/System/SystemApp.vue';
+const systemRoot = document.getElementById('system-app');
+if (systemRoot) createApp(SystemApp).mount(systemRoot);

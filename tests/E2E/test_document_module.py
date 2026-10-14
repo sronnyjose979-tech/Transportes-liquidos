@@ -58,8 +58,8 @@ class DocumentModuleE2E(unittest.IsolatedAsyncioTestCase):
         try:
             for _ in range(50):
                 try:
-                    with urlopen(cls.base + '/documentacion', timeout=1) as response:
-                        if response.status == 200 and b'fleet-documents-app' in response.read():
+                    with urlopen(cls.base + '/login', timeout=1) as response:
+                        if response.status == 200 and b'system-app' in response.read():
                             cls.proxy = FaultProxy(cls.port)
                             cls.base = f'http://127.0.0.1:{cls.proxy.server_port}'
                             return
@@ -117,14 +117,17 @@ class DocumentModuleE2E(unittest.IsolatedAsyncioTestCase):
     async def sign_in(self, role='administrator', context=None, page=None):
         context = context or self.context
         page = page or self.page
-        await page.goto(self.base + '/documentacion')
-        await expect(page.get_by_role('heading', name='Acceso a documentación')).to_be_visible()
+        await page.goto(self.base + '/login')
+        await expect(page.get_by_role('heading', name='Iniciar sesión', exact=True)).to_be_visible()
         await page.get_by_label('Usuario', exact=True).fill('e2e-' + role)
         await page.get_by_label('Contraseña', exact=True).fill(PASSWORD)
         async with page.expect_response(lambda r: r.url.endswith('/api/login') and r.request.method == 'POST') as event:
             await page.get_by_role('button', name='Iniciar sesión').click()
         response = await event.value
         self.assertEqual(200, response.status, await response.text())
+        await page.wait_for_url('**'+{'administrator':'/dashboard','secretary':'/transporte','driver':'/mis-viajes','mechanic':'/taller'}[role])
+        if role in ['administrator','secretary']:
+            await page.goto(self.base+'/documentacion')
         await expect(page.get_by_role('button', name='Cerrar sesión')).to_be_visible()
         return response
 
@@ -184,7 +187,7 @@ class DocumentModuleE2E(unittest.IsolatedAsyncioTestCase):
             context = await self.browser.new_context()
             page = await context.new_page()
             await self.sign_in(role, context, page)
-            await expect(page.get_by_role('heading', name='Acceso no autorizado')).to_be_visible()
+            self.assertEqual(403,(await page.goto(self.base+'/documentacion')).status)
             self.assertEqual(403, (await context.request.get(self.base + '/api/fleet-assets')).status)
             self.assertEqual(403, (await context.request.get(self.base + '/api/documents/' + created['id'] + '/download')).status)
             await context.close()

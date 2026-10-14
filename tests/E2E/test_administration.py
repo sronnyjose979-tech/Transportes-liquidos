@@ -36,10 +36,12 @@ class AdministrationE2E(unittest.IsolatedAsyncioTestCase):
             await self.context.close(); await self.browser.close(); await self.playwright.stop()
         self.assertEqual([],self.errors)
     async def login(self,role='administrator'):
-        await self.page.goto(self.base+'/taller')
+        await self.page.goto(self.base+'/login')
         await self.page.get_by_label('Usuario',exact=True).fill('e2e-'+role)
         await self.page.get_by_label('Contraseña',exact=True).fill(support.PASSWORD)
         await self.page.get_by_role('button',name='Iniciar sesión',exact=True).click()
+        await self.page.wait_for_url('**'+{'administrator':'/dashboard','secretary':'/transporte'}[role])
+        await self.page.goto(self.base+'/taller')
         await expect(self.page.get_by_role('heading',name='Inicio de Taller',exact=True)).to_be_visible()
     async def save(self,button,path,method='POST',status=201):
         async with self.page.expect_response(lambda r:r.request.method==method and r.url.endswith('/api'+path)) as event:
@@ -186,12 +188,12 @@ class AdministrationE2E(unittest.IsolatedAsyncioTestCase):
         await expect(row.get_by_role('button',name='Activar',exact=True)).to_be_visible()
         await self.page.get_by_role('button',name='Cerrar sesión',exact=True).click()
         await self.page.goto(self.base+'/administracion/personal')
-        await expect(self.page.get_by_role('heading',name='Acceso a Administración')).to_be_visible()
+        await expect(self.page.get_by_role('heading',name='Iniciar sesión',exact=True)).to_be_visible()
         await self.login('secretary')
         await expect(self.page.get_by_role('link',name='Administración',exact=False)).to_have_count(0)
         for section in ['flota','personal','catalogos']:
-            await self.page.goto(self.base+'/administracion/'+section)
-            await expect(self.page.get_by_role('heading',name='Acceso no autorizado')).to_be_visible()
+            response=await self.page.goto(self.base+'/administracion/'+section)
+            self.assertEqual(403,response.status)
 
     async def test_sites_route_and_secretary_request_keep_history(self):
         await self.login()

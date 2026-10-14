@@ -38,11 +38,13 @@ class TransportModuleE2E(unittest.IsolatedAsyncioTestCase):
             self.proxy.drop_response_statuses=(201,)
         self.assertEqual([],self.errors)
     async def login(self,role='secretary'):
-        await self.page.goto(self.base+'/transporte')
+        await self.page.goto(self.base+'/login')
         await self.page.get_by_label('Usuario',exact=True).fill('e2e-'+role)
         await self.page.get_by_label('Contraseña',exact=True).fill(support.PASSWORD)
         await self.page.get_by_role('button',name='Iniciar sesión').click()
-        await expect(self.page.get_by_role('heading',name='Panel general')).to_be_visible()
+        await self.page.wait_for_url('**'+{'administrator':'/dashboard','secretary':'/transporte'}[role])
+        await self.page.goto(self.base+'/transporte')
+        await expect(self.page.get_by_role('heading',name='Panel general',exact=True)).to_be_visible()
     async def save(self,form,suffix,status=201):
         async with self.page.expect_response(lambda r:r.request.method=='POST' and r.url.endswith(suffix)) as event:
             await form.get_by_role('button',name='Guardar',exact=True).click()

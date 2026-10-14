@@ -1,5 +1,6 @@
 <?php
 
+use App\Modules\TransportAndDispatch\Http\Controllers\AssignedTripController;
 use App\Modules\TransportAndDispatch\Http\Controllers\TransportAuthorizationController;
 use App\Modules\TransportAndDispatch\Http\Controllers\TransportLookupController;
 use App\Modules\TransportAndDispatch\Http\Controllers\TransportRequestController;
@@ -10,6 +11,10 @@ use App\Modules\TransportAndDispatch\Http\Middleware\TransportApiErrors;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('transport')->name('transport.')->middleware(TransportApiErrors::class)->group(function () {
+    Route::middleware('can:view-assigned-trips')->group(function () {
+        Route::get('my-trips', [AssignedTripController::class, 'index']);
+        Route::get('my-trips/{id}', [AssignedTripController::class, 'show'])->whereUuid('id');
+    });
     Route::post('trips/{id}/reports', [TripOperationController::class, 'report'])->whereUuid('id')->name('operations.report');
     Route::middleware('can:manage-transport-core')->group(function () {
         Route::get('lookups/{kind}', [TransportLookupController::class, 'index']);

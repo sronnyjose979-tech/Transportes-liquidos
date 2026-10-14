@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import SharedNavigation from '../System/SharedNavigation.vue';
 import { computed, onMounted, provide, ref } from 'vue';
 import { getSession, login, logout, refreshCsrf } from '../FleetAndDocuments/api';
 import type { Session } from '../FleetAndDocuments/contracts';
@@ -168,8 +169,7 @@ finally {
 <p class="text-sm text-slate-500">Transporte y Despacho</p>
 </div>
 <nav v-if="session&&office" aria-label="Navegación interna" class="flex flex-wrap gap-3">
-<a v-if="admin" href="/administracion/flota" class="btn-text" :aria-disabled="busy" @click="busy&&$event.preventDefault()">Administración</a>
-<a href="/documentacion" class="btn-text" :aria-disabled="busy" @click="busy&&$event.preventDefault()">Documentación de flota</a>
+<SharedNavigation :session="session" :disabled="busy||uncertain"/>
 <span class="self-center text-sm">{{session.login}} · {{admin?'Administrador':'Secretaria'}}</span>
 <button class="btn-secondary" :disabled="busy" @click="signOut">Cerrar sesión</button>
 </nav>

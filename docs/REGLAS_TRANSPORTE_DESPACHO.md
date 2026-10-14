@@ -80,7 +80,7 @@
 
 **RN-TR-32 — Confirmada.** El cliente puede pagar al contado o a crédito, según acuerdo comercial. Para crédito, registrar plazo y vencimiento; consultar estados de cobro.
 
-**RN-TR-33 — Confirmada.** Una factura se paga íntegramente en una única transacción; no se admiten abonos parciales, tanto al contado como a crédito.
+**RN-TR-33 — Actualizada por instrucción del usuario (2026-10-14).** Permitir pagos parciales o totales y consultar el saldo pendiente. Esta instrucción sustituye la decisión anterior de un único pago completo. La persistencia y aplicación monetaria requieren definir moneda, precisión, conceptos y contratos comerciales pendientes; todavía no están implementadas.
 
 **RN-TR-34 — Confirmada.** Admitir efectivo, transferencia bancaria, SINPE Móvil y otros métodos de pago configurables. El administrador puede gestionar métodos. Registrar medio, monto, fecha, usuario y referencia/comprobante cuando aplique.
 

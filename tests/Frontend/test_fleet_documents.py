@@ -95,6 +95,26 @@ class FleetDocumentsBrowserTest(unittest.IsolatedAsyncioTestCase):
         self.delay_asset = None
         self.delay_upload = False
         await self.context.route('**/api/**', self.api)
+        await self.context.route('**/api/navigation', lambda route: FleetDocumentsBrowserTest.navigation(self, route))
+
+    async def navigation(self, route):
+        """Synthetic navigation contract only; actual Gates are covered by E2E."""
+        links = [('dashboard','Inicio','/dashboard',['administrator']),
+                 ('transport','Transporte','/transporte',['administrator','secretary']),
+                 ('driver','Mis viajes','/mis-viajes',['administrator','driver']),
+                 ('workshop','Taller','/taller',['administrator','secretary','mechanic']),
+                 ('documents','Documentación','/documentacion',['administrator','secretary']),
+                 ('fleet','Flota','/administracion/flota',['administrator']),
+                 ('personnel','Personal','/administracion/personal',['administrator']),
+                 ('catalogs','Catálogos','/administracion/catalogos',['administrator']),
+                 ('inventory','Inventario','/inventario',['administrator','secretary','mechanic']),
+                 ('purchasing','Compras','/compras',['administrator','secretary']),
+                 ('billing','Facturación · consulta','/facturacion',['administrator','secretary'])]
+        if not self.role:
+            await route.fulfill(status=401, json={'message':'Sesión expirada'})
+            return
+        home={'administrator':'/dashboard','secretary':'/transporte','mechanic':'/taller','driver':'/mis-viajes'}.get(self.role,'/login')
+        await route.fulfill(json={'data':{'home':home,'modules':[{'key':k,'label':l,'href':h} for k,l,h,roles in links if self.role in roles]}})
 
     async def asyncTearDown(self):
         await self.page.screenshot(path=str(self.artifacts / f'{self._testMethodName}.png'), full_page=True)

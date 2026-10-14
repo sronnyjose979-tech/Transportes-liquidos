@@ -27,7 +27,7 @@ return Application::configure(basePath: dirname(__DIR__))
             AuthenticatesSessions::class,
             EnsureActiveAccount::class,
         );
-        $middleware->redirectGuestsTo(fn (Request $request) => $request->is('api/*') ? null : '/');
+        $middleware->redirectGuestsTo(fn (Request $request) => $request->is('api/*') ? null : '/login');
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->report(function (QueryException $exception) {
@@ -72,7 +72,7 @@ return Application::configure(basePath: dirname(__DIR__))
             return null;
         });
         $exceptions->respond(function (Response $response, Throwable $exception, Request $request) {
-            if ($request->is('api/workshop/*', 'api/workshop', 'api/purchasing/*', 'api/inventory/*', 'api/catalogs/spare-parts*', 'api/purchasing', 'api/inventory')) {
+            if ($request->is('api/navigation', 'api/dashboard', 'api/billing/*', 'api/transport/my-trips*', 'api/workshop/*', 'api/workshop', 'api/purchasing/*', 'api/inventory/*', 'api/catalogs/spare-parts*', 'api/purchasing', 'api/inventory')) {
                 $response->headers->set('Cache-Control', 'private, no-store');
                 $response->headers->set('X-Content-Type-Options', 'nosniff');
             }

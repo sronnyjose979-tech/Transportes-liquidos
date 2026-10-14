@@ -55,14 +55,16 @@ class WorkshopModuleE2E(unittest.IsolatedAsyncioTestCase):
         self.assertEqual([], self.errors)
 
     async def login(self, role='administrator'):
-        await self.page.goto(self.base + '/taller')
-        await expect(self.page.get_by_role('heading', name='Acceso a Taller Mecánico')).to_be_visible()
+        await self.page.goto(self.base + '/login')
+        await expect(self.page.get_by_role('heading', name='Iniciar sesión', exact=True)).to_be_visible()
         await self.page.get_by_label('Usuario', exact=True).fill('e2e-' + role)
         await self.page.get_by_label('Contraseña', exact=True).fill(support.PASSWORD)
         async with self.page.expect_response(lambda r: r.url.endswith('/api/login')) as event:
             await self.page.get_by_role('button', name='Iniciar sesión', exact=True).click()
         response = await event.value
         self.assertEqual(200, response.status, await response.text())
+        await self.page.wait_for_url('**'+{'administrator':'/dashboard','secretary':'/transporte','mechanic':'/taller','driver':'/mis-viajes'}[role])
+        await self.page.goto(self.base + '/taller')
         await self.ready()
         await expect(self.page.get_by_role('heading', name='Inicio de Taller', exact=True)).to_be_visible()
 
@@ -71,7 +73,9 @@ class WorkshopModuleE2E(unittest.IsolatedAsyncioTestCase):
         await expect(self.page.get_by_text('Cargando información…', exact=True)).not_to_be_visible()
 
     async def switch(self, role):
-        await self.page.get_by_role('button', name='Cerrar sesión', exact=True).click()
+        async with self.page.expect_response(lambda r: r.url.endswith('/api/logout')) as event:
+            await self.page.get_by_role('button', name='Cerrar sesión', exact=True).click()
+        self.assertEqual(204, (await event.value).status)
         await self.login(role)
 
     async def choose(self, form, label, value, term):

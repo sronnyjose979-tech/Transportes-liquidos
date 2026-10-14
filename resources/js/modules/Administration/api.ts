@@ -47,3 +47,11 @@ export async function all<T>(path: string): Promise<T[]> {
         if (page >= last) return result;
     }
 }
+
+/** Read the complete paginator envelope without losing server pagination. */
+export async function paginated<T>(path: string): Promise<{data:T[];meta:{current_page:number;last_page:number}}> {
+    const value = object(await fetchValue(path));
+    const meta = object(value.meta);
+    if (!Array.isArray(value.data) || !Number.isInteger(meta.current_page) || !Number.isInteger(meta.last_page)) throw failure(value);
+    return {data:value.data as T[],meta:{current_page:meta.current_page as number,last_page:meta.last_page as number}};
+}
