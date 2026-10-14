@@ -72,7 +72,7 @@ class SystemNavigationE2E(unittest.IsolatedAsyncioTestCase):
             await expect(self.page).to_have_url(self.base+'/login')
             self.assertEqual(401,(await self.api('/navigation'))['status'])
 
-    async def test_assigned_driver_real_trip_release_and_billing_read_only(self):
+    async def test_assigned_driver_real_trip_release_and_unapproved_billing(self):
         result=subprocess.run(['php',str(support.ROOT/'tests/E2E/transport-console.php'),'fixture'],input='{}',capture_output=True,text=True,check=True,cwd=support.ROOT)
         fixture=json.loads(result.stdout)
         await self.login('secretary')
@@ -84,8 +84,9 @@ class SystemNavigationE2E(unittest.IsolatedAsyncioTestCase):
         assigned=await self.api('/transport/trips/'+tripid+'/assignments/assign',{'resource_kind':'driver','resource_id':fixture['driver'],'reason':'Asignación E2E de conductor'})
         self.assertEqual(201,assigned['status'],assigned)
         await self.page.goto(self.base+'/facturacion')
-        await expect(self.page.get_by_role('cell',name=tripid,exact=True)).to_be_visible()
-        await expect(self.page.get_by_role('button',name='Crear factura')).to_have_count(0)
+        await expect(self.page.get_by_role('row').filter(has_text=tripid)).to_be_visible()
+        await expect(self.page.get_by_role('checkbox',name='Seleccionar viaje '+tripid)).to_be_disabled()
+        await expect(self.page.get_by_role('button',name='Emitir factura electrónica')).to_have_count(0)
         await self.page.get_by_role('button',name='Cerrar sesión',exact=True).click()
         await self.page.wait_for_url('**/login')
         await self.login('driver',fixture['driver_login'])

@@ -36,7 +36,7 @@ class SystemBrowserTest(unittest.IsolatedAsyncioTestCase):
         if path=='/api/transport/my-trips':
             data=[{'id':'trip-1','product':'Agua','execution_status':'pending','administrative_status':'open','scheduled_start_at':'2026-10-14T14:00:00Z','route':{'name':'Ruta real de contrato','origin':'Origen','destination':'Destino'},'assets':[{'type':'tractor_unit','code':'CAB-01'}]}]
         if path=='/api/billing/trips':
-            data=[{'id':'trip-1','customer':{'id':'customer-1','name':'Cliente de contrato'},'product':'Agua','execution_status':'completed','administrative_status':'closed'}]
+            data=[{'id':'trip-1','customer':{'id':'customer-1','name':'Cliente de contrato'},'product':'Agua','execution_status':'completed','administrative_status':'closed','price_proposals':[],'approved_price':None,'invoice_id':None,'billing_eligibility':False}]
         await route.fulfill(json={'data':data,'meta':{'current_page':1,'last_page':1,'per_page':25,'total':len(data)}})
 
     async def test_admin_dashboard_and_shared_navigation_use_contract_counts(self):
@@ -44,7 +44,7 @@ class SystemBrowserTest(unittest.IsolatedAsyncioTestCase):
         await expect(self.page.get_by_role('heading',name='Panel general',exact=True)).to_be_visible()
         await expect(self.page.get_by_label('Resumen general')).to_contain_text('3')
         nav=self.page.get_by_role('navigation',name='Módulos del sistema')
-        for label in ['Flota','Personal','Catálogos','Taller','Inventario','Compras','Facturación · consulta']:
+        for label in ['Flota','Personal','Catálogos','Taller','Inventario','Compras','Facturación']:
             await expect(nav.get_by_role('link',name=label,exact=True)).to_be_visible()
         self.assertNotIn('Ingresos',await self.page.locator('main').inner_text())
 
@@ -56,17 +56,18 @@ class SystemBrowserTest(unittest.IsolatedAsyncioTestCase):
         nav=self.page.get_by_role('navigation',name='Módulos del sistema')
         await expect(nav.get_by_role('link',name='Mis viajes',exact=True)).to_be_visible()
         await expect(nav.get_by_role('link',name='Taller',exact=True)).to_have_count(0)
-        await expect(nav.get_by_role('link',name='Facturación · consulta')).to_have_count(0)
+        await expect(nav.get_by_role('link',name='Facturación')).to_have_count(0)
         for width in [768,390]:
             await self.page.set_viewport_size({'width':width,'height':1000})
             self.assertTrue(await self.page.evaluate('document.documentElement.scrollWidth<=innerWidth'))
 
-    async def test_billing_is_read_only_and_does_not_claim_fiscal_or_payment_success(self):
+    async def test_billing_unapproved_trip_cannot_be_selected_and_no_fiscal_actions_exist(self):
         self.role='secretary'
         await self.page.goto(self.base+'/facturacion')
         await expect(self.page.get_by_role('cell',name='Cliente de contrato')).to_be_visible()
-        await expect(self.page.get_by_text('Consulta administrativa.',exact=False)).to_be_visible()
-        await expect(self.page.get_by_role('button',name='Crear factura')).to_have_count(0)
+        await expect(self.page.get_by_text('Documentos administrativos internos.',exact=False)).to_be_visible()
+        await expect(self.page.get_by_role('checkbox',name='Seleccionar viaje trip-1')).to_be_disabled()
+        await expect(self.page.get_by_role('button',name='Emitir factura electrónica')).to_have_count(0)
         await expect(self.page.get_by_role('button',name='Registrar pago')).to_have_count(0)
         await expect(self.page.get_by_role('navigation',name='Módulos del sistema').get_by_role('link',name='Personal')).to_have_count(0)
 

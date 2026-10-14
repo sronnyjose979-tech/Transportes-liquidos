@@ -1,5 +1,11 @@
 # Inicio por roles y preparación de facturación
 
+> Documento del avance inicial. Los bloqueos monetarios aquí descritos se
+> resolvieron para el circuito administrativo mediante las decisiones posteriores
+> del usuario. El estado vigente está en
+> [facturación administrativa y pagos](facturacion-administrativa-y-pagos.md).
+> Las pruebas y resultados que siguen corresponden a aquel avance.
+
 ## Alcance implementado
 
 Se reutilizan las sesiones Laravel (`SessionController`), CSRF, cuentas activas,

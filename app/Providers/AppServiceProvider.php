@@ -53,6 +53,8 @@ class AppServiceProvider extends ServiceProvider
         foreach (['manage-transport-core', 'request-transport-authorization', 'correct-transport-record', 'record-transport-information', 'resolve-transport-warning'] as $ability) {
             Gate::define($ability, [TransportCorePolicy::class, 'manage']);
         }
+        Gate::define('manage-billing', [TransportCorePolicy::class, 'manage']);
+        Gate::define('approve-trip-amount', [TransportCorePolicy::class, 'decide']);
         Gate::define('decide-transport-authorization', [TransportCorePolicy::class, 'decide']);
         Gate::define('manage-trip-assignments', [TransportCorePolicy::class, 'manage']);
         Gate::define('manage-trip-operations', [TransportCorePolicy::class, 'manage']);

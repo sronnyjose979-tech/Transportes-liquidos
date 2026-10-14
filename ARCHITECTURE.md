@@ -1118,8 +1118,33 @@ módulos sin alterar sus operaciones ni desbloquear comandos inciertos.
 El dashboard administrativo consulta conteos reales. Transporte ofrece una
 proyección limitada de asignaciones vigentes para conductores mediante
 `AssignedTripController`; no expone el detalle administrativo general.
-BillingAndPayments contiene exclusivamente `BillingReviewController`, consulta
-de viajes y clientes. `/facturacion` no crea facturas, pagos ni documentos
-fiscales: moneda/precisión, precio autorizado, conceptos, elegibilidad y demás
-contratos comerciales siguen pendientes. No se crean migraciones monetarias.
-Véase [alcance y bloqueos](docs/inicio-y-facturacion-administrativa.md).
+La entrega inicial de BillingAndPayments fue una consulta de viajes y clientes;
+queda documentada en [el avance inicial](docs/inicio-y-facturacion-administrativa.md).
+La implementación operativa siguiente completa `/facturacion` conforme a las
+reglas monetarias aprobadas, sin reestructurar dashboard ni navegación.
+
+## Facturación administrativa y pagos de transporte
+
+`BillingPayments` coordina importes manuales/versiones, aprobaciones exclusivas,
+facturas internas y pagos parciales/totales. La migración incremental 000360 agrega
+seis tablas financieras inmutables y una guardia técnica; reutiliza clientes,
+viajes, usuarios y roles existentes. Triggers PostgreSQL protegen precisión,
+moneda única, elegibilidad, unicidad por viaje, saldo, idempotencia y auditoría.
+El coordinador común y guardias/bloqueos protegen también contra snapshots viejos.
+
+`Money` utiliza cadenas decimales e integer centavos. Los montos CRC/USD y saldos
+se representan en JSON como cadenas; estados de pago se derivan de registros
+confirmados. Cada concepto factura un viaje completo, cantidad 1 y su versión
+exacta de importe aprobado. Las propuestas pendientes no sustituyen aprobación.
+
+Controllers/Requests/Resources y modelos de lectura permanecen en
+`BillingAndPayments`; rutas bajo `/api/billing` con Gates que reutilizan
+`TransportCorePolicy`. Vue `BillingApp`, `TripsPanel`, `InvoicesPanel` completan
+la página existente. Intenciones inciertas conservan clave/contenido por actor
+en memoria, incluso durante la recuperación de sesión en la misma página.
+
+Sin impuestos, emisión electrónica, numeración fiscal, anticipos, conversiones
+ni crédito automático. Las anulaciones, correcciones posteriores a facturación
+y reversiones de pagos quedan fuera hasta aprobar compensaciones. El medio de
+pago es texto administrativo opcional, sin inventar requisitos bancarios.
+Véase [contratos, integridad y pruebas](docs/facturacion-administrativa-y-pagos.md).

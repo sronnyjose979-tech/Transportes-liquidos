@@ -1,0 +1,9 @@
+export type Currency='CRC'|'USD';
+export interface Price {id:string;amount:string;currency:Currency;supersedes_id:string|null;reason:string;requested_by_id:string|number;registered_at:string;decision:null|{decision:'approved'|'rejected';reason:string;decided_by_id:string|number;decided_at:string}}
+export interface Trip {id:string;customer:{id:string;name:string};product:string;execution_status:string;administrative_status:string;price_proposals:Price[];approved_price:null|{id:string;amount:string;currency:Currency};invoice_id:string|null;billing_eligibility:boolean}
+export interface Invoice {id:string;customer:{id:string;name:string};currency:Currency;total:string;paid:string;balance:string;status:'pending'|'partially_paid'|'paid';registered_at:string;created_by_id:string|number;reason:string;items:{id:string;trip_id:string;price_proposal_id:string;concept:string;amount:string}[];payments:{id:string;amount:string;currency:Currency;paid_at:string;registered_at:string;recorded_by_id:string|number;reason:string;method:string|null}[]}
+export interface Intent {actor:string;roles:string[];title:string;path:string;body:Record<string,unknown>}
+/** Display strings without binary floating-point conversion. Calculations remain server-owned. */
+export function money(value:string,currency:Currency):string {if(!/^\d+\.\d{2}$/.test(value))return `${currency} ${value}`;const [integer,fraction]=value.split('.');return `${currency} ${integer!.replace(/\B(?=(\d{3})+(?!\d))/g,'.')},${fraction}`;}
+export const paymentLabels={pending:'Pendiente',partially_paid:'Parcialmente pagada',paid:'Pagada'};
+export function date(value:string):string {const parsed=new Date(value);return Number.isNaN(parsed.getTime())?value:new Intl.DateTimeFormat('es-CR',{dateStyle:'medium',timeStyle:'short',timeZone:'America/Costa_Rica'}).format(parsed);}

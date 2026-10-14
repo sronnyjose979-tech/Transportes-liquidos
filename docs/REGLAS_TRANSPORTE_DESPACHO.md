@@ -80,7 +80,7 @@
 
 **RN-TR-32 — Confirmada.** El cliente puede pagar al contado o a crédito, según acuerdo comercial. Para crédito, registrar plazo y vencimiento; consultar estados de cobro.
 
-**RN-TR-33 — Actualizada por instrucción del usuario (2026-10-14).** Permitir pagos parciales o totales y consultar el saldo pendiente. Esta instrucción sustituye la decisión anterior de un único pago completo. La persistencia y aplicación monetaria requieren definir moneda, precisión, conceptos y contratos comerciales pendientes; todavía no están implementadas.
+**RN-TR-33 — Confirmada, actualizada por instrucción del usuario (2026-10-14).** Una factura administrativa puede recibir múltiples pagos parciales hasta quedar completamente pagada. Los pagos deben ser positivos, en la moneda de la factura y no superiores al saldo. Conservar historial, actor y fechas; deduplicar reintentos y proteger pagos concurrentes. El saldo se calcula exactamente, sin float. Esta regla sustituye el contrato histórico de un único pago íntegro.
 
 **RN-TR-34 — Confirmada.** Admitir efectivo, transferencia bancaria, SINPE Móvil y otros métodos de pago configurables. El administrador puede gestionar métodos. Registrar medio, monto, fecha, usuario y referencia/comprobante cuando aplique.
 
@@ -103,3 +103,13 @@
 5. Las RN-TR-30 a RN-TR-38 describen principalmente integración futura; no implementar Facturación y Pagos durante etapa 5.
 6. No inferir automáticamente políticas faltantes sobre documentos, precios, facturación fiscal, liquidación de viáticos o casos excepcionales.
 7. En etapa 5.1 actualizar solo documentación y propuesta de diseño. **No crear migraciones, modificar código, ejecutar migraciones en `transporte_db`, hacer commit ni push sin autorización explícita.**
+
+## Aclaración vigente para facturación administrativa
+
+Las decisiones del usuario para esta entrega establecen CRC/USD, dos decimales,
+ROUND_HALF_UP cuando corresponda, precio manual aprobado exclusivamente por el
+administrador y elegibilidad de viajes finalizados con importe aprobado. La
+facturación interna puede agrupar viajes del mismo cliente y moneda, sin esperar
+la finalización de toda la solicitud. No se alteran las RN numeradas ni se
+convierten estas facturas en documentos fiscales. Véase
+[facturación administrativa y pagos](facturacion-administrativa-y-pagos.md).

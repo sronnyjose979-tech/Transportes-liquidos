@@ -89,12 +89,12 @@ class SystemNavigationTest extends PostgresTestCase
         $this->getJson('/api/transport/my-trips/'.$trip->id)->assertNotFound();
     }
 
-    public function test_billing_review_does_not_claim_eligibility_or_offer_monetary_writes(): void
+    public function test_billing_review_marks_unapproved_trips_ineligible(): void
     {
         $user = $this->actor('secretary');
         $trip = $this->trip($this->request());
         $this->actingAs($user);
-        $this->getJson('/api/billing/trips?customer_id='.$trip->transportRequest->customer_id)->assertOk()->assertJsonPath('meta.total', 1)->assertJsonPath('data.0.billing_eligibility', null)->assertJsonPath('billing_enabled', false);
+        $this->getJson('/api/billing/trips?customer_id='.$trip->transportRequest->customer_id)->assertOk()->assertJsonPath('meta.total', 1)->assertJsonPath('data.0.billing_eligibility', false)->assertJsonPath('billing_enabled', true);
         $this->getJson('/api/billing/trips?execution_status=completed')->assertOk()->assertJsonPath('meta.total', 0);
         $this->getJson('/api/billing/trips?per_page=1000')->assertUnprocessable();
         $this->postJson('/api/billing/trips', [])->assertStatus(405);

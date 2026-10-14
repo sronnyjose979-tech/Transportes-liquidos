@@ -31,6 +31,11 @@ return Application::configure(basePath: dirname(__DIR__))
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->report(function (QueryException $exception) {
+            if (request()->is('api/billing/*')) {
+                Log::warning('billing.database_operation_rejected', ['sqlstate' => $exception->errorInfo[0] ?? null]);
+
+                return false;
+            }
             if (request()->is('api/workshop/*', 'api/purchasing/*', 'api/inventory/*', 'api/catalogs/spare-parts*')) {
                 // Do not log SQL bindings containing private documents or economic data.
                 Log::warning(request()->is('api/inventory/*', 'api/catalogs/spare-parts*') ? 'inventory.database_operation_rejected' : (request()->is('api/purchasing/*') ? 'purchasing.database_operation_rejected' : 'workshop.database_operation_rejected'), ['sqlstate' => $exception->errorInfo[0] ?? null]);
@@ -41,7 +46,7 @@ return Application::configure(basePath: dirname(__DIR__))
             return null;
         });
         $exceptions->render(function (QueryException $exception, Request $request) {
-            if ($request->is('api/workshop/*', 'api/workshop', 'api/purchasing/*', 'api/inventory/*', 'api/catalogs/spare-parts*', 'api/purchasing', 'api/inventory')) {
+            if ($request->is('api/billing/*', 'api/workshop/*', 'api/workshop', 'api/purchasing/*', 'api/inventory/*', 'api/catalogs/spare-parts*', 'api/purchasing', 'api/inventory')) {
                 return WorkshopApiErrors::databaseError($exception);
             }
             if ($request->is('api/transport/*')) {
@@ -58,14 +63,14 @@ return Application::configure(basePath: dirname(__DIR__))
             return null;
         });
         $exceptions->render(function (RuntimeException $exception, Request $request) {
-            if ($request->is('api/workshop/*', 'api/purchasing/*', 'api/inventory/*', 'api/catalogs/spare-parts*') && ! $exception instanceof HttpExceptionInterface) {
+            if ($request->is('api/billing/*', 'api/workshop/*', 'api/purchasing/*', 'api/inventory/*', 'api/catalogs/spare-parts*') && ! $exception instanceof HttpExceptionInterface) {
                 return response()->json(['message' => 'No se pudo confirmar la operación; conserve la clave y consulte el recibo.'], 503);
             }
 
             return null;
         });
         $exceptions->render(function (Throwable $exception, Request $request) {
-            if ($request->is('api/workshop/*', 'api/purchasing/*', 'api/inventory/*', 'api/catalogs/spare-parts*') && ! $exception instanceof AuthenticationException && ! $exception instanceof AuthorizationException && ! $exception instanceof ValidationException && ! $exception instanceof HttpExceptionInterface) {
+            if ($request->is('api/billing/*', 'api/workshop/*', 'api/purchasing/*', 'api/inventory/*', 'api/catalogs/spare-parts*') && ! $exception instanceof AuthenticationException && ! $exception instanceof AuthorizationException && ! $exception instanceof ValidationException && ! $exception instanceof HttpExceptionInterface) {
                 return response()->json(['message' => 'No se pudo completar la operación; consulte su estado antes de reintentar.'], $exception instanceof LogicException ? 503 : 500);
             }
 

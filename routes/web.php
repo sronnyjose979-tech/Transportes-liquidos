@@ -12,7 +12,7 @@ Route::middleware(['auth', EnsureActiveAccount::class, 'auth.session', PrivatePa
     Route::get('/', fn (Request $request, SystemNavigation $navigation) => redirect($navigation->home($request->user())));
     Route::get('/dashboard', fn () => view('system-home', ['section' => 'dashboard']))->middleware('can:manage-personnel');
     Route::get('/mis-viajes', fn () => view('system-home', ['section' => 'driver']))->middleware('can:view-assigned-trips');
-    Route::get('/facturacion', fn () => view('system-home', ['section' => 'billing']))->middleware('can:manage-transport-core');
+    Route::get('/facturacion', fn () => view('system-home', ['section' => 'billing']))->middleware('can:manage-billing');
     Route::get('/taller', fn () => view('workshop'))->middleware('can:access-workshop')->name('workshop.web');
     Route::get('/documentacion', fn () => view('fleet-documents'))->middleware('can:manage-fleet-documents')->name('fleet.documents.web');
     Route::get('/transporte', fn () => view('transport'))->middleware('can:manage-transport-core')->name('transport.web');
