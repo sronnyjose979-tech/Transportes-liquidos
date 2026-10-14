@@ -36,6 +36,11 @@ class AppServiceProvider extends ServiceProvider
 
             return true;
         });
+        foreach (['access-purchasing', 'manage-purchase-requests'] as $ability) {
+            Gate::define($ability, fn (User $user): bool => $user->is_active && $user->roles()->whereIn('name', ['administrator', 'secretary'])->exists());
+        }
+        Gate::define('decide-purchase-request', fn (User $user): bool => $user->is_active && $user->roles()->where('name', 'administrator')->exists());
+        Gate::define('access-inventory', fn (User $user): bool => $user->is_active && $user->roles()->whereIn('name', ['administrator', 'secretary', 'mechanic'])->exists());
         Gate::define('manage-catalogs', fn (User $user): bool => $user->is_active && $user->roles()->where('name', 'administrator')->exists()
         );
         Gate::define('manage-personnel', fn (User $user): bool => $user->is_active && $user->roles()->where('name', 'administrator')->exists());

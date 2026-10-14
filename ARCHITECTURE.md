@@ -1064,3 +1064,44 @@ Ver [circuito, contratos y pruebas](docs/taller-circuito-operativo.md).
 La suite `--e2e-workshop-circuit` usa Chromium, Laravel y PostgreSQL 18 aislado; incluye
 registro de Flota, ingreso, reparación autorizada, resolución, salida y disponibilidad,
 así como respuesta de ingreso perdida y liberación mecánica con historial.
+
+## Compras — solicitudes y decisiones independientes
+
+`Purchasing` reutiliza `Supplier` y `Inventory/SparePart`. La migración nueva 000320
+incorpora solicitudes/líneas, decisiones administrativas y recibos idempotentes;
+no implementa órdenes, recepciones ni existencias. El módulo expone solicitudes
+inmutables bajo `/api/purchasing/requests`, con cantidades/unidades históricas y
+vínculo opcional a necesidades reales de Taller. La autorización de reparación no
+se interpreta como autorización de compra. PostgreSQL protege actores, referencias,
+contenido confirmado, unicidad y trazabilidad con el coordinador común existente.
+
+`/administracion/compras` reutiliza Blade/Vite y el layout azul/blanco, sesión y CSRF.
+Catálogos añade repuestos y proveedores usando los endpoints existentes. Las preguntas
+sobre descuento físico, recepción, ajustes/compensaciones y conciliación inicial
+impiden habilitar el circuito de Inventario sin decisiones expresas; no se simula.
+Ver [alcance parcial, contratos y bloqueos](docs/inventario-compras-primer-avance.md).
+
+
+## Inventario y Compras — circuito cuantitativo integrado
+
+`InventoryLedger` coordina conciliación inicial autorizada, ajustes/reversiones de
+ajustes y devoluciones físicas. La migración 000330 integra automáticamente las
+fuentes existentes de Taller: entrega bodega→custodia, uso custodia→consumo, devolución
+custodia→bodega. No duplica entregas/usos ni convierte registros históricos en stock.
+SQL conserva fuentes exactas, unidades, no negativos e historial; los mecánicos solo
+consumen sus entregas. Rectificaciones autorizadas de uso compensan clasificación sin
+retorno físico automático. Los saldos se derivan del ledger, con `null` sin conciliar.
+
+`PurchaseFulfillment` y 000340 agregan órdenes y recepciones parciales/totales desde
+solicitudes aprobadas. La recepción y su entrada al ledger son atómicas, con cuotas
+por detalle, trazabilidad exacta y deduplicación. 000345 amplía solicitudes a oficina
+sin cambiar autorizaciones exclusivas; 000350 protege unidades de compras aprobadas.
+Las fechas de recepción conservan offset y microsegundos. No se implementa valoración.
+
+`SupplyApp` en `/inventario` y `/compras` reutiliza Blade/Vite, sesión/CSRF y componentes.
+Roles: oficina administra el circuito; administrador decide/aplica correcciones y
+aprueba compras; mecánico consulta custodia/declara uso. Intenciones inciertas quedan
+por actor en memoria, sin reenvío automático ni navegación que descarte su clave.
+Ver [contratos, flujos, pruebas y límites concretos](docs/inventario-compras-operativo.md).
+Los casos excepcionales e históricos indicados allí permanecen pendientes; el avance
+no se presenta como completo para todos esos procedimientos.

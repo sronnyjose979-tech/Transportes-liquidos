@@ -23,6 +23,8 @@ Route::prefix('api')->group(function () {
     Route::middleware(['auth', EnsureActiveAccount::class, 'auth.session'])->group(function () {
         require __DIR__.'/transport.php';
         require __DIR__.'/workshop.php';
+        require __DIR__.'/purchasing.php';
+        require __DIR__.'/inventory.php';
         Route::get('session', [SessionController::class, 'show']);
         Route::post('logout', [SessionController::class, 'destroy']);
         Route::middleware('can:manage-fleet-documents')->name('fleet.documents.')->group(function () {

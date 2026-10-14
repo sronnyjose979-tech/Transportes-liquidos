@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Modules\AccessAndPersonnel\Models\Employee;
 use App\Modules\FleetAndDocuments\Models\FleetAsset;
 use App\Modules\FleetAndDocuments\Models\TractorUnit;
+use App\Modules\Inventory\Application\InventoryLedger;
 use App\Modules\Inventory\Models\SparePart;
 use App\Modules\Workshop\Application\WorkshopAttachments;
 use App\Modules\Workshop\Application\WorkshopAuthorizations;
@@ -16,7 +17,9 @@ use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use Tests\PostgresTestCase;
+use Tests\Support\InventoryFixtures;
 use Tests\Support\TransportFixtures;
 use Tests\Support\WorkshopSchema;
 
@@ -60,6 +63,7 @@ class WorkshopMaterialsTest extends PostgresTestCase
         DB::commit();
         $authorizations = app(WorkshopAuthorizations::class);
         $catalog = SparePart::create(['code' => 'PART-'.Str::uuid(), 'description' => 'Junta', 'unit' => 'unidad']);
+        InventoryFixtures::reconcile($admin, $catalog, '2.000000');
         $scope = $authorizations->requestScope($admin, $order, (string) Str::uuid(), ['diagnosis_id' => $diagnosis, 'description' => 'Alcance', 'reason' => 'Prueba', 'tasks' => [['line_number' => 1, 'description' => 'Reparar']], 'parts' => [['line_number' => 1, 'task_line_number' => 1, 'spare_part_id' => $catalog->id, 'quantity' => '2.000000']]]);
         $decision = $authorizations->decide($admin, $scope['request_id'], (string) Str::uuid(), 'approved', 'Aprobado');
         $authorizations->applyScope($admin, $decision['decision_id'], (string) Str::uuid());
@@ -229,6 +233,9 @@ class WorkshopMaterialsTest extends PostgresTestCase
         $decision = $this->approveCorrection($f, 'workshop_part_usages', $usage['usage_id'], ['quantity' => '1.5', 'reason' => 'Uso corregido']);
         $corrected = $materials->reviseUsage($f['admin'], $decision, (string) Str::uuid());
         $this->assertSame($f['admin']->id, DB::table('workshop_part_usages')->where('id', $corrected['usage_id'])->value('confirmed_by_id'));
+        $balances = DB::selectOne('SELECT sum(custody_delta)::text AS custody, sum(consumed_delta)::text AS consumed FROM inventory_movements WHERE delivery_id=?', [$delivery['delivery_id']]);
+        $this->assertSame('0.500000', $balances->custody);
+        $this->assertSame('1.500000', $balances->consumed);
         $decision = $this->approveCorrection($f, 'workshop_part_deliveries', $delivery['delivery_id'], ['quantity' => '1.4', 'reason' => 'Corrección incompatible']);
         try {
             $materials->reviseDelivery($f['admin'], $decision, (string) Str::uuid());
@@ -238,6 +245,61 @@ class WorkshopMaterialsTest extends PostgresTestCase
         }
         $this->assertSame(1, DB::table('workshop_part_deliveries')->count());
         $this->assertSame(2, DB::table('workshop_part_usages')->count());
+    }
+
+    public function test_usage_correction_after_physical_return_restores_only_custody(): void
+    {
+        $f = $this->fixture();
+        $delivery = $this->delivery($f);
+        $materials = app(WorkshopMaterials::class);
+        $ledger = app(InventoryLedger::class);
+        $usage = $materials->usePart($f['mechanic'], $f['order'], (string) Str::uuid(), ['delivery_id' => $delivery['delivery_id'], 'mechanic_assignment_id' => $f['assignment'], 'quantity' => '1', 'occurred_at' => '2026-10-12T10:00:00Z', 'reason' => 'Uso comunicado']);
+        $return = ['delivery_id' => $delivery['delivery_id'], 'quantity' => '0.5', 'occurred_at' => '2026-10-12T11:00:00Z', 'reason' => 'Recepción física de sobrante'];
+        $ledger->returnParts($f['admin'], (string) Str::uuid(), $return);
+        $balance = fn () => DB::selectOne('SELECT sum(warehouse_delta)::text AS warehouse, sum(custody_delta)::text AS custody, sum(consumed_delta)::text AS consumed FROM inventory_movements WHERE spare_part_id=?', [$f['catalog']->id]);
+        $this->assertEquals((object) ['warehouse' => '0.500000', 'custody' => '0.500000', 'consumed' => '1.000000'], $balance());
+        $decision = $this->approveCorrection($f, 'workshop_part_usages', $usage['usage_id'], ['quantity' => '0.5', 'reason' => 'Cantidad comunicada corregida']);
+        $materials->reviseUsage($f['admin'], $decision, (string) Str::uuid());
+        $this->assertEquals((object) ['warehouse' => '0.500000', 'custody' => '1.000000', 'consumed' => '0.500000'], $balance());
+        $key = (string) Str::uuid();
+        $return['quantity'] = '1';
+        $confirmed = $ledger->returnParts($f['admin'], $key, $return);
+        $this->assertSame($confirmed, $ledger->returnParts($f['admin'], $key, $return));
+        $this->assertEquals((object) ['warehouse' => '1.500000', 'custody' => '0.000000', 'consumed' => '0.500000'], $balance());
+        try {
+            $ledger->returnParts($f['admin'], (string) Str::uuid(), array_replace($return, ['quantity' => '0.1']));
+            $this->fail('Devolución superior a custodia aceptada');
+        } catch (ValidationException $error) {
+            $this->assertArrayHasKey('operation', $error->errors());
+        }
+        $this->assertSame(2, DB::table('inventory_returns')->count());
+        $this->assertSame(2, DB::table('workshop_part_usages')->count());
+    }
+
+    public function test_second_assigned_mechanic_cannot_consume_another_mechanics_delivery(): void
+    {
+        $f = $this->fixture();
+        $delivery = $this->delivery($f);
+        $other = $this->actor('mechanic');
+        $employee = Employee::create(['user_id' => $other->id, 'name' => 'Segundo mecánico', 'is_active' => true]);
+        $assignment = (string) Str::uuid();
+        DB::transaction(function () use ($f, $employee, $assignment): void {
+            DB::table('workshop_mechanic_assignments')->insert(['id' => $assignment, 'work_order_id' => $f['order'], 'employee_id' => $employee->id, 'starts_at' => '2026-10-12T08:00:00Z', 'assigned_by_id' => $f['admin']->id, 'reason' => 'Segundo participante']);
+            $this->receipt($f['admin']->id, $f['order'], 'mechanic_assign', ['mechanic_assignment_id' => $assignment]);
+        });
+        $data = ['delivery_id' => $delivery['delivery_id'], 'mechanic_assignment_id' => $assignment, 'quantity' => '0.5', 'occurred_at' => '2026-10-12T10:00:00Z', 'reason' => 'Entrega ajena'];
+        $this->actingAs($other)->postJson('/api/workshop/orders/'.$f['order'].'/usages', $data + ['request_key' => (string) Str::uuid()])->assertUnprocessable();
+        try {
+            DB::transaction(function () use ($data, $other): void {
+                $quantity = $data['quantity'];
+                unset($data['quantity']);
+                DB::select('SELECT workshop_write_usage(?::jsonb, ?::text)', [json_encode($data + ['id' => (string) Str::uuid(), 'confirmed_by_id' => $other->id], JSON_THROW_ON_ERROR), $quantity]);
+            });
+            $this->fail('Consumo SQL de entrega ajena aceptado');
+        } catch (QueryException $error) {
+            $this->assertSame('23514', $error->errorInfo[0]);
+        }
+        $this->assertSame(0, DB::table('workshop_part_usages')->count());
     }
 
     public function test_large_material_need_preserves_exact_audit_quantity(): void

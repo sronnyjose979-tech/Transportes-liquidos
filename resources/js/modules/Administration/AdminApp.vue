@@ -7,9 +7,10 @@ import { adminKey } from './context';
 import FleetPanel from './components/FleetPanel.vue';
 import PersonnelPanel from './components/PersonnelPanel.vue';
 import CatalogPanel from './components/CatalogPanel.vue';
+import PurchaseRequestsPanel from './components/PurchaseRequestsPanel.vue';
 const root = document.getElementById('administration-app');
 const section = root?.dataset.section ?? 'flota';
-const titles: Record<string,string> = { flota: 'Administración de Flota', personal: 'Administración de Personal', catalogos: 'Catálogos operativos' };
+const titles: Record<string,string> = { flota: 'Administración de Flota', personal: 'Administración de Personal', catalogos: 'Catálogos operativos', compras:'Solicitudes de compra' };
 const session = ref<Session | null>(null), checking = ref(true), busy = ref(false), uncertain = ref(false);
 const errors = ref<Record<string,string[]>>({}), message = ref(''), success = ref(''), csrfExpired = ref(false), revision = ref(0);
 const allowed = computed(() => session.value?.roles.includes('administrator') ?? false);
@@ -43,7 +44,7 @@ onMounted(loadSession);
 <div class="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-4 py-5">
 <div><p class="font-semibold text-blue-950">Transportes Líquidos</p><p class="text-sm text-blue-700">{{titles[section]}}</p></div>
 <nav class="flex flex-wrap items-center gap-4" aria-label="Navegación interna">
-<a href="/taller" :aria-disabled="busy||uncertain" @click="(busy||uncertain)&&$event.preventDefault()">Taller</a><a href="/transporte" :aria-disabled="busy||uncertain" @click="(busy||uncertain)&&$event.preventDefault()">Transporte</a><a href="/documentacion" :aria-disabled="busy||uncertain" @click="(busy||uncertain)&&$event.preventDefault()">Documentación</a>
+<a href="/taller" :aria-disabled="busy||uncertain" @click="(busy||uncertain)&&$event.preventDefault()">Taller</a><a href="/transporte" :aria-disabled="busy||uncertain" @click="(busy||uncertain)&&$event.preventDefault()">Transporte</a><a href="/inventario" :aria-disabled="busy||uncertain" @click="(busy||uncertain)&&$event.preventDefault()">Inventario</a><a href="/compras" :aria-disabled="busy||uncertain" @click="(busy||uncertain)&&$event.preventDefault()">Compras</a><a href="/documentacion" :aria-disabled="busy||uncertain" @click="(busy||uncertain)&&$event.preventDefault()">Documentación</a>
 <button v-if="session" class="btn-secondary" :disabled="busy" @click="signOut">Cerrar sesión</button>
 </nav></div>
 </header>
@@ -56,7 +57,7 @@ onMounted(loadSession);
 <template v-else>
 <h1 class="text-2xl font-semibold text-blue-950">{{titles[section]}}</h1>
 <nav class="flex flex-wrap gap-3" aria-label="Administración"><a v-for="(title,key) in titles" :key="key" class="btn-secondary" :href="`/administracion/${key}`" :aria-current="section===key?'page':undefined" :aria-disabled="busy||uncertain" @click="(busy||uncertain)&&$event.preventDefault()">{{title}}</a></nav>
-<FleetPanel v-if="section==='flota'" :key="revision"/><PersonnelPanel v-else-if="section==='personal'" :key="revision"/><CatalogPanel v-else :key="revision"/>
+<FleetPanel v-if="section==='flota'" :key="revision"/><PersonnelPanel v-else-if="section==='personal'" :key="revision"/><PurchaseRequestsPanel v-else-if="section==='compras'" :key="revision"/><CatalogPanel v-else :key="revision"/>
 </template>
 </main>
 </div>

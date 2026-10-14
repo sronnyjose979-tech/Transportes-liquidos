@@ -8,7 +8,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
-/** Physical workshop handovers never create inventory stock movements. */
+/** Physical facts are coordinated atomically with Inventory by PostgreSQL source triggers. */
 final class WorkshopMaterials
 {
     public function __construct(private readonly WorkshopCommands $commands) {}

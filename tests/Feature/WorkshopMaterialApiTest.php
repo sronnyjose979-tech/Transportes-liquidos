@@ -11,6 +11,7 @@ use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Tests\PostgresTestCase;
+use Tests\Support\InventoryFixtures;
 use Tests\Support\TransportFixtures;
 use Tests\Support\WorkshopSchema;
 
@@ -47,6 +48,7 @@ class WorkshopMaterialApiTest extends PostgresTestCase
         DB::commit();
         $authorizations = app(WorkshopAuthorizations::class);
         $catalog = SparePart::create(['code' => 'PART-'.Str::uuid(), 'description' => 'Junta', 'unit' => 'unidad']);
+        InventoryFixtures::reconcile($admin, $catalog, '2.000000');
         $scope = $authorizations->requestScope($admin, $order, (string) Str::uuid(), ['diagnosis_id' => $diagnosis, 'description' => 'Alcance', 'reason' => 'Prueba', 'tasks' => [['line_number' => 1, 'description' => 'Reparar']], 'parts' => [['line_number' => 1, 'task_line_number' => 1, 'spare_part_id' => $catalog->id, 'quantity' => '2.000000']]]);
         $decision = $authorizations->decide($admin, $scope['request_id'], (string) Str::uuid(), 'approved', 'Aprobado');
         $authorizations->applyScope($admin, $decision['decision_id'], (string) Str::uuid());
@@ -62,7 +64,7 @@ class WorkshopMaterialApiTest extends PostgresTestCase
         DB::table('workshop_operations')->insert($extra + ['id' => (string) Str::uuid(), 'work_order_id' => $order, 'operation_type' => $type, 'actor_id' => $actor, 'reason' => 'Prueba', 'occurred_at' => now(), 'after_values' => '{}', 'confirmed_result' => '{}', 'request_key' => (string) Str::uuid(), 'idempotency_scope' => $type, 'request_fingerprint' => str_repeat('a', 64)]);
     }
 
-    public function test_deliveries_and_usages_replay_and_reject_excess_without_inventory_moves(): void
+    public function test_deliveries_and_usages_replay_and_reject_excess_with_inventory_custody(): void
     {
         $f = $this->fixture();
         $data = ['request_key' => (string) Str::uuid(), 'scope_part_id' => $f['part'], 'delivered_to_assignment_id' => $f['assignment'], 'quantity' => '2.000000', 'occurred_at' => '2026-10-12T09:00:00Z', 'reason' => 'Entrega'];

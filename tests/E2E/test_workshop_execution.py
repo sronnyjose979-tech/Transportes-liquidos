@@ -1,6 +1,6 @@
 """Chromium -> real Vue/Laravel/session API -> exclusive PostgreSQL 18.
 Run only: bash tests/run-postgres.sh --e2e-workshop-execution.
-Synthetic fixtures; no mocked responses or inventory movements.
+Synthetic fixtures and explicitly authorized initial counts; no mocked responses.
 """
 import base64
 import json
@@ -15,6 +15,10 @@ import test_workshop_module as first
 
 
 class WorkshopExecutionE2E(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):
+        await first.WorkshopModuleE2E.asyncSetUp(self)
+        self.command('reconcile-part', {'part_id': self.fixture['part']['id']})
+
     def execution_snapshot(self, order):
         result = subprocess.run(['php', str(support.ROOT / 'tests/E2E/workshop-execution-console.php'), 'snapshot'],
                                 input=json.dumps({'order_id': order}), text=True, capture_output=True,

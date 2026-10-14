@@ -15,3 +15,7 @@ if (workshopRoot) createApp(WorkshopApp).mount(workshopRoot);
 import AdminApp from './modules/Administration/AdminApp.vue';
 const administrationRoot = document.getElementById('administration-app');
 if (administrationRoot) createApp(AdminApp).mount(administrationRoot);
+
+import SupplyApp from './modules/Supply/SupplyApp.vue';
+const supplyRoot = document.getElementById('supply-app');
+if (supplyRoot) createApp(SupplyApp).mount(supplyRoot);

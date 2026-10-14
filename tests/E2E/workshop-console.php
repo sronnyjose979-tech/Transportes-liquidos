@@ -10,6 +10,7 @@ use Illuminate\Contracts\Console\Kernel;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Tests\Support\InventoryFixtures;
 
 if (PHP_SAPI !== 'cli') {
     throw new RuntimeException('Instrumentación exclusiva de pruebas CLI.');
@@ -37,6 +38,15 @@ $result = match ($argv[1] ?? '') {
         return ['tag' => $tag, 'asset' => $asset->only('id', 'code'), 'employee' => $employee->only('id', 'name'),
             'part' => $part->only('id', 'code', 'description'), 'supplier' => $supplier->only('id', 'name'),
             'starts_local' => now()->subHour()->setTimezone('America/Costa_Rica')->format('Y-m-d\TH:i')];
+    })(),
+    'reconcile-part' => (function () use ($input): array {
+        require_once dirname(__DIR__).'/Support/InventoryFixtures.php';
+        $admin = User::where('login', 'e2e-administrator')->firstOrFail();
+        $part = SparePart::findOrFail($input['part_id']);
+        // A declared physical count for the synthetic execution fixture only.
+        InventoryFixtures::reconcile($admin, $part, '2.000000');
+
+        return ['reconciled' => true];
     })(),
     'snapshot' => (function () use ($input): array {
         $orders = DB::table('workshop_work_orders')->where('fleet_asset_id', $input['asset_id'])->get();
