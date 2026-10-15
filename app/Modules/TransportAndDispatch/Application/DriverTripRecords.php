@@ -35,6 +35,8 @@ class DriverTripRecords
 
                 return ($existing->kind === 'report' ? TripEvent::query() : TripOdometerReading::query())->findOrFail($existing->record_id);
             }
+            DriverOfflineContext::check($trip, $data['expected_trip_context'] ?? null);
+            unset($data['expected_trip_context']);
             Gate::forUser($fresh)->authorize('report-trip-information', $trip);
             $operations = app(TripOperations::class);
             $at = CarbonImmutable::parse($data['occurred_at']);

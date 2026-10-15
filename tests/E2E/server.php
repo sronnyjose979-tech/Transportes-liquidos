@@ -8,7 +8,7 @@ if (PHP_SAPI !== 'cli-server' || getenv('TEST_DB_ISOLATED') !== '1') {
 }
 $uri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH) ?? '';
 // Serve compiled public assets only. All application routes run the real Laravel kernel.
-if (str_starts_with($uri, '/build/') && ! str_contains(rawurldecode($uri), '..')
+if ((str_starts_with($uri, '/build/') || in_array($uri, ['/driver.webmanifest', '/driver-icon-192.png', '/driver-icon-512.png'], true)) && ! str_contains(rawurldecode($uri), '..')
     && is_file(__DIR__.'/../../public'.$uri)) {
     return false;
 }

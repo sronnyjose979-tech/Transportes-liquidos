@@ -97,16 +97,17 @@ class ExpensesDriverE2E(unittest.IsolatedAsyncioTestCase):
         await self.page.get_by_label('Observación', exact=True).fill('Reporte confirmado con respuesta perdida')
         self.proxy.drop_response_path=path
         await self.page.get_by_role('button', name='Registrar reporte', exact=True).click()
-        await expect(self.page.get_by_role('button', name='Reintentar la misma operación', exact=True)).to_be_visible()
+        await expect(self.page.get_by_role('button', name='Sincronizar pendientes', exact=True)).to_be_visible()
+        await expect(self.page.get_by_text('No se pudo confirmar la operación.',exact=False)).to_be_visible()
         self.assertEqual(1, len(writes))
         self.expenses('release', self.fixture)
         before=self.expenses('snapshot', self.fixture)['reports']
-        await self.page.get_by_role('button', name='Reintentar la misma operación', exact=True).click()
+        await self.page.get_by_role('button', name='Sincronizar pendientes', exact=True).click()
         await expect(self.page.get_by_role('status').filter(has_text='confirmado')).to_be_visible()
         self.assertEqual(2, len(writes)); self.assertEqual(writes[0], writes[1])
         self.assertEqual(before, self.expenses('snapshot', self.fixture)['reports'])
         await self.checked('/transport/my-trips/'+self.fixture['trip_id']+'/reports', {
-            **writes[0], 'request_key':str(uuid.uuid4())}, status=403)
+            **writes[0], 'request_key':str(uuid.uuid4())}, status=409)
         history=await self.checked('/transport/my-records', status=200)
         self.assertTrue(any(r['trip_id']==self.fixture['trip_id'] for r in history['reports']))
         await self.checked('/transport/my-trips/'+self.fixture['trip_id'], status=404)

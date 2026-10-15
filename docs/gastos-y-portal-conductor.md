@@ -1,5 +1,9 @@
 # Gastos administrativos y portal operativo del conductor
 
+Estado posterior del trabajo offline, todavía sin validación integral:
+[implementación y bloqueo del conductor](conductor-offline.md). Las verificaciones
+de este documento corresponden exclusivamente al avance online original.
+
 ## Alcance implementado
 
 Se conserva el dashboard por roles, facturación y Transporte existentes. Este

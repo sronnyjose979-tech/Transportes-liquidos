@@ -4,6 +4,8 @@ namespace Tests\Feature;
 
 use App\Modules\BillingAndPayments\Application\Money;
 use App\Modules\TransportAndDispatch\Application\AssignmentAdministration;
+use App\Modules\TransportAndDispatch\Application\TransportAdministration;
+use App\Modules\TransportAndDispatch\Application\TripOperations;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -134,9 +136,10 @@ class ExpenseApiTest extends PostgresTestCase
         [$admin, $trip, $driver] = $this->prepared();
         $record = $this->actingAs($driver)->createExpense(['trip_id' => $trip->id]);
         $url = '/api/expenses/'.$record['expense_id'].'/receipts';
+        $context = $this->getJson('/api/transport/my-trips/'.$trip->id)->assertOk()->json('data.offline_context');
         $key = (string) Str::uuid();
         $pdf = "%PDF-1.4\n1 0 obj\n<< /Type /Catalog >>\nendobj\n%%EOF\n";
-        $upload = fn () => ['request_key' => $key, 'file' => UploadedFile::fake()->createWithContent('recibo.pdf', $pdf)];
+        $upload = fn () => ['request_key' => $key, 'expected_trip_context' => $context, 'file' => UploadedFile::fake()->createWithContent('recibo.pdf', $pdf)];
         $receipt = $this->post($url, $upload(), ['Accept' => 'application/json'])->assertCreated()->json('data.receipt_id');
         $this->post($url, $upload(), ['Accept' => 'application/json'])->assertCreated()->assertJsonPath('data.receipt_id', $receipt);
         $this->get('/api/expenses/receipts/'.$receipt.'/download')->assertOk();
@@ -146,6 +149,10 @@ class ExpenseApiTest extends PostgresTestCase
         }
         $this->post($url, ['request_key' => (string) Str::uuid(), 'file' => UploadedFile::fake()->createWithContent('recibo.pdf', 'texto sin PDF')], ['Accept' => 'application/json'])->assertUnprocessable();
         $this->post($url, ['request_key' => (string) Str::uuid(), 'file' => UploadedFile::fake()->create('grande.pdf', 10001, 'application/pdf')], ['Accept' => 'application/json'])->assertUnprocessable();
+        app(TripOperations::class)->start($admin, $trip->id, 'Cambio durante desconexión del comprobante');
+        $this->post($url, [...$upload(), 'request_key' => (string) Str::uuid()], ['Accept' => 'application/json'])->assertConflict();
+        $this->post($url, $upload(), ['Accept' => 'application/json'])->assertCreated()->assertJsonPath('data.receipt_id', $receipt);
+        app(TransportAdministration::class)->tripAction($admin, $trip->id, 'cancel', ['version' => $trip->refresh()->version, 'reason' => 'Cancelación previa a liberación manual']);
         app(AssignmentAdministration::class)->release($admin, $trip->id, 'driver', 'Liberación manual posterior al comprobante');
         $this->post($url, $upload(), ['Accept' => 'application/json'])->assertCreated()->assertJsonPath('data.receipt_id', $receipt);
         $this->post($url, ['request_key' => (string) Str::uuid(), 'file' => $upload()['file']], ['Accept' => 'application/json'])->assertForbidden();

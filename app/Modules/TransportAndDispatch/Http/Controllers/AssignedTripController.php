@@ -13,7 +13,7 @@ class AssignedTripController extends Controller
 {
     private function query(AssignedTripQueryRequest $request): Builder
     {
-        $query = Trip::query()->with(['transportRequest.route.originSite', 'transportRequest.route.destinationSite', 'assetAssignments' => fn ($q) => $q->current()->whereRaw('starts_at <= clock_timestamp()')->with('fleetAsset')]);
+        $query = Trip::query()->with(['transportRequest.route.originSite', 'transportRequest.route.destinationSite', 'driverAssignments' => fn ($q) => $q->current()->whereRaw('starts_at <= clock_timestamp()'), 'assetAssignments' => fn ($q) => $q->current()->whereRaw('starts_at <= clock_timestamp()')->with('fleetAsset')]);
         if (! $request->user()->can('manage-personnel')) {
             $query->whereHas('driverAssignments', fn ($q) => $q->current()->whereRaw('starts_at <= clock_timestamp()')->whereHas('employee', fn ($e) => $e->where('user_id', $request->user()->id)->where('is_active', true)));
         }

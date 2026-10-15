@@ -16,6 +16,9 @@ final class ExpenseWriteRequest extends FormRequest
     public function rules(): array
     {
         $key = ['request_key' => 'required|uuid'];
+        if ($this->routeIs('expenses.store', 'expenses.receipts.store')) {
+            $key['expected_trip_context'] = ['sometimes', 'string', 'regex:/\A[a-f0-9]{64}\z/'];
+        }
         if ($this->routeIs('expenses.receipts.store')) {
             return $key + ['file' => 'required|file'];
         }

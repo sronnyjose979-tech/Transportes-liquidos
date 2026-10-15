@@ -84,6 +84,9 @@ final class ExpenseController
         $record = $this->visible($request)->findOrFail($id);
         $file = $request->file('file');
         $data = ['sha256' => hash_file('sha256', $file->getPathname()), 'mime_type' => $file->getMimeType(), 'size_bytes' => $file->getSize(), 'extension' => strtolower($file->getClientOriginalExtension())];
+        if ($request->has('expected_trip_context')) {
+            $data['expected_trip_context'] = $request->validated('expected_trip_context');
+        }
         $result = $storage->register($file, fn (string $receipt, string $key) => $service->receipt($request->user(), $id, $request->validated('request_key'), $data, function () use ($request, $id, $receipt, $key, $data): array {
             DB::table('expense_receipts')->insert(['id' => $receipt, 'expense_id' => $id, 'storage_key' => $key, 'mime_type' => $data['mime_type'], 'size_bytes' => $data['size_bytes'], 'sha256' => $data['sha256'], 'uploaded_by_id' => $request->user()->id]);
 
