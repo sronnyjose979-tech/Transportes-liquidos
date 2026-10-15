@@ -265,16 +265,68 @@ releer `AGENTS.md` y preservar estas reglas aprobadas. Incorporar únicamente
 instrucciones de Boost compatibles con el alcance, las fuentes de verdad y las
 políticas del proyecto.
 
+
 ## 13. Coordinación y perfiles reutilizables
 
-El agente principal implementa directamente las tareas. Los subagentes son opcionales y solo se utilizan cuando una tarea compleja justifique una revisión especializada. No se requiere ejecutar todos los perfiles ni repetir revisiones secuenciales de cada especialidad.
+El agente principal es responsable de implementar directamente
+las tareas autorizadas.
 
-La configuración local está en `.codex/config.toml`, con perfiles en `.codex/agents/`:
-coordinator, functional_analyst, database_architect, integration_specialist y technical_auditor.
-Usarlos para Transporte, Flota, Taller, Inventario, Compras y Facturación. El analista revisa
-requisitos y contradicciones; el arquitecto revisa ER, integridad, concurrencia e idempotencia;
-el especialista revisa contratos y límites entre módulos; el auditor revisa seguridad,
-permisos, trazabilidad, documentación y alcance. Las reglas específicas se reciben por tarea.
-Si no hay delegación, realizar estas revisiones secuencialmente y conservar sus resultados.
-El perfil coordinator no sustituye automáticamente instrucciones del agente principal:
-estas responsabilidades también se establecen aquí. Ver [configuración y validación](docs/agentes-codex.md).
+### Uso de subagentes
+
+- Los subagentes están desactivados por defecto.
+- No es obligatorio utilizar todos los perfiles.
+- No realizar revisiones secuenciales de todas las
+  especialidades.
+- Utilizar subagentes únicamente cuando una tarea
+  compleja justifique una revisión especializada.
+- Evitar delegaciones para tareas pequeñas o rutinarias.
+
+### Perfiles disponibles
+
+La configuración está en `.codex/config.toml`.
+
+Los perfiles se encuentran en `.codex/agents/`:
+
+- coordinator: coordinación de tareas complejas.
+- functional_analyst: reglas de negocio y requisitos.
+- database_architect: PostgreSQL, integridad y concurrencia.
+- integration_specialist: contratos entre módulos.
+- technical_auditor: seguridad, permisos y auditoría.
+
+Estos perfiles son opcionales y no deben ejecutarse
+automáticamente para cada tarea.
+
+### Ejecución eficiente
+
+1. Continuar desde el estado actual del repositorio.
+2. Revisar únicamente los archivos relacionados con
+   la funcionalidad solicitada.
+3. No repetir análisis o decisiones ya aprobadas.
+4. Implementar directamente cuando el alcance esté claro.
+5. Evitar refactorizaciones y mejoras no solicitadas.
+6. Reutilizar código, componentes y pruebas existentes.
+7. Ejecutar pruebas específicas durante el desarrollo.
+8. Ejecutar verificaciones integrales según el riesgo.
+9. No repetir pruebas sin cambios relevantes.
+10. Mantener respuestas y documentación concisas.
+
+### Calidad y entrega
+
+- Respetar las reglas de negocio aprobadas.
+- Mantener seguridad, permisos, auditoría e idempotencia.
+- No realizar operaciones destructivas sin autorización.
+- No modificar archivos de entorno ni bases de producción.
+- Realizar commit y push a main únicamente cuando la
+  tarea esté terminada y las verificaciones sean
+  satisfactorias.
+- Informar brevemente cambios, pruebas y pendientes.
+
+El agente principal realiza únicamente las verificaciones
+pertinentes al alcance y riesgo de la tarea.
+
+No es obligatorio ejecutar revisiones de todas las
+especialidades.
+
+Consultar `docs/agentes-codex.md` cuando sea necesario
+utilizar perfiles especializados.
+
