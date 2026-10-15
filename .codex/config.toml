@@ -1,9 +1,12 @@
-# Configuración local; no cambia modelos ni permisos del usuario.
+
+# Configuración de Codex para Transportes Líquidos.
+# Priorizar ejecución directa y evitar subagentes innecesarios.
+
 [features]
-multi_agent = true
+multi_agent = false
 
 [agents]
-max_threads = 3
+max_threads = 1
 
 [agents.coordinator]
 description = "Coordinador principal"

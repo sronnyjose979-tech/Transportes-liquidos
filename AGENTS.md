@@ -1,5 +1,28 @@
 # Reglas de desarrollo para Codex
 
+
+## Política de ejecución eficiente
+
+Estas instrucciones aplican a las tareas de desarrollo.
+
+1. Trabajar desde el estado actual del repositorio.
+2. Revisar solo los archivos y contratos relacionados
+   con la tarea solicitada.
+3. No repetir análisis arquitectónicos ya aprobados.
+4. Implementar directamente cuando las reglas sean claras.
+5. No delegar revisiones rutinarias a subagentes.
+6. Evitar refactorizaciones fuera del alcance.
+7. Reutilizar servicios, componentes y pruebas existentes.
+8. Ejecutar primero las pruebas específicas.
+9. Ejecutar pruebas integrales según riesgo y alcance.
+10. No repetir pruebas si no hubo cambios relevantes.
+11. Mantener respuestas breves y concretas.
+12. Actualizar solo la documentación afectada.
+13. Realizar commit y push a main después de verificar
+    satisfactoriamente los cambios autorizados.
+14. Nunca reducir controles de seguridad, permisos,
+    integridad o idempotencia para ahorrar cuota.
+
 ## 1. Contexto y fuentes de verdad
 
 Sistema empresarial de transporte de líquidos, con una PWA para conductores.
@@ -244,9 +267,7 @@ políticas del proyecto.
 
 ## 13. Coordinación y perfiles reutilizables
 
-El agente principal coordina, delega revisiones independientes cuando la sesión lo permite
-y consolida resultados. Asignar un único editor por archivo y no realizar modificaciones
-simultáneas sobre él. Comprobar las decisiones aprobadas antes de entregar.
+El agente principal implementa directamente las tareas. Los subagentes son opcionales y solo se utilizan cuando una tarea compleja justifique una revisión especializada. No se requiere ejecutar todos los perfiles ni repetir revisiones secuenciales de cada especialidad.
 
 La configuración local está en `.codex/config.toml`, con perfiles en `.codex/agents/`:
 coordinator, functional_analyst, database_architect, integration_specialist y technical_auditor.
