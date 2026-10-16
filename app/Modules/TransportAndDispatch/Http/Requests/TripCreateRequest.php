@@ -6,6 +6,6 @@ class TripCreateRequest extends TransportInput
 {
     public function rules(): array
     {
-        return ['transport_request_id' => ['required', 'uuid', 'exists:transport_requests,id']];
+        return ['request_key' => ['required', 'uuid'], 'transport_request_id' => ['required', 'uuid', 'exists:transport_requests,id']];
     }
 }

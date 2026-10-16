@@ -54,7 +54,7 @@ class TransportApiTest extends PostgresTestCase
         $seed = $this->request();
         $secretary = $this->actor('secretary');
         $this->actingAs($secretary);
-        $data = ['customer_id' => $seed->customer_id, 'liquid_product_id' => $seed->liquid_product_id, 'route_id' => $seed->route_id,
+        $data = ['request_key' => (string) Str::uuid(), 'customer_id' => $seed->customer_id, 'liquid_product_id' => $seed->liquid_product_id, 'route_id' => $seed->route_id,
             'requested_liters' => '1000.25', 'requested_at' => '2026-10-12T08:00:00-06:00'];
         $request = $this->postJson('/api/transport/requests', $data)->assertCreated()->assertJsonPath('data.registered_by_id', $secretary->id)->assertJsonPath('data.requested_at', '2026-10-12T14:00:00.000000Z')->json('data');
         $path = '/api/transport/requests/'.$request['id'];
@@ -74,7 +74,7 @@ class TransportApiTest extends PostgresTestCase
     {
         $request = $this->request();
         $this->actingAs($request->registeredBy);
-        $tripData = $this->postJson('/api/transport/trips', ['transport_request_id' => $request->id])->assertCreated()->assertJsonPath('data.product_name_snapshot', 'Agua')->json('data');
+        $tripData = $this->postJson('/api/transport/trips', ['request_key' => (string) Str::uuid(), 'transport_request_id' => $request->id])->assertCreated()->assertJsonPath('data.product_name_snapshot', 'Agua')->json('data');
         $trip = Trip::findOrFail($tripData['id']);
         $this->postJson($this->url($trip, '/schedule'), ['version' => 1, 'reason' => 'Horario', 'scheduled_start_at' => '2026-10-13T08:00:00-06:00', 'scheduled_end_at' => '2026-10-13T09:00:00-06:00'])->assertOk()->assertJsonPath('data.version', 2);
         $this->postJson($this->url($trip, '/reschedule'), ['version' => 2, 'reason' => 'Cambio', 'scheduled_start_at' => '2026-10-14T08:00:00-06:00'])->assertOk()->assertJsonPath('data.planning_status', 'rescheduled');

@@ -50,7 +50,7 @@ onBeforeUnmount(() => controller?.abort());
 <button class="btn-primary" :disabled="ctx.busy.value" @click="creating=true;editing=null">Registrar solicitud</button>
 </div>
 <template v-if="creating||editing">
-<CommandForm :key="editing?.id??'create'" :title="editing?'Editar solicitud':'Registrar solicitud'" :fields="fields" :submit="save"/>
+<CommandForm :creation="editing?undefined:'request'" :key="editing?.id??'create'" :title="editing?'Editar solicitud':'Registrar solicitud'" :fields="fields" :submit="save"/>
 <p class="notice-info">El producto histórico no se cambia. Las rutas deben existir previamente; esta API permite seleccionarlas, no crearlas.</p>
 <button class="btn-secondary" :disabled="ctx.busy.value" @click="creating=false;editing=null">Cerrar formulario</button>
 </template>

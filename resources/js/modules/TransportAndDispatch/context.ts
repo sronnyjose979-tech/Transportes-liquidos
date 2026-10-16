@@ -2,6 +2,7 @@ import type { InjectionKey, Ref } from 'vue';
 import { inject } from 'vue';
 import type { Lookups } from './contracts';
 export interface TransportContext {
+    actor: Ref<string>;
     lookups: Ref<Lookups>;
     admin: Ref<boolean>;
     busy: Ref<boolean>;

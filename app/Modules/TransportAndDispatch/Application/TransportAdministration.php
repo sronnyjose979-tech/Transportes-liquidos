@@ -13,6 +13,7 @@ use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
 
@@ -34,9 +35,45 @@ class TransportAdministration
 
     public function createRequest(User $actor, array $data): TransportRequest
     {
-        $data['requested_at'] = CarbonImmutable::parse($data['requested_at'])->utc();
+        $data['requested_at'] = CarbonImmutable::parse($data['requested_at'])->utc()->format('Y-m-d\\TH:i:s.u\\Z');
+        $parts = explode('.', $data['requested_liters']);
+        $data['requested_liters'] = (ltrim($parts[0], '0') ?: '0').'.'.str_pad($parts[1] ?? '', 2, '0');
 
-        return $this->transaction($actor, fn () => TransportRequest::create($data + ['registered_by_id' => $actor->id])->refresh());
+        return $this->createOnce($actor, 'request', $data, fn (array $values) => TransportRequest::create($values + ['registered_by_id' => $actor->id])->refresh());
+    }
+
+    private function createOnce(User $actor, string $kind, array $data, callable $create): Model
+    {
+        return $this->transaction($actor, function () use ($actor, $kind, $data, $create): Model {
+            $key = strtolower($data['request_key']);
+            unset($data['request_key']);
+            foreach (['customer_id', 'liquid_product_id', 'route_id', 'transport_request_id'] as $field) {
+                if (isset($data[$field])) {
+                    $data[$field] = strtolower($data[$field]);
+                }
+            }
+            ksort($data);
+            $fingerprint = hash('sha256', json_encode([$kind, $data], JSON_THROW_ON_ERROR));
+            $receipt = DB::table('transport_creation_receipts')->where('actor_id', $actor->id)->where('request_key', $key)->first();
+            if ($receipt) {
+                if ($receipt->kind !== $kind || $receipt->fingerprint !== $fingerprint) {
+                    throw new ConflictHttpException('Este identificador ya corresponde a otros datos de creación.');
+                }
+                $model = $kind === 'request' ? new TransportRequest : new Trip;
+
+                return $model->newFromBuilder(json_decode($receipt->result, true, 512, JSON_THROW_ON_ERROR));
+            }
+            $record = $create($data);
+            DB::table('transport_creation_receipts')->insert([
+                'id' => (string) Str::uuid(), 'actor_id' => $actor->id, 'request_key' => $key,
+                'kind' => $kind, 'fingerprint' => $fingerprint,
+                'transport_request_id' => $kind === 'request' ? $record->id : null,
+                'trip_id' => $kind === 'trip' ? $record->id : null,
+                'result' => json_encode($record->getAttributes(), JSON_THROW_ON_ERROR),
+            ]);
+
+            return $record;
+        });
     }
 
     public function updateRequest(User $actor, string $id, array $data): TransportRequest
@@ -55,7 +92,7 @@ class TransportAdministration
 
     public function createTrip(User $actor, array $data): Trip
     {
-        return $this->transaction($actor, function () use ($actor, $data) {
+        return $this->createOnce($actor, 'trip', $data, function (array $data) use ($actor) {
             $request = TransportRequest::query()->with('liquidProduct')->lockForUpdate()->findOrFail($data['transport_request_id']);
 
             return Trip::create(['transport_request_id' => $request->id, 'liquid_product_id' => $request->liquid_product_id,

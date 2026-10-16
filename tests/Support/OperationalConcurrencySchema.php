@@ -15,7 +15,7 @@ trait OperationalConcurrencySchema
         $schema = 'assignment_concurrency_'.str_replace('-', '', (string) Str::uuid());
         $tables = ['users', 'roles', 'user_roles', 'employees', 'customers', 'liquid_products', 'operation_sites', 'fleet_assets', 'tractor_units', 'tankers', 'compartments',
             'routes', 'transport_requests', 'trips', 'transport_authorization_requests', 'transport_authorization_decisions', 'transport_changes', 'trip_product_reviews', 'trip_events', 'trip_warnings', 'trip_warning_resolutions',
-            'transport_assignment_guard', 'transport_assignment_operations', 'trip_asset_assignments', 'trip_asset_releases', 'driver_assignments', 'driver_releases', 'transport_assignment_conflicts', 'transport_authorization_applications', 'trip_loads', 'load_items', 'trip_unloads', 'unload_items', 'trip_odometer_readings'];
+            'transport_assignment_guard', 'transport_assignment_operations', 'trip_asset_assignments', 'trip_asset_releases', 'driver_assignments', 'driver_releases', 'transport_assignment_conflicts', 'transport_authorization_applications', 'trip_loads', 'load_items', 'trip_unloads', 'unload_items', 'trip_odometer_readings', 'transport_creation_receipts'];
         $other->exec('CREATE SCHEMA '.$schema);
         try {
             $other->exec('SET search_path TO '.$schema.',public');

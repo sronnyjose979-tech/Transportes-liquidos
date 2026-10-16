@@ -1,6 +1,7 @@
 """Real Chromium -> Vue/Blade -> session/CSRF API -> temporary PostgreSQL 18.
 No intercepted API responses. Run bash tests/run-postgres.sh --e2e-transport.
 """
+import uuid
 import asyncio
 import os
 import json
@@ -65,6 +66,40 @@ class TransportModuleE2E(unittest.IsolatedAsyncioTestCase):
         trip=await self.save(self.page.get_by_role('form',name='Crear viaje asociado'),'/api/transport/trips')
         await expect(self.page.get_by_role('heading',name='Viaje ·',exact=False)).to_be_visible()
         return trip['id']
+    async def test_creation_retries_after_lost_responses_preserve_one_request_and_one_trip(self):
+        await self.login()
+        await self.page.get_by_role('button',name='Solicitudes',exact=True).click()
+        await self.page.get_by_role('button',name='Registrar solicitud',exact=True).click()
+        form=self.page.get_by_role('form',name='Registrar solicitud')
+        for label,key in [('Cliente','customer'),('Producto líquido','product'),('Ruta','route')]:
+            await form.get_by_label(label,exact=True).select_option(self.fixture[key])
+        await form.get_by_label('Litros solicitados').fill('100.00')
+        sent=[]
+        self.page.on('request',lambda r:sent.append(r.post_data_json) if r.method=='POST' and r.url.endswith(('/api/transport/requests','/api/transport/trips')) else None)
+        self.proxy.drop_response_path='/api/transport/requests'
+        await form.get_by_role('button',name='Guardar',exact=True).click()
+        await expect(self.page.get_by_role('button',name='Consultar estado confirmado')).to_be_visible()
+        records=(await self.api('/transport/requests?per_page=100'))['body']['data']
+        own=[r for r in records if r['customer_id']==self.fixture['customer']]
+        self.assertEqual(1,len(own));original=own[0]['id']
+        await self.page.get_by_role('button',name='Consultar estado confirmado').click()
+        await self.page.get_by_role('button',name='Registrar solicitud',exact=True).click()
+        recovered=await self.save(self.page.get_by_role('form',name='Registrar solicitud'),'/api/transport/requests')
+        self.assertEqual(original,recovered['id']);self.assertEqual(sent[0],sent[1])
+        row=self.page.get_by_role('row').filter(has_text=original)
+        await row.get_by_role('button',name='Crear viaje',exact=True).click()
+        self.proxy.drop_response_path='/api/transport/trips'
+        await self.page.get_by_role('form',name='Crear viaje asociado').get_by_role('button',name='Guardar',exact=True).click()
+        await expect(self.page.get_by_role('button',name='Consultar estado confirmado')).to_be_visible()
+        records=(await self.api('/transport/trips?transport_request_id='+original))['body']['data']
+        self.assertEqual(1,len(records));trip_id=records[0]['id']
+        await self.page.get_by_role('button',name='Consultar estado confirmado').click()
+        recovered=await self.save(self.page.get_by_role('form',name='Crear viaje asociado'),'/api/transport/trips')
+        self.assertEqual(trip_id,recovered['id']);self.assertEqual(sent[2],sent[3])
+        self.assertEqual(1,(await self.api('/transport/trips?transport_request_id='+original))['body']['meta']['total'])
+        conflict=await self.api('/transport/requests',{**sent[0],'requested_liters':'101.00'})
+        self.assertEqual(409,conflict['status'])
+
     async def assign(self,trip,kind,key):
         await self.page.get_by_role('button',name='Recursos',exact=True).click()
         await self.page.get_by_label('Recurso',exact=True).select_option(kind)
@@ -275,7 +310,7 @@ class TransportModuleE2E(unittest.IsolatedAsyncioTestCase):
         await self.login()
         await self.checked('/transport/requests',{},422)
         trip=await self.create()
-        second=await self.checked('/transport/trips',{'transport_request_id':(await self.checked(f'/transport/trips/{trip}',None,200))['transport_request_id']})
+        second=await self.checked('/transport/trips',{'request_key':str(uuid.uuid4()),'transport_request_id':(await self.checked(f'/transport/trips/{trip}',None,200))['transport_request_id']})
         context=await self.browser.new_context()
         try:
             page=await context.new_page();await page.goto(self.base+'/transporte')

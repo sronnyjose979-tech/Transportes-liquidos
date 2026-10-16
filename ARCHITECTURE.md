@@ -1256,3 +1256,14 @@ clave externa, retención y Scheduler de forma explícita; conserva las alertas 
 El perfil adicional `pgsql_recovery` no modifica la conexión operativa. Restauración
 solo a servidor aislado y base/directorio nuevos, con confirmación exacta y validación
 previa. Véanse [comandos, procedimiento, pruebas y límites](docs/respaldos-y-recuperacion.md).
+
+
+## Idempotencia de altas de Transporte (P1-05)
+
+Las altas de solicitudes/viajes requieren `request_key` UUID. `TransportAdministration`
+reutiliza su guardia/transacción para confirmar entidad y recibo inmutable juntos;
+`transport_creation_receipts` conserva huella por actor/clave y snapshot original.
+Repetir devuelve 201 original; cambiar contenido/tipo devuelve 409. No introduce
+unicidad comercial. Vue conserva la intención para reintentos manuales y solo su
+clave opaca en sessionStorage para recargas, sin persistir datos del formulario.
+Véanse contratos, límites y pruebas en [preparación para producción](docs/preparacion-produccion.md#corrección-posterior-de-p1-05).

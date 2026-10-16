@@ -52,6 +52,8 @@ class TransportBrowserTest(unittest.IsolatedAsyncioTestCase):
             if method=='POST': self.request_row.update(route.request.post_data_json)
             await route.fulfill(status=201 if method=='POST' else 200,json={'data':self.request_row} if method=='POST' else self.pagination([self.request_row],query));return
         if path.endswith('/trips'):
+            if method=='POST':
+                await route.fulfill(status=201,json={'data':self.trip});return
             rows=[self.trip] if not query.get('execution_status') or query['execution_status'][0]==self.trip['execution_status'] else []
             await route.fulfill(json=self.pagination(rows,query));return
         if path.endswith('/volume-differences'): await route.fulfill(json={'data':{'difference':None}});return
@@ -105,6 +107,105 @@ class TransportBrowserTest(unittest.IsolatedAsyncioTestCase):
         await self.page.get_by_role('button',name='Consultar viajes',exact=True).click()
         await expect(self.page.get_by_text('Viajes asociados a solicitud',exact=False)).to_be_visible()
         self.assertTrue(any(q.get('transport_request_id')==[REQUEST] for m,p,q in self.calls if p.endswith('/trips')))
+    async def test_creation_retry_retains_key_and_values_and_new_intention_gets_new_key(self):
+        await self.page.goto(self.base+'/transporte')
+        await self.page.get_by_role('button',name='Solicitudes',exact=True).click()
+        await self.page.get_by_role('button',name='Registrar solicitud',exact=True).click()
+        form=self.page.get_by_role('form',name='Registrar solicitud')
+        for label in ['Cliente','Producto líquido','Ruta']:
+            await form.get_by_label(label,exact=True).select_option(ID)
+        await form.get_by_label('Litros solicitados').fill('200.25')
+        self.forced[('POST','/api/transport/requests')]=(500,{'message':'Error'})
+        await form.get_by_role('button',name='Guardar',exact=True).click()
+        await expect(self.page.get_by_role('button',name='Consultar estado confirmado')).to_be_visible()
+        first=self.sent[-1][1].copy()
+        self.assertIn('request_key',first)
+        self.assertEqual(1,len([p for p,b in self.sent if p=='/api/transport/requests']))
+        await self.page.get_by_role('button',name='Consultar estado confirmado').click()
+        await self.page.get_by_role('button',name='Registrar solicitud',exact=True).click()
+        form=self.page.get_by_role('form',name='Registrar solicitud')
+        await expect(form.get_by_label('Litros solicitados')).to_have_value('200.25')
+        await expect(form.get_by_label('Litros solicitados')).to_be_disabled()
+        del self.forced[('POST','/api/transport/requests')]
+        await form.get_by_role('button',name='Guardar',exact=True).click()
+        await expect(self.page.get_by_text('Operación confirmada y datos actualizados.')).to_be_visible()
+        self.assertEqual(first,self.sent[-1][1])
+        await self.page.get_by_role('button',name='Registrar solicitud',exact=True).click()
+        form=self.page.get_by_role('form',name='Registrar solicitud')
+        for label in ['Cliente','Producto líquido','Ruta']:
+            await form.get_by_label(label,exact=True).select_option(ID)
+        await form.get_by_label('Litros solicitados').fill('200.25')
+        await form.get_by_role('button',name='Guardar',exact=True).click()
+        await expect(self.page.get_by_text('Operación confirmada y datos actualizados.')).to_be_visible()
+        self.assertNotEqual(first['request_key'],self.sent[-1][1]['request_key'])
+
+    async def test_validation_correction_preserves_the_same_key(self):
+        await self.page.goto(self.base+'/transporte')
+        await self.page.get_by_role('button',name='Solicitudes',exact=True).click()
+        await self.page.get_by_role('button',name='Registrar solicitud',exact=True).click()
+        form=self.page.get_by_role('form',name='Registrar solicitud')
+        for label in ['Cliente','Producto líquido','Ruta']:
+            await form.get_by_label(label,exact=True).select_option(ID)
+        await form.get_by_label('Litros solicitados').fill('200.25')
+        self.forced[('POST','/api/transport/requests')]=(422,{'message':'Revisa litros','errors':{'requested_liters':['Revisa litros']}})
+        await form.get_by_role('button',name='Guardar',exact=True).click()
+        await expect(form.get_by_label('Litros solicitados')).to_be_enabled()
+        await expect(self.page.get_by_text('Revisa litros',exact=True).first).to_be_visible()
+        first=self.sent[-1][1].copy()
+        await form.get_by_label('Litros solicitados').fill('201.25')
+        del self.forced[('POST','/api/transport/requests')]
+        await form.get_by_role('button',name='Guardar',exact=True).click()
+        await expect(self.page.get_by_text('Operación confirmada y datos actualizados.')).to_be_visible()
+        self.assertEqual(first['request_key'],self.sent[-1][1]['request_key'])
+        self.assertEqual('201.25',self.sent[-1][1]['requested_liters'])
+
+    async def test_reload_retains_only_the_opaque_key_for_safe_retry(self):
+        await self.page.goto(self.base+'/transporte')
+        await self.page.get_by_role('button',name='Solicitudes',exact=True).click()
+        await self.page.get_by_role('button',name='Registrar solicitud',exact=True).click()
+        form=self.page.get_by_role('form',name='Registrar solicitud')
+        for label in ['Cliente','Producto líquido','Ruta']:
+            await form.get_by_label(label,exact=True).select_option(ID)
+        await form.get_by_label('Litros solicitados').fill('200.25')
+        self.forced[('POST','/api/transport/requests')]=(500,{'message':'Error'})
+        await form.get_by_role('button',name='Guardar',exact=True).click()
+        await expect(self.page.get_by_role('button',name='Consultar estado confirmado')).to_be_visible()
+        first=self.sent[-1][1].copy()
+        stored=await self.page.evaluate("Object.entries(sessionStorage).filter(([k])=>k.startsWith('transport-creation:')).map(([k,v])=>v)")
+        self.assertEqual([first['request_key']],stored)
+        await self.page.reload()
+        await self.page.get_by_role('button',name='Solicitudes',exact=True).click()
+        await self.page.get_by_role('button',name='Registrar solicitud',exact=True).click()
+        form=self.page.get_by_role('form',name='Registrar solicitud')
+        for label in ['Cliente','Producto líquido','Ruta']:
+            await form.get_by_label(label,exact=True).select_option(ID)
+        await form.get_by_label('Litros solicitados').fill('200.25')
+        await form.get_by_label('Fecha solicitada · Costa Rica').fill(first['requested_at'][:-6])
+        del self.forced[('POST','/api/transport/requests')]
+        await form.get_by_role('button',name='Guardar',exact=True).click()
+        await expect(self.page.get_by_text('Operación confirmada y datos actualizados.')).to_be_visible()
+        self.assertEqual(first,self.sent[-1][1])
+
+    async def test_trip_creation_retry_reuses_the_same_intention(self):
+        await self.page.goto(self.base+'/transporte')
+        await self.page.get_by_role('button',name='Viajes',exact=True).click()
+        await self.page.get_by_role('button',name='Crear viaje',exact=True).click()
+        form=self.page.get_by_role('form',name='Crear viaje asociado')
+        await form.get_by_label('Solicitud de transporte',exact=True).select_option(REQUEST)
+        self.forced[('POST','/api/transport/trips')]=(500,{'message':'Error'})
+        await form.get_by_role('button',name='Guardar',exact=True).click()
+        await expect(self.page.get_by_role('button',name='Consultar estado confirmado')).to_be_visible()
+        first=self.sent[-1][1].copy()
+        await self.page.get_by_role('button',name='Consultar estado confirmado').click()
+        await self.page.get_by_role('button',name='Crear viaje',exact=True).click()
+        form=self.page.get_by_role('form',name='Crear viaje asociado')
+        await expect(form.get_by_label('Solicitud de transporte',exact=True)).to_have_value(REQUEST)
+        del self.forced[('POST','/api/transport/trips')]
+        await form.get_by_role('button',name='Guardar',exact=True).click()
+        await expect(self.page.get_by_role('heading',name='Viaje · Agua')).to_be_visible()
+        self.assertEqual(first,self.sent[-1][1])
+        self.assertEqual(2,len([p for p,b in self.sent if p=='/api/transport/trips']))
+
     async def test_state_transitions_confirmation_and_incomplete_completion_disabled(self):
         await self.open_trip()
         await self.page.get_by_role('button',name='Iniciar oficialmente',exact=True).click()

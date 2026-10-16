@@ -38,7 +38,7 @@ requisitos generales de salida de restricciones sobre una funcionalidad concreta
 | P1-02. Riesgo por verificar: migración y publicación en el destino real | `composer.json`, script `setup`; `database/migrations/`; `docs/validacion-integral.md`, entorno | Alta | `composer setup` genera clave y migra automáticamente; no es un procedimiento seguro para una actualización productiva. Locks, triggers y locales de PostgreSQL requieren entorno compatible. | Ensayar migraciones desde la versión instalada sobre copia aislada, medir bloqueos, comprobar PG18/extensiones/locales y dependencias PHP. Publicar desde locks con dependencias productivas, compilar con el modo PWA aprobado, preservar `APP_KEY`, verificar cachés/configuración/rutas y ejecutar smoke test. Preparar recuperación antes de cambios irreversibles; no confiar en un rollback genérico. | No; aprobar ventana de despliegue. | Sí: ensayo y procedimiento previos. |
 | P1-03. Comprobado: captura offline no es una copia de seguridad | `resources/js/modules/DriverPortal/local.ts` (`captures`, `cachedTrips`, `lockLocal`); `docs/conductor-offline.md`, límites | Alta | Limpieza/evicción del navegador o pérdida del teléfono puede perder comprobantes/capturas sin sincronizar. El bloqueo de sesión no cifra físicamente IndexedDB; acceso al perfil o XSS queda fuera del aislamiento lógico probado. | Exigir bloqueo del dispositivo y perfiles personales, revisar pendientes antes de borrar/reasignar equipos y sincronizar al recuperar conexión con la aplicación abierta. Informar el límite a conductores; aprobar retención de capturas y tratamiento de equipos perdidos. No borrar pendientes automáticamente. | Sí: uso de equipos, retención y aceptación del riesgo offline. | Condicional: política y capacitación antes de depender del offline. |
 | P1-04. Decisión pendiente: permisos de salida obligatorios y sustitución de cisterna | `docs/etapa-5-6.md`, riesgos; `docs/validacion-integral.md`, límites; reglas RN-TR-17 / D05 | Alta | No existe conducta aprobada ante permiso obligatorio ausente; la sustitución de cisterna sigue bloqueada. | Definir el alcance operativo permitido y procedimiento humano para situaciones no soportadas; resolver reglas antes de habilitar esas operaciones. No interpretar autorizaciones de conflicto como disponibilidad mecánica. | Sí. | Condicional: no operar escenarios que dependan de estas decisiones. |
-| P1-05. Comprobado: creación básica de solicitud/viaje sin recibo idempotente durable | `TransportAndDispatch/Application/TransportAdministration.php::createRequest`, `createTrip`; `docs/etapa-5-5.md`, recuperación | Media | Un reenvío tras respuesta perdida puede crear otra entidad válida. No se debe confundir esto con los recibos idempotentes de pagos, stock o PWA, que sí existen. | Mantener consulta/manual antes de repetir; si se requiere garantía de reenvío en estas altas, aprobar y añadir recibo por intención sin prohibir viajes legítimos múltiples de una solicitud. | No para la garantía técnica; no inventar unicidad comercial. | No general; riesgo operativo a comunicar. |
+| P1-05. Corregido: creación idempotente de solicitudes y viajes | `TransportAndDispatch/Application/TransportAdministration.php::createOnce`; migración `000400`; `tests/Feature/TransportCreationIdempotencyTest.php`; `tests/E2E/test_transport_module.py` | Media (hallazgo original; resuelto en código) | Una clave por usuario conserva el resultado original; cambios de contenido/tipo dan 409. El frontend mantiene la intención en reintentos y la clave tras recarga. | Mantener recibos inmutables y regresiones; revisar limitaciones de pestaña descritas al final. No se añade unicidad comercial. | No. | No para las dos altas identificadas. |
 | P1-06. Riesgo por verificar: observabilidad, rotación y capacidad | `config/logging.php` (stack/single predeterminado, daily disponible); `routes/console.php`; `/up` en `bootstrap/app.php` | Media | Logs sin rotación pueden llenar disco; tareas fallidas o una aplicación que responde HTTP con DB indisponible pueden pasar inadvertidas. `/up` no acredita por sí solo disponibilidad de todas las dependencias. | Configurar rotación, acceso restringido, umbrales de disco, comprobación de PostgreSQL/almacenamiento y alertas operativas por fallos de scheduler/respaldo. Usar capacidades del servidor; no construir otro módulo de notificaciones. | No; asignar responsable y umbrales. | Comprobar supervisión mínima antes de operar. |
 | P1-07. Riesgo por verificar: scheduler y reconciliación de archivos | `routes/console.php`; `FleetAndDocuments/Console/ReconcileDocumentStorage.php`; `Expenses/Infrastructure/PrivateReceiptStorage.php` | Media | Sin cron no se ejecuta la consulta diaria; fallos parciales pueden dejar archivos pendientes ocupando espacio. La consulta no envía avisos externos, por diseño. | Configurar `schedule:run`, zona horaria y cache de locks persistente; comprobar salida y supervisar ejecución. Documentar reconciliación conservadora y revisión de pendientes fuera de la captura de respaldo. | No. | Condicional: necesario para prometer automatización, no para consultar alertas manualmente. |
 | P1-08. Riesgo por verificar: almacenamiento y límites HTTP | `config/filesystems.php`; `config/workshop.php`; `FleetAndDocuments/Infrastructure/PrivateDocumentStorage.php`; `Expenses/Infrastructure/PrivateReceiptStorage.php`; `Workshop/Infrastructure/PrivateWorkshopFiles.php` | Media | Permisos web incorrectos, cuotas agotadas o límites PHP/proxy menores al contrato impedirían archivos válidos; algunos flujos necesitan disco local y locks de archivos. | Verificar raíces privadas fuera de publicación, permisos, espacio, máximo de 10.000.000 bytes y margen multipart; configurar PHP/proxy coherentes. Mantener inicialmente una instancia con almacenamiento persistente; no asumir compatibilidad multiinstancia o S3 sin validarla. | No. | Validación del destino necesaria; no se demostró exposición actual. |
@@ -126,3 +126,63 @@ Regresión final tras ampliar la comprobación HTML: **4 pruebas correctas, 1.10
 aserciones** (incluidas en el alcance anterior, no se suman como pruebas distintas).
 `vendor/bin/pint --test` y `git diff --check`: correctos.
 No se modificaron `.env`, `transporte_db` ni los demás hallazgos.
+
+## Corrección posterior de P1-05
+
+Los POST `/api/transport/requests` y `/api/transport/trips` requieren ahora
+`request_key` UUID, generado por el cliente antes de enviar y conservado por intención.
+No se generan claves nuevas en el servidor para reintentos sin identificador: esos
+clientes reciben 422 y deben adoptar el contrato. El resto de respuestas no cambia:
+creación y repetición confirmada devuelven 201 con el resultado original.
+
+La migración incremental `2026_10_16_000400_create_transport_creation_receipts.php`
+es indispensable para conservar recibos entre procesos/reinicios. Registra usuario,
+clave, tipo, huella SHA-256 y snapshot original, con FK al resultado, unicidad de
+usuario/clave y triggers que impiden edición, eliminación y truncado. No altera
+migraciones publicadas ni añade unicidad por cliente/ruta/fecha/solicitud.
+
+`TransportAdministration` reutiliza su transacción, el bloqueo `873210` y guardia
+existentes: vuelve a autorizar, busca el recibo tras adquirir el bloqueo y confirma
+alta/recibo atómicamente. Otra creación concurrente espera; si la primera confirma,
+recupera el mismo resultado. Si falla la persistencia del recibo se revierte el alta.
+La huella normaliza orden de campos, UUID, instante UTC y litros a dos decimales sin
+float. La misma clave con contenido válido diferente o tipo distinto da 409 seguro.
+Cada usuario tiene su ámbito; no se concede acceso por poseer una clave. El replay
+no restaura ni modifica el estado actual del registro: devuelve el snapshot de alta.
+Los recibos no tienen purga automática que debilite la garantía de reintento.
+
+En Vue, `CommandForm` mantiene clave y datos pendientes por actor/tipo en memoria,
+con campos congelados ante resultados inciertos y recuperación manual; no hay reenvío
+automático. Solo el UUID opaco se guarda en `sessionStorage` antes del envío, sin
+persistir datos del formulario. Tras recargar se puede volver a introducir el contenido
+original usando la misma clave; si difiere del confirmado se rechaza con conflicto.
+Un 422 permite corregir campos conservando la clave. Una confirmación inequívoca
+retira la intención; otra creación legítima o la acción explícita «Nueva creación
+distinta» genera una clave nueva. Esa acción advierte que la anterior podría existir.
+
+Límite: cerrar/borrar el almacenamiento de la pestaña puede perder la clave. En ese
+caso debe consultarse el listado antes de comenzar otra intención; no se deduce
+unicidad comercial ni se pretende identificar una intención perdida por sus datos.
+Las claves de otra cuenta no se reutilizan; sesión y permisos siguen siendo obligatorios.
+Este cambio no convierte las demás operaciones de Transporte en universalmente idempotentes.
+
+Pruebas enfocadas: backend PostgreSQL 18 aislado (repetición, snapshots, conflicto,
+permisos revocados, rollback del recibo, inmutabilidad y dos procesos concurrentes);
+frontend Chromium con API sintética (clave/datos, recarga, validación y otra intención);
+E2E Chromium/Laravel/PostgreSQL reales que descartan respuestas después del commit
+de ambas altas y recuperan sus mismos IDs. Se conservan los flujos existentes de
+Transporte y el contrato actualizado de navegación. Resultados ejecutados:
+
+| Verificación enfocada | Resultado |
+| --- | --- |
+| Backend: recibos, API Transporte/concurrencia y administración de rutas | 27 pruebas / 334 aserciones correctas |
+| Regresión final de recibos tras añadir conflicto de viaje con otra solicitud válida | 6 pruebas / 46 aserciones correctas; incluidas en el alcance anterior, no se suman como pruebas distintas |
+| Frontend Transporte, API sintética | 14 pruebas correctas |
+| Contratos frontend existentes | 29 pruebas correctas |
+| E2E reales de Transporte | 5 recorridos correctos; se repitió solo el nuevo de respuestas perdidas tras el ajuste final del frontend y pasó |
+| E2E real de navegación afectado por el campo obligatorio | 1 recorrido correcto |
+| TypeScript, build, Pint y diff check | Correctos; persiste aviso previo de importación de `DriverPortal/local.ts` |
+
+No se repitió la validación integral. Los fallos iniciales de las pruebas nuevas
+(observación de estadísticas PostgreSQL, expectativa 401 frente al 403 existente y
+mock de POST que devolvía una lista) se corrigieron sin relajar los contratos reales.

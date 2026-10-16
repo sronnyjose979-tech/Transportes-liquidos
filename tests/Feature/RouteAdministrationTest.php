@@ -56,11 +56,11 @@ class RouteAdministrationTest extends PostgresTestCase
         $this->actingAs($secretary);
         $lookup = $this->getJson('/api/transport/lookups/routes')->assertOk()->json('data');
         $this->assertContains($routeId, array_column($lookup, 'id'));
-        $requestId = $this->postJson('/api/transport/requests', [
+        $requestId = $this->postJson('/api/transport/requests', ['request_key' => (string) Str::uuid(),
             'customer_id' => $seed->customer_id, 'liquid_product_id' => $seed->liquid_product_id,
             'route_id' => $routeId, 'requested_liters' => '1000.25', 'requested_at' => '2026-10-12T08:00:00-06:00',
         ])->assertCreated()->assertJsonPath('data.registered_by_id', $secretary->id)->json('data.id');
-        $tripId = $this->postJson('/api/transport/trips', ['transport_request_id' => $requestId])->assertCreated()->json('data.id');
+        $tripId = $this->postJson('/api/transport/trips', ['request_key' => (string) Str::uuid(), 'transport_request_id' => $requestId])->assertCreated()->json('data.id');
         $requestBefore = $this->row(TransportRequest::findOrFail($requestId));
         $tripBefore = $this->row(Trip::findOrFail($tripId));
         $this->actingAs($admin);

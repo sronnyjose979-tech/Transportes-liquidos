@@ -1,4 +1,5 @@
 """Real Chromium, Laravel session/CSRF and isolated PostgreSQL18; no API mocks."""
+import uuid
 import asyncio
 import json
 import os
@@ -76,9 +77,9 @@ class SystemNavigationE2E(unittest.IsolatedAsyncioTestCase):
         result=subprocess.run(['php',str(support.ROOT/'tests/E2E/transport-console.php'),'fixture'],input='{}',capture_output=True,text=True,check=True,cwd=support.ROOT)
         fixture=json.loads(result.stdout)
         await self.login('secretary')
-        request=await self.api('/transport/requests',{'customer_id':fixture['customer'],'liquid_product_id':fixture['product'],'route_id':fixture['route'],'requested_liters':'100','requested_at':'2026-10-14T08:00:00-06:00'})
+        request=await self.api('/transport/requests',{'request_key':str(uuid.uuid4()),'customer_id':fixture['customer'],'liquid_product_id':fixture['product'],'route_id':fixture['route'],'requested_liters':'100','requested_at':'2026-10-14T08:00:00-06:00'})
         self.assertEqual(201,request['status'],request)
-        trip=await self.api('/transport/trips',{'transport_request_id':request['body']['data']['id']})
+        trip=await self.api('/transport/trips',{'request_key':str(uuid.uuid4()),'transport_request_id':request['body']['data']['id']})
         self.assertEqual(201,trip['status'],trip)
         tripid=trip['body']['data']['id']
         assigned=await self.api('/transport/trips/'+tripid+'/assignments/assign',{'resource_kind':'driver','resource_id':fixture['driver'],'reason':'Asignación E2E de conductor'})

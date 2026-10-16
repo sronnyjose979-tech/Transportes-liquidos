@@ -54,7 +54,7 @@ onBeforeUnmount(() => controller?.abort());
 <button class="btn-primary" :disabled="ctx.busy.value" @click="creating=!creating">Crear viaje</button>
 </div>
 <template v-if="creating">
-<CommandForm title="Crear viaje asociado" :fields="fields" :submit="create">
+<CommandForm creation="trip" title="Crear viaje asociado" :fields="fields" :submit="create">
 <p class="text-sm text-slate-500">El viaje conserva el producto de la solicitud. Después podrás programarlo y asignar recursos.</p>
 </CommandForm>
 <Pagination v-if="requests" :meta="requests.meta" :busy="ctx.busy.value" @change="loadRequests"label="Listado de viajes"/>

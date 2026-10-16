@@ -84,7 +84,7 @@ catch (error) {
 finally {
     busy.value = false;
 } }
-provide(contextKey, { lookups, admin, busy, uncertain, errors: fields, mutate, report });
+provide(contextKey, { actor: computed(() => session.value?.id ?? ''), lookups, admin, busy, uncertain, errors: fields, mutate, report });
 async function signIn(): Promise<void> { if (busy.value)
     return; busy.value = true; message.value = ''; fields.value = {}; try {
     await refreshCsrf();
