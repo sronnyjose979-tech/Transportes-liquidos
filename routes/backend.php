@@ -8,6 +8,7 @@ use App\Modules\AccessAndPersonnel\Http\Middleware\EnsureActiveAccount;
 use App\Modules\AccessAndPersonnel\Http\Middleware\PrivatePage;
 use App\Modules\AdministrativeReports\Http\Controllers\ReportController;
 use App\Modules\AdministrativeReports\Http\Requests\ReportQueryRequest;
+use App\Modules\FleetAndDocuments\Http\Controllers\DocumentAlertController;
 use App\Modules\FleetAndDocuments\Http\Controllers\DocumentController;
 use App\Modules\FleetAndDocuments\Http\Controllers\DocumentTypeController;
 use App\Modules\FleetAndDocuments\Http\Controllers\FleetAssetLookupController;
@@ -30,6 +31,12 @@ Route::prefix('api')->group(function () {
         Route::get('reports/{kind}', [ReportController::class, 'show'])
             ->whereIn('kind', array_keys(ReportQueryRequest::STATES))
             ->middleware([PrivatePage::class, 'can:view-administrative-reports']);
+        Route::prefix('document-alerts')->middleware([PrivatePage::class, 'can:manage-fleet-documents'])->group(function () {
+            $controller = DocumentAlertController::class;
+            Route::get('/', [$controller, 'index']);
+            Route::get('summary', [$controller, 'summary']);
+            Route::post('{id}/review', [$controller, 'review'])->whereUuid('id');
+        });
         require __DIR__.'/billing.php';
         require __DIR__.'/expenses.php';
         require __DIR__.'/transport.php';

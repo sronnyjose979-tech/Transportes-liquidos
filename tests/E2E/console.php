@@ -5,6 +5,7 @@ use App\Modules\AccessAndPersonnel\Models\Role;
 use App\Modules\FleetAndDocuments\Application\DocumentAdministration;
 use App\Modules\FleetAndDocuments\Application\FleetAdministration;
 use App\Modules\FleetAndDocuments\Models\Document;
+use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Console\Kernel;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\UploadedFile;
@@ -77,6 +78,14 @@ $result = match ($command) {
         $user = User::where('login', 'e2e-'.$input['role'])->firstOrFail();
 
         return ['expired' => DB::table('sessions')->where('user_id', $user->id)->update(['last_activity' => 0])];
+    })(),
+    'real-clock' => (function () use ($workspace): array {
+        if (is_file($workspace.'/clock')) {
+            unlink($workspace.'/clock');
+        }
+        CarbonImmutable::setTestNow();
+
+        return ['clock' => 'wall'];
     })(),
     'clock' => (function () use ($input, $workspace): array {
         if (! in_array($input['at'], ['2026-10-12T05:59:59+00:00', '2026-10-12T06:00:00+00:00', '2026-10-27T06:00:00+00:00'], true)) {

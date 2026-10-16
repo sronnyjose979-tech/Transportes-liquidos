@@ -1219,3 +1219,18 @@ Costa Rica; existencias son actuales y no admiten reconstrucción temporal ficti
 Vue se integra con `SystemApp` y navegación compartida, reutiliza `SearchSelect`,
 presenta filtros, totales, tablas paginadas y acceso al módulo original. No persiste
 reportes en IndexedDB/cachés. Véanse [contratos, alcance y pruebas](docs/reportes-administrativos.md).
+
+## Alertas y atención de vencimientos
+
+`FleetAndDocuments\Application\DocumentAlerts` reutiliza vigencia, snapshots y
+referencias actuales para alertas informativas. `/alertas` y `/api/document-alerts`
+son de administrador/secretaria, con filtros y revisión única por documento.
+La migración 000390 solo añade revisiones inmutables; los documentos no se editan,
+renuevan u ocultan al atender una alerta. Las renovaciones conservan revisiones
+históricas y tienen atención independiente.
+
+Indicadores reutilizables en dashboard e inicio de Transporte; no cambian reglas
+operativas ni la PWA. `documents:check-expirations` consulta el mismo resumen,
+programado por Laravel a las 06:00 de Costa Rica, sin mensajes externos ni registros
+duplicados. Personal no tiene modelo documental/vencimientos y queda fuera hasta
+definirlo. Véase [alcance, API, scheduler y pruebas](docs/alertas-y-vencimientos.md).

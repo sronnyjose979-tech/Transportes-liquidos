@@ -1,8 +1,10 @@
 <?php
 
 use App\Modules\Expenses\Infrastructure\PrivateReceiptStorage;
+use App\Modules\FleetAndDocuments\Application\DocumentAlerts;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Schedule;
 
 Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
@@ -12,3 +14,11 @@ Artisan::command('expenses:reconcile-receipts', function () {
     $resolved = app(PrivateReceiptStorage::class)->reconcile();
     $this->info('Comprobantes pendientes reconciliados: '.$resolved);
 })->purpose('Reconciliar cargas privadas pendientes sin eliminar comprobantes históricos');
+
+Artisan::command('documents:check-expirations', function () {
+    $summary = app(DocumentAlerts::class)->summary();
+    $this->line(json_encode($summary, JSON_THROW_ON_ERROR));
+})->purpose('Consultar vencimientos actuales sin duplicar alertas ni enviar notificaciones');
+
+Schedule::command('documents:check-expirations')
+    ->dailyAt('06:00')->timezone('America/Costa_Rica')->withoutOverlapping();

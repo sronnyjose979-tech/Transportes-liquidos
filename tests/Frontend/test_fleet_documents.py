@@ -132,6 +132,9 @@ class FleetDocumentsBrowserTest(unittest.IsolatedAsyncioTestCase):
             'total': len(records), 'per_page': per_page}}
 
     async def api(self, route):
+        if urlparse(route.request.url).path == '/api/document-alerts/summary':
+            await route.fulfill(json={'data': {'expired': 0, 'expiring_soon': 0, 'unreviewed': 0}})
+            return
         request = route.request
         parsed = urlparse(request.url)
         path, method = parsed.path, request.method

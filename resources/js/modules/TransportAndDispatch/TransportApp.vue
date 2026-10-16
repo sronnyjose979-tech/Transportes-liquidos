@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ExpirationIndicators from '../DocumentAlerts/ExpirationIndicators.vue';
 import SharedNavigation from '../System/SharedNavigation.vue';
 import { computed, onMounted, provide, ref } from 'vue';
 import { getSession, login, logout, refreshCsrf } from '../FleetAndDocuments/api';
@@ -175,7 +176,7 @@ finally {
 </nav>
 <button v-else-if="session" class="btn-secondary" :disabled="busy" @click="signOut">Cerrar sesión</button>
 </div>
-</header>
+</header><ExpirationIndicators v-if="view==='dashboard'" :session="session"/>
 <main id="transport-main" class="mx-auto max-w-7xl space-y-6 px-4 py-6 sm:px-6" tabindex="-1">
 <section v-if="message" class="notice-error" role="alert">
 <p>{{message}}</p>
