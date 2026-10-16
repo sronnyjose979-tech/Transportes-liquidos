@@ -80,6 +80,13 @@ class ExpensesBrowserTest(unittest.IsolatedAsyncioTestCase):
         self.invalid=True
         await self.page.get_by_role('button',name='Registrar gasto',exact=True).click()
         await expect(self.page.get_by_text('amount: El importe debe ser mayor que cero.')).to_be_visible()
+        control=self.page.get_by_label('Importe del gasto',exact=True)
+        await expect(control).to_have_attribute('aria-invalid','true')
+        error_id=await control.get_attribute('aria-describedby')
+        self.assertTrue(error_id)
+        await expect(self.page.locator('[id="'+error_id+'"]')).to_be_visible()
+        await expect(control).not_to_be_empty()
+
         await expect(self.page.get_by_text('Operación confirmada.',exact=False)).to_have_count(0)
 
     async def test_secretary_cannot_decide_but_can_correct(self):

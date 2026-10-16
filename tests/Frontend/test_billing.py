@@ -119,6 +119,16 @@ class BillingBrowserTest(unittest.IsolatedAsyncioTestCase):
         await self.page.get_by_label('Motivo o referencia administrativa').fill('Pago inválido')
         await self.page.get_by_role('button',name='Registrar pago',exact=True).click()
         await expect(self.page.get_by_text('amount: Importe superior al saldo')).to_be_visible()
+        control=self.page.get_by_label('Importe del pago',exact=True)
+        await expect(control).to_have_attribute('aria-invalid','true')
+        error_id=await control.get_attribute('aria-describedby')
+        self.assertTrue(error_id)
+        await expect(self.page.locator('[id="'+error_id+'"]')).to_be_visible()
+        await expect(control).to_have_value('9999.00')
+        await self.page.get_by_role('button',name='Importes y viajes',exact=True).click()
+        await self.page.get_by_role('button',name='Ver importe e historial',exact=True).click()
+        await expect(self.page.get_by_label('Importe acordado',exact=True)).to_have_attribute('aria-invalid','false')
+
         await expect(self.page.get_by_text('Operación confirmada.',exact=False)).to_have_count(0)
         self.assertEqual(len(self.posts),1)
 

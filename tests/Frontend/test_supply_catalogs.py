@@ -1,4 +1,5 @@
 """Administration catalog UI tests with synthetic API contracts, not real persistence."""
+import asyncio
 import unittest
 from urllib.parse import urlparse
 
@@ -19,6 +20,8 @@ class SupplyCatalogBrowserTest(unittest.IsolatedAsyncioTestCase):
         self.records = {'customers': [], 'spare-parts': [], 'suppliers': []}
         self.writes = []
         self.rejection = None
+        self.hold = None
+        self.started = asyncio.Event()
         await browser_support.FleetDocumentsBrowserTest.asyncSetUp(self)
         self.page.on('dialog', lambda dialog: dialog.accept())
 
@@ -30,6 +33,15 @@ class SupplyCatalogBrowserTest(unittest.IsolatedAsyncioTestCase):
         path = urlparse(req.url).path
         if path == '/api/session':
             await route.fulfill(json={'data': {'id': '7', 'login': 'admin', 'roles': [self.role]}})
+            return
+        if path in ['/api/tractor-units','/api/tankers']:
+            if req.method=='POST':
+                self.writes.append((req.method,path,req.post_data_json))
+                self.started.set()
+                if self.hold: await self.hold.wait()
+                await route.fulfill(status=422,json={'message':'Revisa el código','errors':{'code':['Código ya registrado.']}})
+            else:
+                await route.fulfill(json={'data':[],'meta':{'current_page':1,'last_page':1}})
             return
         if path.startswith('/api/catalogs/'):
             segments = path.split('/')
@@ -59,6 +71,25 @@ class SupplyCatalogBrowserTest(unittest.IsolatedAsyncioTestCase):
     async def open_catalog(self, kind):
         await self.page.goto(self.base + '/administracion/catalogos')
         await self.page.get_by_label('Catálogo', exact=True).select_option(kind)
+
+    async def test_fleet_pending_write_cannot_close_form_and_validation_retains_data(self):
+        self.hold=asyncio.Event()
+        await self.page.goto(self.base+'/administracion/flota')
+        await self.page.get_by_role('button',name='Registrar cabezal',exact=True).click()
+        await self.page.get_by_label('Código del activo',exact=True).fill('CAB-DUPLICADO')
+        await self.page.get_by_role('button',name='Guardar activo',exact=True).click()
+        await self.started.wait()
+        try:
+            await expect(self.page.get_by_label('Buscar por código',exact=True)).to_be_disabled()
+            await expect(self.page.get_by_role('button',name='Guardar activo',exact=True)).to_be_disabled()
+            await self.page.get_by_label('Código del activo',exact=True).evaluate("e=>e.form.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}))")
+            self.assertEqual(1,len(self.writes))
+        finally:
+            self.hold.set()
+        await expect(self.page.locator('#fleet-code-errors')).to_have_text('Código ya registrado.')
+        await expect(self.page.get_by_label('Código del activo',exact=True)).to_have_value('CAB-DUPLICADO')
+        await expect(self.page.get_by_role('button',name='Guardar activo',exact=True)).to_be_enabled()
+        await expect(self.page.get_by_text('Operación confirmada y registros actualizados.',exact=True)).to_have_count(0)
 
     async def test_spare_part_create_search_and_edit_uses_real_fields(self):
         await self.open_catalog('spare-parts')

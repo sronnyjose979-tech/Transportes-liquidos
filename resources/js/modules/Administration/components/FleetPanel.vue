@@ -88,7 +88,7 @@ onBeforeUnmount(() => { generation++; });
         <div class="panel space-y-4">
             <div class="grid gap-3 sm:grid-cols-2">
                 <label class="field-label">Tipo de activo<select aria-label="Tipo de activo" v-model="type" class="field" :disabled="disabled"><option value="tractor_unit">Cabezales</option><option value="tanker">Cisternas</option></select></label>
-                <label class="field-label">Buscar por código<input aria-label="Buscar por código" v-model="search" class="field" type="search" /></label>
+                <label class="field-label">Buscar por código<input aria-label="Buscar por código" :disabled="disabled" v-model="search" class="field" type="search" /></label>
             </div>
             <p v-if="loading" role="status">Consultando flota…</p>
             <template v-if="mode === 'list'">

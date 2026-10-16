@@ -24,6 +24,8 @@ class SupplyBrowserTest(unittest.IsolatedAsyncioTestCase):
         self.paths = []
         self.lose = False
         self.status = 201
+        self.hold = None
+        self.started = asyncio.Event()
         self.accept = lambda dialog: dialog.accept()
         self.page.on('dialog', self.accept)
 
@@ -39,11 +41,13 @@ class SupplyBrowserTest(unittest.IsolatedAsyncioTestCase):
             return
         if req.method == 'POST':
             self.writes.append((path, req.post_data_json))
+            self.started.set()
+            if self.hold: await self.hold.wait()
             if self.lose:
                 self.lose = False
                 await route.abort('connectionfailed')
             elif self.status != 201:
-                await route.fulfill(status=self.status, json={'message': 'Operación rechazada.', 'errors': {'quantity': ['Cantidad inválida.']}})
+                await route.fulfill(status=self.status, json={'message': 'Operación rechazada.', 'errors': {('items.0.quantity' if path=='/api/purchasing/requests' else 'quantity'): ['Cantidad inválida.']}})
             else:
                 await route.fulfill(status=201, json={'data': {'id': 'confirmed'}})
             return
@@ -53,7 +57,7 @@ class SupplyBrowserTest(unittest.IsolatedAsyncioTestCase):
         requests = [{'id': 'request-1', 'supplier': {'id': 'supplier-1', 'name': 'Proveedor'}, 'reason': 'Reparación', 'items': [], 'decision': None}]
         data = {'/api/inventory/stock': stock, '/api/inventory/custody': custody, '/api/inventory/corrections': correction, '/api/inventory/movements': [], '/api/purchasing/requests': requests, '/api/purchasing/orders': [], '/api/workshop/material-needs': []}
         if path == '/api/purchasing/lookups':
-            await route.fulfill(json={'data': {'parts': [], 'suppliers': []}})
+            await route.fulfill(json={'data': {'parts': [{'id':PART,'code':'FILT-01','description':'Filtro','unit':'unidad'}], 'suppliers': [{'id':'supplier-1','name':'Proveedor'}]}})
         elif path in data:
             await route.fulfill(json={'data': data[path], 'meta': {'current_page': 1, 'last_page': 1}})
         else:
@@ -65,6 +69,39 @@ class SupplyBrowserTest(unittest.IsolatedAsyncioTestCase):
         await self.page.get_by_label('Repuesto', exact=True).select_option(PART)
         await self.page.get_by_label('Cantidad', exact=True).fill('2.000001')
         await self.page.get_by_label('Motivo', exact=True).fill('Conteo físico documentado')
+
+    async def test_pending_operation_shows_progress_and_prevents_second_submission(self):
+        self.hold=asyncio.Event()
+        await self.prepare_correction()
+        await self.page.get_by_role('button',name='Guardar operación',exact=True).click()
+        await self.started.wait()
+        try:
+            await expect(self.page.get_by_role('status').filter(has_text='Confirmando operación')).to_be_visible()
+            await expect(self.page.get_by_role('button',name='Guardar operación',exact=True)).to_be_disabled()
+            await self.page.get_by_label('Cantidad',exact=True).evaluate("e=>e.form.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}))")
+            self.assertEqual(1,len(self.writes))
+            await expect(self.page.get_by_text('Operación confirmada.',exact=False)).to_have_count(0)
+        finally:
+            self.hold.set()
+        await expect(self.page.get_by_role('status').filter(has_text='Operación confirmada')).to_be_visible()
+        await expect(self.page.get_by_role('status').filter(has_text='Confirmando operación')).to_have_count(0)
+
+    async def test_purchase_validation_is_attached_to_the_requested_quantity(self):
+        self.status=422
+        await self.page.goto(self.base+'/compras')
+        await self.page.get_by_role('button',name='Registrar solicitud de compra',exact=True).click()
+        await self.page.get_by_label('Proveedor',exact=True).select_option('supplier-1')
+        await self.page.get_by_label('Repuesto',exact=True).select_option(PART)
+        control=self.page.get_by_label('Cantidad solicitada',exact=True)
+        await control.fill('2.000001')
+        await self.page.get_by_label('Motivo',exact=True).fill('Necesidad del taller')
+        await self.page.get_by_role('button',name='Guardar operación',exact=True).click()
+        await expect(control).to_have_attribute('aria-invalid','true')
+        await expect(control).to_have_value('2.000001')
+        error_id=await control.get_attribute('aria-describedby')
+        await expect(self.page.locator('[id="'+error_id+'"]')).to_have_text('Cantidad inválida.')
+        await expect(self.page.get_by_text('Operación confirmada.',exact=False)).to_have_count(0)
+        self.assertEqual(1,len(self.writes))
 
     async def test_unknown_stock_is_not_presented_as_zero_and_exact_count_is_submitted(self):
         await self.prepare_correction()
@@ -134,6 +171,16 @@ class SupplyBrowserTest(unittest.IsolatedAsyncioTestCase):
         await self.page.get_by_role('button', name='Guardar operación', exact=True).click()
         await expect(self.page.get_by_label('Corrección de inventario', exact=True)).to_be_visible()
         await expect(self.page.get_by_role('alert').filter(has_text='Cantidad inválida.')).to_be_visible()
+        control=self.page.get_by_label('Cantidad',exact=True)
+        await expect(control).to_have_attribute('aria-invalid','true')
+        error_id=await control.get_attribute('aria-describedby')
+        self.assertTrue(error_id)
+        await expect(self.page.locator('[id="'+error_id+'"]')).to_be_visible()
+        await expect(control).to_have_value('2.000001')
+        await self.page.get_by_role('button',name='Cancelar',exact=True).click()
+        await self.page.get_by_role('button',name='Solicitar conciliación o ajuste',exact=True).click()
+        await expect(self.page.get_by_label('Cantidad',exact=True)).to_have_attribute('aria-invalid','false')
+
         await expect(self.page.get_by_role('heading', name='Operación pendiente de confirmación')).to_have_count(0)
         await expect(self.page.get_by_text('Operación confirmada.', exact=False)).to_have_count(0)
 
