@@ -39,3 +39,41 @@ Los errores generales y otros detalles anidados de recepción/orden conservan el
 resumen existente. No se añadieron persistencia de borradores ni recuperación de
 operaciones nuevas: se mantienen los mecanismos y límites de cada módulo.
 No se modificaron `.env`, `transporte_db`, servicios ni servidor.
+
+## Ajuste responsivo de pantallas internas
+
+Base: `38b1972`. Se revisaron Administración/Catálogos, Flota, Transporte, Taller,
+Inventario, Compras, Facturación, Gastos, Reportes y Alertas mediante sus fixtures
+existentes de interfaz, sin cambiar API, permisos o reglas de negocio.
+
+Se reprodujeron desbordamientos de página a 320 px con referencias, conceptos y
+texto descriptivo largos sin espacios, admitidos por los contratos actuales:
+
+- Facturación: referencia y nombre del cliente en el detalle de factura.
+- Gastos: concepto, descripción y versiones mostradas en el detalle.
+
+La corrección aplica `overflow-wrap:anywhere` solo a los párrafos afectados de
+`BillingAndPayments/InvoicesPanel.vue` y al detalle de `Expenses/ExpensesPanel.vue`.
+No recorta ni elimina datos, no oculta el desbordamiento de la página y no modifica
+la distribución de escritorio, los cálculos o el formato monetario.
+
+Las demás pantallas revisadas ya se ajustaban a los viewports probados: se conservaron
+sin cambios. Las tablas mantienen su desplazamiento interno, con comprobación real
+de foco/ArrowRight y acceso a la última acción después de desplazarlas. No se rediseñó
+la tabla ni se ocultaron acciones para hacer pasar la prueba. Se comprobó además que
+los enlaces del menú permanecen dentro del viewport y que la navegación presentada
+corresponde al administrador, secretaria y mecánico según los contratos sintéticos.
+
+Verificación: 23 casos frontend distintos correctos (10 de diseño responsivo,
+8 de Facturación y 5 de Gastos). Tras ampliar el nombre del cliente y las
+comprobaciones de navegación se repitieron únicamente los 10 casos responsivos.
+Estos cubren anchos de 320, 360, 390, 768 y 1280 px. Los primeros ensayos con datos
+habituales ya pasaban; los textos largos reprodujeron los dos defectos corregidos.
+TypeScript, build y diff check correctos; se mantiene el aviso anterior de
+importación estática/dinámica de `DriverPortal/local.ts`.
+
+Son pruebas Chromium con APIs sintéticas, no una nueva validación de permisos del
+servidor ni pruebas en teléfonos físicos. No se repitieron backend/E2E ni Pint:
+no se modificó PHP. No se alteraron la PWA, estilos globales, otras pantallas,
+`.env`, `transporte_db` ni el servidor. Queda comprobar táctil/teclados virtuales,
+Safari/iOS, zoom y otras combinaciones de datos con los dispositivos reales.
