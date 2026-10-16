@@ -14,7 +14,7 @@ if (PHP_SAPI !== 'cli-server' || getenv('APP_ENV') !== 'testing'
     throw new RuntimeException('Servidor de navegador requiere un directorio temporal aislado.');
 }
 $uri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH) ?? '';
-if (str_starts_with($uri, '/build/') && ! str_contains(rawurldecode($uri), '..')
+if ((str_starts_with($uri, '/build/') || in_array($uri, ['/driver.webmanifest', '/driver-icon-192.png', '/driver-icon-512.png'], true)) && ! str_contains(rawurldecode($uri), '..')
     && is_file(__DIR__.'/../../public'.$uri)) {
     return false;
 }

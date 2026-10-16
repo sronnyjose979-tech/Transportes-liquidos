@@ -55,11 +55,28 @@ function json(method: string, body: unknown): RequestInit {
 }
 function query(values: Record<string, string | number>): string { return new URLSearchParams(Object.entries(values).map(([k, v]) => [k, String(v)])).toString(); }
 export const getSession = async (): Promise<Session> => session(await request('/api/session'));
-export const login = async (username: string, password: string): Promise<Session> => session(await request('/api/login', json('POST', { login: username, password })));
+export async function login(username: string, password: string): Promise<Session> {
+    const local = await import('../DriverPortal/local');
+    return local.sessionLock(async () => {
+        const actor = session(await request('/api/login', json('POST', { login: username, password })));
+        const previous = local.offlineActor();
+        if (previous && previous.id !== actor.id) {
+            local.lockLocal();
+            await local.forgetReadCache(previous.id);
+        }
+        return actor;
+    });
+}
 export async function logout(): Promise<void> {
-    if (!csrfToken()) await refreshCsrf();
-    await checked(await fetch('/api/logout', { method: 'POST', credentials: 'same-origin', cache: 'no-store',
-        headers: { Accept: 'application/json', 'X-XSRF-TOKEN': csrfToken() } }));
+    const local = await import('../DriverPortal/local');
+    await local.sessionLock(async () => {
+        if (!csrfToken()) await refreshCsrf();
+        await checked(await fetch('/api/logout', { method: 'POST', credentials: 'same-origin', cache: 'no-store',
+            headers: { Accept: 'application/json', 'X-XSRF-TOKEN': csrfToken() } }));
+        const actor = local.offlineActor();
+        local.lockLocal();
+        if (actor) await local.forgetReadCache(actor.id);
+    });
 }
 export const getAssets = async (number: number, signal: AbortSignal): Promise<Page<FleetAsset>> => page(await request(`/api/fleet-assets?${query({ page: number, per_page: 10 })}`, { signal }), fleetAsset);
 export const getTypes = async (number: number, signal?: AbortSignal): Promise<Page<DocumentType>> => page(await request(`/api/document-types?${query({ page: number, per_page: 25 })}`, signal ? { signal } : {}), documentType);

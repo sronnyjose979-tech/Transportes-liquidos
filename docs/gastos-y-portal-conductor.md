@@ -1,5 +1,9 @@
 # Gastos administrativos y portal operativo del conductor
 
+Estado posterior del trabajo offline, todavía sin validación integral:
+[implementación y bloqueo del conductor](conductor-offline.md). Las verificaciones
+de este documento corresponden exclusivamente al avance online original.
+
 ## Alcance implementado
 
 Se conserva el dashboard por roles, facturación y Transporte existentes. Este
@@ -170,7 +174,9 @@ bloqueadas y Laravel 13; no se afirma haber validado PHP 8.5.
 
 ## Pendientes explícitos
 
-- PWA, IndexedDB, captura offline y sincronización durable: siguiente avance.
+- PWA, IndexedDB, captura offline y sincronización con la aplicación abierta:
+  implementadas y validadas en el [avance offline](conductor-offline.md).
+  La descripción en memoria de este documento corresponde a la entrega anterior.
 - Reembolsos, anticipos, desembolsos, medios de pago y reglas contables/fiscales:
   requieren definición; aprobar un gasto no registra un pago ni un desembolso.
 - No conversiones CRC/USD ni sumas de monedas diferentes.

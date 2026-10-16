@@ -2,6 +2,7 @@
 
 namespace App\Modules\TransportAndDispatch\Http\Resources;
 
+use App\Modules\TransportAndDispatch\Application\DriverOfflineContext;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -11,7 +12,7 @@ class AssignedTripResource extends JsonResource
     {
         $route = $this->transportRequest->route;
 
-        return ['id' => $this->id, 'product' => $this->product_name_snapshot, 'execution_status' => $this->execution_status,
+        return ['id' => $this->id, 'offline_context' => DriverOfflineContext::token($this->resource), 'product' => $this->product_name_snapshot, 'execution_status' => $this->execution_status,
             'administrative_status' => $this->administrative_status, 'scheduled_start_at' => $this->scheduled_start_at,
             'scheduled_end_at' => $this->scheduled_end_at, 'officially_started_at' => $this->officially_started_at,
             'officially_completed_at' => $this->officially_completed_at,

@@ -4,6 +4,8 @@ namespace App\Modules\Expenses\Application;
 
 use App\Models\User;
 use App\Modules\BillingAndPayments\Application\Money;
+use App\Modules\TransportAndDispatch\Application\DriverOfflineContext;
+use App\Modules\TransportAndDispatch\Models\Trip;
 use Closure;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\QueryException;
@@ -31,6 +33,10 @@ final class ExpenseAdministration
         return $this->run($actor, 'create', $key, $data, false, function () use ($actor, $data): array {
             if (! self::office($actor) && (! ($data['trip_id'] ?? null) || ! self::assigned($actor, $data['trip_id']))) {
                 throw new AuthorizationException;
+            }
+            if (isset($data['expected_trip_context'])) {
+                DriverOfflineContext::check(Trip::query()->lockForUpdate()->findOrFail($data['trip_id']), $data['expected_trip_context']);
+                unset($data['expected_trip_context']);
             }
             $expense = (string) Str::uuid();
             $revision = (string) Str::uuid();
@@ -78,10 +84,14 @@ final class ExpenseAdministration
 
     public function receipt(User $actor, string $expense, string $key, array $data, Closure $persist): array
     {
-        return $this->run($actor, 'receipt:'.$expense, $key, $data, false, function () use ($actor, $expense, $persist): array {
+        return $this->run($actor, 'receipt:'.$expense, $key, $data, false, function () use ($actor, $expense, $persist, $data): array {
             $record = DB::table('expenses')->where('id', $expense)->firstOrFail();
             if (! self::office($actor) && ($record->created_by_id !== $actor->id || ! $record->trip_id || ! self::assigned($actor, $record->trip_id))) {
                 throw new AuthorizationException;
+            }
+
+            if (isset($data['expected_trip_context'])) {
+                DriverOfflineContext::check(Trip::query()->lockForUpdate()->findOrFail($record->trip_id), $data['expected_trip_context']);
             }
 
             return $persist();

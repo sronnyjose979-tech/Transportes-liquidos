@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Modules\TransportAndDispatch\Application\AssignmentAdministration;
+use App\Modules\TransportAndDispatch\Application\TripOperations;
 use Illuminate\Support\Str;
 use Tests\PostgresTestCase;
 use Tests\Support\TransportFixtures;
@@ -40,6 +41,40 @@ class DriverPortalTest extends PostgresTestCase
     private function reading(string $tractor, array $overrides = []): array
     {
         return $overrides + ['request_key' => (string) Str::uuid(), 'tractor_assignment_id' => $tractor, 'reading_type' => 'initial', 'reading_value' => '1000.25', 'reason' => 'Lectura física sintética', 'occurred_at' => now()->format('Y-m-d\TH:i:s.uP')];
+    }
+
+    public function test_offline_context_rejects_changed_state_but_replays_confirmed_records(): void
+    {
+        [$admin, $trip, $driver, $tractor] = $this->prepared();
+        $url = '/api/transport/my-trips/'.$trip->id;
+        $context = $this->getJson($url)->assertOk()->json('data.offline_context');
+        $this->assertMatchesRegularExpression('/^[a-f0-9]{64}$/', $context);
+        $body = $this->report(['expected_trip_context' => $context]);
+        $id = $this->postJson($url.'/reports', $body)->assertCreated()->json('data.id');
+        app(TripOperations::class)->start($admin, $trip->id, 'Inicio durante desconexión');
+        $this->actingAs($driver);
+        $this->postJson($url.'/reports', $body)->assertCreated()->assertJsonPath('data.id', $id);
+        $this->postJson($url.'/reports', $this->report(['expected_trip_context' => $context]))->assertConflict();
+        $this->postJson($url.'/odometer', $this->reading($tractor->id, ['expected_trip_context' => $context]))->assertConflict();
+        $this->postJson('/api/expenses', ['request_key' => (string) Str::uuid(), 'trip_id' => $trip->id,
+            'concept' => 'Captura desconectada', 'category' => 'Operación', 'amount' => '1.02', 'currency' => 'CRC',
+            'occurred_at' => now()->format('Y-m-d\TH:i:s.uP'), 'expected_trip_context' => $context])->assertConflict();
+        $this->assertDatabaseCount('expenses', 0);
+        $this->assertDatabaseCount('trip_odometer_readings', 0);
+    }
+
+    public function test_offline_context_detects_assignment_release_and_is_part_of_idempotency(): void
+    {
+        [$admin, $trip] = $this->prepared();
+        $url = '/api/transport/my-trips/'.$trip->id;
+        $context = $this->getJson($url)->assertOk()->json('data.offline_context');
+        $body = $this->report(['expected_trip_context' => $context]);
+        $id = $this->postJson($url.'/reports', $body)->assertCreated()->json('data.id');
+        app(AssignmentAdministration::class)->release($admin, $trip->id, 'driver', 'Cambio de asignación durante desconexión');
+        $this->postJson($url.'/reports', $body)->assertCreated()->assertJsonPath('data.id', $id);
+        $this->postJson($url.'/reports', $this->report(['expected_trip_context' => $context]))->assertConflict();
+        $this->postJson($url.'/reports', [...$body, 'expected_trip_context' => str_repeat('0', 64)])->assertConflict();
+        $this->assertDatabaseCount('trip_events', 1);
     }
 
     public function test_driver_records_reports_and_exact_readings_once_and_office_can_consult_without_official_transitions(): void

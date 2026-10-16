@@ -1182,3 +1182,23 @@ Véase [contratos, recuperación y verificación](docs/gastos-y-portal-conductor
 E2E real: `bash tests/run-postgres.sh --e2e-expenses-driver`, con Chromium, Laravel
 y PostgreSQL 18 aislado. El entorno validado utiliza PHP 8.4.24, compatible con las
 dependencias; PHP 8.5 continúa siendo el objetivo no validado en este entorno.
+
+
+## PWA offline del conductor integrada
+
+La ampliación de `/mis-viajes` sustituye la cola en memoria de la entrega anterior
+por IndexedDB versionado, con caché mínima de viajes por usuario y capturas
+inmutables pendientes, incluyendo archivos y dependencias gasto/comprobante.
+Web Locks coordina envíos y cambios de sesión entre pestañas; el servidor reutiliza
+los recibos idempotentes existentes y comprueba el contexto del viaje/asignaciones
+bajo sus bloqueos. No hay migraciones ni cambios de reglas operativas.
+
+El SW generado por Vite precarga únicamente recursos públicos y un shell vacío;
+no cachea HTML autenticado, APIs ni comprobantes privados. Las actualizaciones
+esperan al cierre de las ventanas anteriores. La sincronización funciona manualmente
+y al recuperar conexión con la aplicación abierta; no se promete ejecución cerrada.
+
+Validación real con Chromium persistente, Laravel y PostgreSQL 18 aislado:
+instalabilidad, reinicio completo del navegador offline, conservación y envío de
+comprobantes, sesiones/cuentas, conflictos y actualización. Véanse los resultados,
+comandos y límites en [PWA offline del conductor](docs/conductor-offline.md).

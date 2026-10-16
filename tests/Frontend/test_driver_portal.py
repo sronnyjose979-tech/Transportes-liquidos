@@ -51,16 +51,17 @@ class DriverPortalBrowserTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual('1200.25',self.posts[0]['reading_value'])
         self.assertEqual('assignment-1',self.posts[0]['tractor_assignment_id'])
         self.assertTrue(self.posts[0]['occurred_at'].endswith('-06:00'))
-    async def test_lost_response_requires_explicit_same_key_retry(self):
+    async def test_lost_response_retains_same_key_for_manual_retry(self):
         await self.open_trip()
         await self.page.get_by_label('Observación',exact=True).fill('Incidencia registrada')
         self.lost=True
         self.page.once('dialog',lambda d:d.accept())
         await self.page.get_by_role('button',name='Registrar reporte',exact=True).click()
-        await expect(self.page.get_by_role('heading',name='Registro pendiente de confirmación')).to_be_visible()
+        await expect(self.page.get_by_role('heading',name='Capturas de este dispositivo')).to_be_visible()
+        await expect(self.page.get_by_text('No se pudo confirmar la operación.',exact=False)).to_be_visible()
         self.assertEqual(1,len(self.posts))
-        await expect(self.page.get_by_role('button',name='Registrar reporte',exact=True)).to_be_disabled()
+        await expect(self.page.get_by_role('button',name='Registrar reporte',exact=True)).to_be_enabled()
         self.page.once('dialog',lambda d:d.accept())
-        await self.page.get_by_role('button',name='Reintentar la misma operación').click()
+        await self.page.get_by_role('button',name='Sincronizar pendientes').click()
         await expect(self.page.get_by_role('status').filter(has_text='confirmado')).to_be_visible()
         self.assertEqual(self.posts[0],self.posts[1])
