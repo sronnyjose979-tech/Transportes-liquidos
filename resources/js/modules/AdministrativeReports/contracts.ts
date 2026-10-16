@@ -1,0 +1,18 @@
+export const names = {transport:'Transporte',billing:'Facturación y cobros',expenses:'Gastos',workshop:'Taller',stock:'Existencias',movements:'Movimientos de inventario'};
+export type Kind = keyof typeof names;
+export type Row = Record<string,string|number|boolean|null>;
+export interface Report {kind:Kind;rows:Row[];summary:Row[]|Row|{invoices:Row[];receipts:Row[]};meta:{current_page:number;last_page:number;total:number};note:string;module_href:string;timezone:string}
+export const states:Record<Kind,string[]> = {transport:['pending','in_progress','completed','cancelled'],billing:['pending','partially_paid','paid'],expenses:['pending','approved','rejected'],workshop:['pending_diagnosis','pending_authorization','authorized','in_repair','finished','closed','cancelled'],stock:[],movements:['initial','adjustment','reversal','receipt','delivery','usage','return']};
+export const labels:Record<string,string> = {id:'Identificador',date:'Fecha · Costa Rica',customer:'Cliente',customer_id:'ID cliente',status:'Estado',currency:'Moneda',count:'Cantidad de registros',invoiced:'Facturado',paid_to_date:'Pagado a la fecha',balance:'Saldo actual',received:'Cobros en el período',amount:'Importe',concept:'Concepto',category:'Categoría',product:'Producto histórico',planning_status:'Planificación',administrative_status:'Cierre administrativo',trip_id:'Viaje',vehicle:'Vehículo',description:'Descripción',priority:'Prioridad',activities:'Actividades actuales',last_activity_at:'Última actividad',code:'Código',unit:'Unidad',available:'Disponible en bodega',custody:'En custodia',consumed:'Consumido neto',initialized:'Inventario inicial registrado',parts:'Repuestos del catálogo',parts_with_movements:'Repuestos con movimientos',warehouse_delta:'Cambio bodega',custody_delta:'Cambio custodia',consumed_delta:'Cambio consumido',pending:'Pendiente',in_progress:'En curso',completed:'Finalizado',cancelled:'Cancelado',partially_paid:'Parcialmente pagada',paid:'Pagada',approved:'Aprobado',rejected:'Rechazado',pending_diagnosis:'Pendiente de diagnóstico',pending_authorization:'Pendiente de autorización',authorized:'Autorizada',in_repair:'En reparación',finished:'Terminada',closed:'Cerrado',open:'Abierto',scheduled:'Programado',rescheduled:'Reprogramado',initial:'Inventario inicial',adjustment:'Ajuste',reversal:'Reversión',receipt:'Recepción',delivery:'Entrega',usage:'Uso',return:'Devolución',low:'Baja',normal:'Normal',high:'Alta',urgent:'Urgente'};
+/** Runtime validation protects the read-only view from incomplete/error envelopes. */
+export function parseReport(value:unknown):Report {
+ if(!value||typeof value!=='object')throw new Error('Reporte incompleto.');
+ const r=value as Record<string,unknown>;
+ const row=(v:unknown):v is Row=>!!v&&typeof v==='object'&&!Array.isArray(v)&&Object.values(v).every(x=>x===null||['string','number','boolean'].includes(typeof x));
+ const rows=(v:unknown):v is Row[]=>Array.isArray(v)&&v.every(row);
+ const meta=r.meta as Record<string,unknown>|undefined;
+ const summary=r.summary;
+ const summaryValid=rows(summary)||row(summary)||!!summary&&typeof summary==='object'&&'invoices'in summary&&'receipts'in summary&&rows(summary.invoices)&&rows(summary.receipts);
+ if(typeof r.kind!=='string'||!Object.hasOwn(names,r.kind)||!rows(r.rows)||!summaryValid||!meta||!Number.isInteger(meta.current_page)||!Number.isInteger(meta.last_page)||!Number.isInteger(meta.total)||Number(meta.current_page)<1||Number(meta.last_page)<1||Number(meta.total)<0||typeof r.note!=='string'||typeof r.module_href!=='string'||!['/transporte','/facturacion','/gastos','/taller','/inventario'].includes(r.module_href)||r.timezone!=='America/Costa_Rica')throw new Error('Reporte incompleto.');
+ return value as Report;
+}

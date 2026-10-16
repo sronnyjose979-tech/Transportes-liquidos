@@ -5,6 +5,9 @@ use App\Modules\AccessAndPersonnel\Http\Controllers\EmployeeController;
 use App\Modules\AccessAndPersonnel\Http\Controllers\SessionController;
 use App\Modules\AccessAndPersonnel\Http\Controllers\SystemController;
 use App\Modules\AccessAndPersonnel\Http\Middleware\EnsureActiveAccount;
+use App\Modules\AccessAndPersonnel\Http\Middleware\PrivatePage;
+use App\Modules\AdministrativeReports\Http\Controllers\ReportController;
+use App\Modules\AdministrativeReports\Http\Requests\ReportQueryRequest;
 use App\Modules\FleetAndDocuments\Http\Controllers\DocumentController;
 use App\Modules\FleetAndDocuments\Http\Controllers\DocumentTypeController;
 use App\Modules\FleetAndDocuments\Http\Controllers\FleetAssetLookupController;
@@ -24,6 +27,9 @@ Route::prefix('api')->group(function () {
     Route::middleware(['auth', EnsureActiveAccount::class, 'auth.session'])->group(function () {
         Route::get('navigation', [SystemController::class, 'navigation']);
         Route::get('dashboard', [SystemController::class, 'dashboard'])->middleware('can:manage-personnel');
+        Route::get('reports/{kind}', [ReportController::class, 'show'])
+            ->whereIn('kind', array_keys(ReportQueryRequest::STATES))
+            ->middleware([PrivatePage::class, 'can:view-administrative-reports']);
         require __DIR__.'/billing.php';
         require __DIR__.'/expenses.php';
         require __DIR__.'/transport.php';

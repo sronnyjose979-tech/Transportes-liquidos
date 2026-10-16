@@ -1,0 +1,10 @@
+import {readFileSync} from 'node:fs';
+import {stripTypeScriptTypes} from 'node:module';
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+const source=stripTypeScriptTypes(readFileSync('resources/js/modules/AdministrativeReports/contracts.ts','utf8'),{mode:'transform'});
+const {parseReport}=await import('data:text/javascript;base64,'+Buffer.from(source).toString('base64'));
+const base={kind:'expenses',rows:[{id:'id',amount:'999999999999.99',currency:'USD'}],summary:[],meta:{current_page:1,last_page:1,total:1},note:'Exact amounts',module_href:'/gastos',timezone:'America/Costa_Rica'};
+test('preserves exact monetary strings and empty results',()=>{assert.equal(parseReport(base).rows[0].amount,'999999999999.99');assert.deepEqual(parseReport({...base,rows:[]}).rows,[]);});
+test('billing has independent invoice and receipt summaries',()=>{const summary={invoices:[{currency:'CRC',balance:'0.01'}],receipts:[{currency:'USD',received:'0.02'}]};assert.deepEqual(parseReport({...base,kind:'billing',summary,module_href:'/facturacion'}).summary,summary);});
+test('rejects malformed responses, private/unknown links and invalid pagination',()=>{for(const invalid of [null,{}, {...base,rows:{}},{...base,module_href:'/storage/private'}, {...base,meta:{current_page:'1'}}, {...base,kind:'unknown'}, {...base,summary:{invoices:[]}}])assert.throws(()=>parseReport(invalid));});

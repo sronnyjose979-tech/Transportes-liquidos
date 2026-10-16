@@ -1202,3 +1202,20 @@ Validación real con Chromium persistente, Laravel y PostgreSQL 18 aislado:
 instalabilidad, reinicio completo del navegador offline, conservación y envío de
 comprobantes, sesiones/cuentas, conflictos y actualización. Véanse los resultados,
 comandos y límites en [PWA offline del conductor](docs/conductor-offline.md).
+
+## Reportes administrativos de solo lectura
+
+`AdministrativeReports` incorpora `/reportes`, exclusivo del administrador activo,
+y `GET /api/reports/{kind}` para Transporte, Facturación/cobros/saldos, Gastos,
+Taller, existencias y movimientos. Reutiliza tablas, reglas y permisos existentes;
+no hay nuevas migraciones ni cambios de lógica operativa o de la PWA.
+
+Consultas agregadas independientes evitan duplicación por detalles/pagos/versiones.
+Importes exactos en PostgreSQL, JSON como cadenas y grupos separados CRC/USD;
+ningún gasto aprobado se presenta como desembolsado. Filas, resumen y paginación
+comparten una lectura transaccional consistente. Los períodos se delimitan en
+Costa Rica; existencias son actuales y no admiten reconstrucción temporal ficticia.
+
+Vue se integra con `SystemApp` y navegación compartida, reutiliza `SearchSelect`,
+presenta filtros, totales, tablas paginadas y acceso al módulo original. No persiste
+reportes en IndexedDB/cachés. Véanse [contratos, alcance y pruebas](docs/reportes-administrativos.md).

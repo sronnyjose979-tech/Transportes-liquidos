@@ -14,6 +14,7 @@ Route::middleware(['auth', EnsureActiveAccount::class, 'auth.session', PrivatePa
     Route::get('/', fn (Request $request, SystemNavigation $navigation) => redirect($navigation->home($request->user())));
     Route::get('/dashboard', fn () => view('system-home', ['section' => 'dashboard']))->middleware('can:manage-personnel');
     Route::get('/mis-viajes', fn () => view('system-home', ['section' => 'driver']))->middleware('can:view-assigned-trips');
+    Route::get('/reportes', fn () => view('system-home', ['section' => 'reports']))->middleware('can:view-administrative-reports');
     Route::get('/gastos', fn () => view('system-home', ['section' => 'expenses']))->middleware('can:manage-expenses');
     Route::get('/facturacion', fn () => view('system-home', ['section' => 'billing']))->middleware('can:manage-billing');
     Route::get('/taller', fn () => view('workshop'))->middleware('can:access-workshop')->name('workshop.web');
