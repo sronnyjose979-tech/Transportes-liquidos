@@ -25,6 +25,7 @@ final class SystemNavigation
             ['purchasing', 'Compras', '/compras', 'access-purchasing'],
             ['billing', 'Facturación', '/facturacion', 'manage-billing'],
             ['alerts', 'Vencimientos', '/alertas', 'manage-fleet-documents'],
+            ['audit', 'Auditoría', '/auditoria', 'view-administrative-audit'],
             ['reports', 'Reportes', '/reportes', 'view-administrative-reports'],
             ['expenses', 'Gastos', '/gastos', 'manage-expenses'],
         ];

@@ -56,6 +56,7 @@ class AppServiceProvider extends ServiceProvider
         Gate::define('access-expenses', fn (User $user): bool => $user->is_active && $user->roles()->whereIn('name', ['administrator', 'secretary', 'driver'])->exists());
         Gate::define('manage-expenses', [TransportCorePolicy::class, 'manage']);
         Gate::define('approve-expenses', [TransportCorePolicy::class, 'decide']);
+        Gate::define('view-administrative-audit', [TransportCorePolicy::class, 'decide']);
         Gate::define('view-administrative-reports', [TransportCorePolicy::class, 'decide']);
         Gate::define('manage-billing', [TransportCorePolicy::class, 'manage']);
         Gate::define('approve-trip-amount', [TransportCorePolicy::class, 'decide']);

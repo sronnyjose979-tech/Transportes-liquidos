@@ -32,7 +32,7 @@ trap finish EXIT
 postgres_started=1
 "$postgres_bin/createdb" -h "$postgres_workspace" -p 55439 -U transport_test transporte_test
 export TEST_DB_HOST="$postgres_workspace" TEST_DB_PORT=55439 TEST_DB_USERNAME=transport_test TEST_DB_PASSWORD='' TEST_DB_ISOLATED=1
-if [[ "${1:-}" == '--e2e' || "${1:-}" == '--e2e-transport' || "${1:-}" == '--e2e-workshop' || "${1:-}" == '--e2e-workshop-execution' || "${1:-}" == '--e2e-workshop-circuit' || "${1:-}" == '--e2e-purchase-requests' || "${1:-}" == '--e2e-supply' || "${1:-}" == '--e2e-billing' || "${1:-}" == '--e2e-navigation' || "${1:-}" == '--e2e-expenses-driver' || "${1:-}" == '--e2e-document-alerts' || "${1:-}" == '--e2e-reports' || "${1:-}" == '--e2e-driver-offline' || "${1:-}" == '--e2e-administration' ]]; then
+if [[ "${1:-}" == '--e2e-audit' || "${1:-}" == '--e2e' || "${1:-}" == '--e2e-transport' || "${1:-}" == '--e2e-workshop' || "${1:-}" == '--e2e-workshop-execution' || "${1:-}" == '--e2e-workshop-circuit' || "${1:-}" == '--e2e-purchase-requests' || "${1:-}" == '--e2e-supply' || "${1:-}" == '--e2e-billing' || "${1:-}" == '--e2e-navigation' || "${1:-}" == '--e2e-expenses-driver' || "${1:-}" == '--e2e-document-alerts' || "${1:-}" == '--e2e-reports' || "${1:-}" == '--e2e-driver-offline' || "${1:-}" == '--e2e-administration' ]]; then
     postgres_suite="$1"
     shift
     export APP_ENV=e2e TRANSPORTE_E2E_ROOT="$postgres_workspace/e2e"
@@ -42,6 +42,8 @@ if [[ "${1:-}" == '--e2e' || "${1:-}" == '--e2e-transport' || "${1:-}" == '--e2e
     php tests/E2E/console.php prepare </dev/null
     if [[ "$postgres_suite" == '--e2e-document-alerts' ]]; then
         "${PLAYWRIGHT_PYTHON:-python3}" tests/E2E/test_document_alerts.py "$@"
+    elif [[ "$postgres_suite" == '--e2e-audit' ]]; then
+        "${PLAYWRIGHT_PYTHON:-python3}" tests/E2E/test_audit.py "$@"
     elif [[ "$postgres_suite" == '--e2e-reports' ]]; then
         "${PLAYWRIGHT_PYTHON:-python3}" tests/E2E/test_reports.py "$@"
     elif [[ "$postgres_suite" == '--e2e-driver-offline' ]]; then

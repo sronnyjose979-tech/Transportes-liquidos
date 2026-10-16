@@ -1234,3 +1234,14 @@ operativas ni la PWA. `documents:check-expirations` consulta el mismo resumen,
 programado por Laravel a las 06:00 de Costa Rica, sin mensajes externos ni registros
 duplicados. Personal no tiene modelo documental/vencimientos y queda fuera hasta
 definirlo. Véase [alcance, API, scheduler y pruebas](docs/alertas-y-vencimientos.md).
+
+## Auditoría administrativa consolidada
+
+`AdministrativeAudit` ofrece `/auditoria` y lecturas `/api/audit`, exclusivas del
+administrador activo. Consulta recibos e historiales existentes mediante fuentes
+fijas y `UNION ALL`, sin tablas nuevas ni duplicar sus registros hijos. Paginación
+estable, filtros previos por período de Costa Rica, actor, módulo y operación.
+Snapshots seguros solo mediante lista explícita de campos registrados; ninguna
+reconstrucción retrospectiva ni exposición de datos privados de idempotencia o
+archivos. Vue reutiliza `SystemApp`, sesión, navegación y selectores compartidos.
+Cobertura, límites y verificación en [Auditoría administrativa](docs/auditoria-administrativa.md).

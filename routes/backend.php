@@ -6,6 +6,7 @@ use App\Modules\AccessAndPersonnel\Http\Controllers\SessionController;
 use App\Modules\AccessAndPersonnel\Http\Controllers\SystemController;
 use App\Modules\AccessAndPersonnel\Http\Middleware\EnsureActiveAccount;
 use App\Modules\AccessAndPersonnel\Http\Middleware\PrivatePage;
+use App\Modules\AdministrativeAudit\Http\Controllers\AuditController;
 use App\Modules\AdministrativeReports\Http\Controllers\ReportController;
 use App\Modules\AdministrativeReports\Http\Requests\ReportQueryRequest;
 use App\Modules\FleetAndDocuments\Http\Controllers\DocumentAlertController;
@@ -26,6 +27,10 @@ Route::prefix('api')->group(function () {
     Route::get('csrf', fn () => response()->noContent()->header('Cache-Control', 'no-store'));
     Route::post('login', [SessionController::class, 'store'])->middleware('throttle:login');
     Route::middleware(['auth', EnsureActiveAccount::class, 'auth.session'])->group(function () {
+        Route::prefix('audit')->middleware([PrivatePage::class, 'can:view-administrative-audit'])->group(function () {
+            Route::get('/', [AuditController::class, 'index']);
+            Route::get('{source}/{id}', [AuditController::class, 'show'])->where('source', '[a-z]+')->whereUuid('id');
+        });
         Route::get('navigation', [SystemController::class, 'navigation']);
         Route::get('dashboard', [SystemController::class, 'dashboard'])->middleware('can:manage-personnel');
         Route::get('reports/{kind}', [ReportController::class, 'show'])

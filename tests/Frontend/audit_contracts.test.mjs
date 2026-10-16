@@ -1,0 +1,11 @@
+import {readFileSync} from 'node:fs';
+import {stripTypeScriptTypes} from 'node:module';
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+const code=stripTypeScriptTypes(readFileSync('resources/js/modules/AdministrativeAudit/contracts.ts','utf8'),{mode:'transform'});
+const {parseAudit,parseDetail}=await import('data:text/javascript;base64,'+Buffer.from(code).toString('base64'));
+const event={id:'operation',source:'changes',module:'transport',operation:'official_start',actor_id:1,actor_name:'Actor',registered_at:'2026-10-16T06:00:00Z',record_type:'trip',record_id:'trip'};
+const page={rows:[event],meta:{current_page:1,last_page:1,total:1},timezone:'America/Costa_Rica'};
+test('accepts empty and canonical audit pages and nullable safe changes',()=>{assert.deepEqual(parseAudit(page).rows,[event]);assert.deepEqual(parseAudit({...page,rows:[]}).rows,[]);assert.equal(parseDetail({event,before:null,after:{execution_status:'in_progress'}}).after.execution_status,'in_progress');});
+test('rejects malformed pagination, private/unknown sources and broken dates',()=>{for(const value of [null,{}, {...page,meta:{current_page:0,last_page:1,total:0}}, {...page,rows:[{...event,module:'users'}]}, {...page,rows:[{...event,source:'sessions'}]}, {...page,rows:[{...event,registered_at:'invalid'}]}, {...page,timezone:'UTC'}])assert.throws(()=>parseAudit(value));});
+test('rejects arbitrary nested payloads in historical changes',()=>{for(const before of [[],{user:{password:'forbidden'}},undefined])assert.throws(()=>parseDetail({event,before,after:null}));});
