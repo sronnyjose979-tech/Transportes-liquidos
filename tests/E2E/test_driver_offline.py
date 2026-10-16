@@ -3,13 +3,38 @@ Run: bash tests/run-postgres.sh --e2e-driver-offline (after a production build).
 No API success mocks; the existing fault proxy can discard a committed response.
 """
 import asyncio
+import os
+import tempfile
 import unittest
-from playwright.async_api import expect
+from playwright.async_api import async_playwright, expect
 import test_expenses_driver as expenses_driver
 import test_document_module as support
 
 
 class DriverOfflineE2E(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):
+        self.command('clear-case-cache')
+        self.fixture=self.expenses('fixture')
+        self.playwright=await async_playwright().start()
+        self.profile=tempfile.mkdtemp(prefix='driver-profile-',dir=self.workspace)
+        self.context=await self.playwright.chromium.launch_persistent_context(
+            self.profile,executable_path=os.environ.get('CHROMIUM_EXECUTABLE','/usr/bin/chromium'),
+            headless=True,args=['--no-sandbox','--disable-dev-shm-usage'],viewport={'width':390,'height':900})
+        await self.context.tracing.start(screenshots=True,snapshots=True)
+        self.page=self.context.pages[0];self.errors=[]
+        self.page.on('pageerror',lambda e:self.errors.append(str(e)))
+        self.page.on('dialog',lambda d:asyncio.create_task(d.accept()))
+
+    async def asyncTearDown(self):
+        try:
+            await self.page.screenshot(path=str(self.artifacts/(self._testMethodName+'.png')),full_page=True)
+            await self.context.tracing.stop(path=str(self.artifacts/(self._testMethodName+'.zip')))
+        finally:
+            await self.context.close();await self.playwright.stop()
+            self.proxy.drop_response_path=None
+            self.proxy.drop_response_statuses=(201,)
+        self.assertEqual([],self.errors)
+
     async def ready(self):
         await self.driver()
         await self.page.wait_for_function('async()=>!!(await navigator.serviceWorker.getRegistration("/mis-viajes"))?.active',timeout=20000)
@@ -44,7 +69,18 @@ class DriverOfflineE2E(unittest.IsolatedAsyncioTestCase):
         await self.page.reload()
         await expect(self.page.get_by_role('heading',name='Capturas de este dispositivo',exact=True)).to_be_visible()
         await expect(self.page.get_by_role('status').filter(has_text='4 capturas sin confirmar')).to_be_visible()
-        await self.page.close();self.page=await self.context.new_page()
+        # Restart Chromium itself using its isolated profile, while still offline.
+        # This proves files/queue/SW survive beyond a page or browser process.
+        await self.context.tracing.stop(path=str(self.artifacts/(self._testMethodName+'-before-restart.zip')))
+        await self.context.close()
+        self.context=await self.playwright.chromium.launch_persistent_context(
+            self.profile,executable_path=os.environ.get('CHROMIUM_EXECUTABLE','/usr/bin/chromium'),
+            headless=True,args=['--no-sandbox','--disable-dev-shm-usage'],viewport={'width':390,'height':900})
+        await self.context.tracing.start(screenshots=True,snapshots=True)
+        await self.context.set_offline(True)
+        self.page=self.context.pages[0]
+        self.page.on('pageerror',lambda e:self.errors.append(str(e)))
+        self.page.on('dialog',lambda d:asyncio.create_task(d.accept()))
         await self.page.goto(self.base+'/mis-viajes')
         await expect(self.page.get_by_role('status').filter(has_text='4 capturas sin confirmar')).to_be_visible()
         await self.context.set_offline(False)

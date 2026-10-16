@@ -1,4 +1,4 @@
-# PWA del conductor: implementación pendiente de validación integral
+# PWA offline del conductor: validación e integración
 
 Trabajo sobre `main` actualizado a `2123ae2`. Alcance exclusivo: `/mis-viajes`.
 No hay migraciones, cambios de reglas operativas ni modificaciones de `.env`.
@@ -49,51 +49,45 @@ recibe 409; permisos y reglas existentes se validan nuevamente. 403/404/409 qued
 como conflicto, 422 como rechazado. Se preservan los datos para revisión explícita;
 no hay resolución automática ni edición del contenido original.
 
-## Entrega provisional para continuar en otro entorno (2026-10-15)
+## Validación e integración (2026-10-16)
 
-Rama de traslado: `feature/conductor-offline`, basada en `2123ae2`.
-**No se declara completada la PWA.** Las últimas ejecuciones se interrumpieron;
-queda pendiente consolidar la validación integral y sus resultados definitivos.
-No se incluyen herramientas, dependencias instaladas, archivos temporales ni datos.
+Rama revisada: `feature/conductor-offline`, commit de traslado `32d062c`, basada
+en `main` `2123ae2`. Se reutilizó el entorno existente sin instalar dependencias,
+crear migraciones ni modificar `.env` o `transporte_db`.
 
-Resultados confirmados en ejecuciones previas:
+Se corrigió la instrumentación E2E: el contexto de incógnito de Playwright impide
+instalar una PWA (`in-incognito`). La suite utiliza ahora un perfil persistente
+**temporal y aislado**, sin omitir la comprobación de instalabilidad de Chromium.
+El caso de persistencia cierra Chromium completamente y lo vuelve a iniciar sin
+conexión: conserva el shell, cuatro capturas y el comprobante; al reconectar,
+Laravel confirma cada registro una sola vez y se verifica la descarga privada.
 
-- Backend PostgreSQL aislado: 52 pruebas, 576 aserciones, correctas. Después se
-  amplió el caso de comprobantes con conflicto de contexto y replay: pasó con
-  24 aserciones. No se repitió toda la suite tras ampliar ese caso.
-- Chromium con HTTP sintético: ocho pruebas de cola/IndexedDB, dos del portal,
-  cinco de gastos y cuatro del sistema correctas. No sustituyen al E2E real.
-- Contratos frontend: 23 pruebas correctas. TypeScript, build y Pint pasaron.
-- E2E real con Laravel, Chromium y PostgreSQL 18.6: se verificaron captura offline,
-  recarga/reapertura y envío de reportes, kilometraje, gastos y comprobantes;
-  recuperación de sesión/cuenta; conflictos, actualización del SW y logout.
-  Estos casos pasaron en ejecuciones específicas anteriores.
+| Verificación ejecutada | Resultado |
+| --- | --- |
+| Backend específico y regresiones de Transporte/navegación, PostgreSQL 18.3 | 52 pruebas, 580 aserciones correctas. |
+| Chromium/IndexedDB con API sintética y portal | 10 pruebas correctas. |
+| Interfaz de Gastos y sistema, API sintética | 9 pruebas correctas (5 + 4). |
+| Contratos frontend existentes | 23 pruebas correctas. |
+| E2E offline, Chromium persistente + Laravel + PostgreSQL aislado | 3 pruebas correctas. |
+| E2E de Gastos/Conductor y recuperación de respuesta perdida | 4 pruebas correctas. |
+| TypeScript, build, Pint y diff check | Correctos. |
 
-Pendientes concretos para la siguiente conversación:
+Las pruebas sintéticas no sustituyen al E2E real. Este verifica instalabilidad,
+recarga/reinicio offline, reconexión automática, gastos y comprobantes, sesión
+expirada, cambio de cuenta y recuperación de capturas propias; conflictos por
+cancelación/liberación, actualización del SW sin borrar pendientes y logout.
+El E2E de respuesta perdida confirma replay de la clave original y conflicto 409
+para una captura nueva cuyo contexto ya cambió. Los tests de almacenamiento
+cubren serialización entre pestañas, reintentos, espera progresiva y archivos
+conservados hasta recibir confirmación.
 
-1. Confirmar la suite E2E offline completa después de añadir las comprobaciones
-   de manifest/instalabilidad de Chromium y los últimos ajustes de interfaz.
-   La última ejecución no dejó un resultado final recuperable.
-2. Reejecutar el caso E2E de respuesta perdida tras el ajuste de su expectativa:
-   una operación nueva con contexto anterior a la liberación devuelve **409**;
-   la misma clave ya confirmada devuelve el resultado original. La ejecución
-   previa falló porque el test esperaba 403; la corrección aún requiere confirmar.
-3. Consolidar verificaciones finales pertinentes y revisar el diff antes de integrar.
-   No volver a instalar ni repetir análisis si el entorno ya está preparado.
+Entorno validado: PHP 8.4.24 (no PHP 8.5), Laravel 13, PostgreSQL 18.3 y Chromium.
+Activación local reutilizada: `/workspace/.tools/activate.sh`; no forma parte del
+repositorio. El build verificó `TRANSPORTE_BUILD_OFFLINE=1`, que utiliza fuentes de
+sistema sin descargarlas; no debe ejecutarse mientras el test de actualización
+del SW modifica temporalmente el archivo generado, restaurado mediante `finally`.
 
-Herramientas utilizadas: PHP 8.4.24, Composer 2.8.12, Node 24 y PostgreSQL 18.6;
-Laravel 13 y dependencias se instalaron desde los archivos de bloqueo sin cambios.
-El entorno temporal anterior se activaba con `/tmp/driver-tools/activate`; esa
-ruta no forma parte del repositorio y puede no existir en la siguiente sesión.
-
-El proxy bloqueaba `fonts.bunny.net`. Para un build sin descargas de fuentes se
-incluye `TRANSPORTE_BUILD_OFFLINE=1`, que usa el fallback de sistema existente;
-la configuración normal conserva la descarga de fuentes. Se corrigió además la
-precarga del SW para generarla después de que Vite retire sus chunks provisionales.
-No compilar mientras el test de actualización del SW modifica temporalmente el
-archivo generado; este test lo restaura en `finally`.
-
-Comandos de referencia, usando exclusivamente la base temporal del runner:
+Comandos reproducibles, exclusivamente con la base temporal del runner:
 
 ```bash
 npm run typecheck
@@ -103,15 +97,15 @@ python3 -m unittest discover -s tests/Frontend -p test_expenses.py -v
 python3 -m unittest discover -s tests/Frontend -p test_system.py -v
 npm run test:frontend-api
 bash tests/run-postgres.sh --filter 'ExpenseApiTest|DriverPortalTest|SystemNavigationTest|TripOperationsTest|TransportApiTest'
-timeout --kill-after=10s 180s bash tests/run-postgres.sh --e2e-driver-offline -v
-timeout --kill-after=10s 180s bash tests/run-postgres.sh --e2e-expenses-driver -v
+bash tests/run-postgres.sh --e2e-driver-offline -v
+bash tests/run-postgres.sh --e2e-expenses-driver -v
 vendor/bin/pint --test
 git diff --check
 ```
 
-En el runner E2E no establecer `POSTGRES_TEST_DATA_ROOT`: su bootstrap exige el
-clúster dentro del directorio temporal de sockets. Nunca utilizar `.env`,
-`transporte_db` ni bases existentes para ejecutar estas verificaciones.
+En E2E no establecer `POSTGRES_TEST_DATA_ROOT`: el bootstrap exige el clúster en
+el directorio temporal de sockets. Los perfiles persistentes son sintéticos y
+pertenecen a los artefactos temporales de cada ejecución.
 
 ## Límites
 
