@@ -1245,3 +1245,14 @@ Snapshots seguros solo mediante lista explícita de campos registrados; ninguna
 reconstrucción retrospectiva ni exposición de datos privados de idempotencia o
 archivos. Vue reutiliza `SystemApp`, sesión, navegación y selectores compartidos.
 Cobertura, límites y verificación en [Auditoría administrativa](docs/auditoria-administrativa.md).
+
+## Respaldos y recuperación operativa
+
+`BackupRecovery` y `backups:run` capturan PostgreSQL 18 y las raíces privadas
+existentes como un conjunto cifrado/autenticado con manifiesto SHA-256. Requieren
+mantenimiento y escritores drenados; utilizan snapshot exportado y locks de tablas.
+No alteran los módulos ni crean nuevas tablas. `config/backups.php` habilita destino,
+clave externa, retención y Scheduler de forma explícita; conserva las alertas actuales.
+El perfil adicional `pgsql_recovery` no modifica la conexión operativa. Restauración
+solo a servidor aislado y base/directorio nuevos, con confirmación exacta y validación
+previa. Véanse [comandos, procedimiento, pruebas y límites](docs/respaldos-y-recuperacion.md).

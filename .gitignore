@@ -35,3 +35,10 @@ _ide_helper.php
 Homestead.json
 Homestead.yaml
 Thumbs.db
+
+# Backup sets, keys and recovery output must never be published.
+/backups/
+/restore_*/
+*.dump
+*.sql.gz
+*.backup-key

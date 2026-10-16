@@ -22,3 +22,9 @@ Artisan::command('documents:check-expirations', function () {
 
 Schedule::command('documents:check-expirations')
     ->dailyAt('06:00')->timezone('America/Costa_Rica')->withoutOverlapping();
+
+// Opt-in maintenance window; never put the application down or stop workers implicitly.
+if (preg_match('/\A(?:[01][0-9]|2[0-3]):[0-5][0-9]\z/D', (string) config('backups.schedule_time'))) {
+    Schedule::command('backups:run create'.(config('backups.writers_stopped') ? ' --quiesced' : ''))
+        ->dailyAt(config('backups.schedule_time'))->timezone('America/Costa_Rica')->withoutOverlapping()->evenInMaintenanceMode();
+}

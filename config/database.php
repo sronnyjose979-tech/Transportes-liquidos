@@ -94,6 +94,20 @@ return [
             ]) : [],
         ],
 
+        // Recovery only: configure a separate isolated server; never defaults to live credentials.
+        'pgsql_recovery' => [
+            'driver' => 'pgsql',
+            'host' => env('BACKUP_RESTORE_HOST'),
+            'port' => env('BACKUP_RESTORE_PORT', '5432'),
+            'database' => env('BACKUP_RESTORE_MAINTENANCE_DB', 'postgres'),
+            'username' => env('BACKUP_RESTORE_USERNAME'),
+            'password' => env('BACKUP_RESTORE_PASSWORD'),
+            'charset' => 'utf8',
+            'prefix' => '',
+            'search_path' => 'public',
+            'sslmode' => env('BACKUP_RESTORE_SSLMODE', 'verify-full'),
+        ],
+
         'pgsql' => [
             'driver' => 'pgsql',
             'url' => env('DB_URL'),
