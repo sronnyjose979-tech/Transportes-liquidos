@@ -7,6 +7,8 @@ import hashlib
 import json
 import os
 from pathlib import Path
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 import signal
 import socket
 import subprocess
@@ -86,6 +88,11 @@ class DocumentModuleE2E(unittest.IsolatedAsyncioTestCase):
         asyncio.get_running_loop().slow_callback_duration = 2.0
         type(self).counter += 1
         self.fixture = self.command('fixture', {'tag': f'E2E-{9999 - self.counter:04}'})
+        # Native browser cookies and Laravel sessions must use wall time.
+        # Exact midnight boundaries are covered with explicit instants in PostgreSQL tests.
+        self.command('real-clock')
+        self.today = datetime.now(ZoneInfo('America/Costa_Rica')).date()
+        self.expiration = (self.today + timedelta(days=30)).isoformat()
         self.asset = self.fixture['tractor']
         self.tanker = self.fixture['tanker']
         self.kind = self.fixture['types'][0]
@@ -145,7 +152,9 @@ class DocumentModuleE2E(unittest.IsolatedAsyncioTestCase):
         await expect(self.page.get_by_role('heading', name='Documentación de ' + asset['code'])).to_be_visible()
         await expect(self.page.get_by_text('Cargando documentos…')).not_to_be_visible()
 
-    async def form(self, kind=None, expires='2026-10-27', extension='pdf', renewal=False):
+    async def form(self, kind=None, expires='default', extension='pdf', renewal=False):
+        if expires == 'default':
+            expires = self.expiration
         kind = kind or self.kind
         if renewal:
             await self.page.get_by_role('button', name='Renovar ' + kind['name'], exact=True).click()
@@ -220,7 +229,7 @@ class DocumentModuleE2E(unittest.IsolatedAsyncioTestCase):
         await self.sign_in('secretary')
         for asset, extension, kind in [(self.asset, 'pdf', self.kind), (self.tanker, 'jpg', self.kind), (self.tanker, 'png', self.no_expiration)]:
             await self.select(asset)
-            await self.form(kind, expires='2026-10-27' if kind['tracks_expiration'] else None, extension=extension)
+            await self.form(kind, expires=self.expiration if kind['tracks_expiration'] else None, extension=extension)
             created = await self.submit()
             self.assertEqual(asset['id'], created['fleet_asset_id'])
             self.assertTrue(created['is_current'])
@@ -243,7 +252,7 @@ class DocumentModuleE2E(unittest.IsolatedAsyncioTestCase):
                                                     data={'name': self.no_expiration['name'] + '-ACTUAL', 'tracks_expiration': True})
         self.assertEqual(200, response.status)
         await admin_context.close()
-        await self.form(self.no_expiration, expires='2026-10-27', renewal=True)
+        await self.form(self.no_expiration, expires=self.expiration, renewal=True)
         current = await self.submit(renewal=True)
         self.assertTrue(current['configuration']['tracks_expiration'])
         snapshot = self.inspect()
@@ -267,8 +276,7 @@ class DocumentModuleE2E(unittest.IsolatedAsyncioTestCase):
     async def test_alert_boundaries_and_costa_rica_calendar_end_of_expiration_day(self):
         await self.sign_in()
         await self.select()
-        # Frozen server time is 2026-10-12 05:59:59 UTC = Oct 11 23:59:59 Costa Rica.
-        await self.form(expires='2026-10-26')  # exactly +15 days
+        await self.form(expires=(self.today + timedelta(days=15)).isoformat())
         edge = await self.submit()
         self.assertEqual('expiring_soon', edge['validity'])
         await self.form(self.no_expiration, expires=None)
@@ -276,17 +284,19 @@ class DocumentModuleE2E(unittest.IsolatedAsyncioTestCase):
         self.assertEqual('no_expiration', none['validity'])
         await self.page.get_by_label('Vigencia', exact=True).select_option('expiring_soon')
         await expect(self.page.get_by_role('cell', name='Próximo a vencer', exact=True)).to_be_visible()
-        await self.form(expires='2026-10-27', renewal=True)  # +16 days
+        await self.form(expires=(self.today + timedelta(days=16)).isoformat(), renewal=True)  # +16 days
         self.assertEqual('valid', (await self.submit(renewal=True))['validity'])
         await self.page.get_by_label('Vigencia', exact=True).select_option('')
-        await self.form(expires='2026-10-11', renewal=True)  # valid for the entire local date
+        await self.form(expires=self.today.isoformat(), renewal=True)  # Includes the complete current local date
         today = await self.submit(renewal=True)
         self.assertEqual('expiring_soon', today['validity'])
-        self.command('clock', {'at': '2026-10-12T06:00:00+00:00'})
+        await self.form(expires=(self.today - timedelta(days=1)).isoformat(), renewal=True)
+        yesterday = await self.submit(renewal=True)
+        self.assertEqual('expired', yesterday['validity'])
         await self.page.get_by_role('button', name='Actualizar', exact=True).click()
         await self.page.get_by_label('Vigencia', exact=True).select_option('expired')
         await expect(self.page.get_by_role('cell', name='Vencido', exact=True)).to_be_visible()
-        response = await self.context.request.get(self.base + '/api/documents/' + today['id'])
+        response = await self.context.request.get(self.base + '/api/documents/' + yesterday['id'])
         self.assertEqual('expired', (await response.json())['data']['validity'])
         await self.page.get_by_label('Vigencia', exact=True).select_option('no_expiration')
         await expect(self.page.get_by_role('cell', name='Sin vencimiento', exact=True)).to_be_visible()
@@ -381,7 +391,7 @@ class DocumentModuleE2E(unittest.IsolatedAsyncioTestCase):
         await self.page.get_by_role('button', name='Actualizar sesión de seguridad').click()
         await expect(self.page.get_by_text('Sesión de seguridad actualizada. Puedes volver a enviar el formulario.')).to_be_visible()
         self.assertEqual(1, len(self.posts))
-        await expect(self.page.get_by_label('Fecha de vencimiento', exact=False)).to_have_value('2026-10-27')
+        await expect(self.page.get_by_label('Fecha de vencimiento', exact=False)).to_have_value(self.expiration)
         await self.submit()
 
     async def test_unknown_resource_returns_real_404_and_ui_handles_missing_download(self):
