@@ -31,24 +31,14 @@ return Application::configure(basePath: dirname(__DIR__))
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->report(function (QueryException $exception) {
-            if (request()->is('api/audit*', 'api/document-alerts*', 'api/reports/*')) {
-                Log::warning(request()->is('api/document-alerts*') ? 'document_alerts.database_operation_rejected' : (request()->is('api/audit*') ? 'audit.database_query_rejected' : 'reports.database_query_rejected'), ['sqlstate' => $exception->errorInfo[0] ?? null]);
+            // Never pass the exception, SQL, bindings or connection details to the logger.
+            // Cover HTTP and console alike, including routes added in the future.
+            $state = $exception->errorInfo[0] ?? null;
+            Log::warning('database.operation_failed', [
+                'sqlstate' => is_string($state) && preg_match('/\A[A-Z0-9]{5}\z/D', $state) ? $state : 'unknown',
+            ]);
 
-                return false;
-            }
-            if (request()->is('api/billing/*', 'api/expenses*')) {
-                Log::warning(request()->is('api/expenses*') ? 'expenses.database_operation_rejected' : 'billing.database_operation_rejected', ['sqlstate' => $exception->errorInfo[0] ?? null]);
-
-                return false;
-            }
-            if (request()->is('api/workshop/*', 'api/purchasing/*', 'api/inventory/*', 'api/catalogs/spare-parts*')) {
-                // Do not log SQL bindings containing private documents or economic data.
-                Log::warning(request()->is('api/inventory/*', 'api/catalogs/spare-parts*') ? 'inventory.database_operation_rejected' : (request()->is('api/purchasing/*') ? 'purchasing.database_operation_rejected' : 'workshop.database_operation_rejected'), ['sqlstate' => $exception->errorInfo[0] ?? null]);
-
-                return false;
-            }
-
-            return null;
+            return false;
         });
         $exceptions->render(function (QueryException $exception, Request $request) {
             if ($request->is('api/audit*', 'api/document-alerts*', 'api/reports/*', 'api/expenses*', 'api/billing/*', 'api/workshop/*', 'api/workshop', 'api/purchasing/*', 'api/inventory/*', 'api/catalogs/spare-parts*', 'api/purchasing', 'api/inventory')) {
@@ -58,7 +48,12 @@ return Application::configure(basePath: dirname(__DIR__))
                 return TransportApiErrors::databaseError($exception);
             }
 
-            return null;
+            // Preserve the generic 500 contract without Laravel's debug exception payload.
+            $response = $request->is('api/*') || $request->expectsJson()
+                ? response()->json(['message' => 'Server Error'], 500)
+                : response('Server Error', 500)->header('Content-Type', 'text/plain; charset=UTF-8');
+
+            return $response->header('Cache-Control', 'private, no-store')->header('X-Content-Type-Options', 'nosniff');
         });
         $exceptions->render(function (ValidationException $exception, Request $request) {
             if ($request->is('api/workshop/*') && $exception->validator->failed() === [] && (isset($exception->errors()['version']) || ($exception->errors()['request_key'][0] ?? '') === 'Clave reutilizada con contenido distinto.')) {

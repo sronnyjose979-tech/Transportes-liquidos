@@ -31,7 +31,7 @@ requisitos generales de salida de restricciones sobre una funcionalidad concreta
 | P0-01. Riesgo por verificar: configuración efectiva de seguridad del despliegue | `AGENTS.md`, §8; `config/app.php` (`debug`, `url`); `config/session.php` (`secure`, dominio, SameSite); `bootstrap/app.php` | Alta | Debug, HTTP, cookies o proxy mal configurados podrían exponer información o comprometer sesiones. Los valores efectivos de producción no se han auditado. | Verificar HTTPS y redirección, `APP_DEBUG=false`, dominio/URL, cookie Secure/HttpOnly, confianza de proxy limitada, exposición exclusiva de `public/`, ausencia de caché compartida de respuestas privadas y acceso restringido a PostgreSQL. Probar login/CSRF y descarga privada en el destino antes de habilitar usuarios. | No; asignar responsable técnico. | Sí, hasta aportar evidencia del destino. |
 | P0-02. Riesgo por verificar: recuperación operativa y copia externa sin acreditación | `config/backups.php`; `docs/respaldos-y-recuperacion.md`, configuración y límites; `tests/Feature/BackupRecoveryTest.php` | Alta | Una avería del servidor podría dejar sin datos/archivos recuperables aunque las pruebas aisladas pasen. | Aprobar RPO/RTO, frecuencia, retención y responsables; configurar copia aislada, clave externa y custodia separada de `APP_KEY`/configuración; ensayar restauración en servidor de recuperación y medir tiempos. | Sí: tolerancia a pérdida e interrupción, retención y responsables. | Sí, antes de almacenar datos operativos reales. |
 | P0-03. Comprobado: respaldo automático requiere ventana y drenaje explícitos | `routes/console.php`; `config/backups.php`; `BackupRecovery/Application/BackupArchive.php::create` | Alta | Programar el comando no detiene escritores; sin mantenimiento falla, y una declaración incorrecta de drenaje puede invalidar la consistencia conjunta base/archivos. | Preparar procedimiento que detenga admisión de escrituras, drene HTTP/cargas/procesos/reconciliadores, entre en mantenimiento, capture/verifique y reactive; supervisar salida y antigüedad de copia. `BACKUP_WRITERS_STOPPED` es una declaración operativa, no un verificador. | Sí: ventana operativa; ejecución técnica. | Sí, para considerar automatizada la protección de datos. |
-| P0-04. Comprobado: saneamiento de errores SQL no cubre todas las rutas | `bootstrap/app.php`, callback `report(QueryException)`; `routes/backend.php`; `vendor/laravel/framework/src/Illuminate/Database/QueryException.php::formatMessage` | Alta | Transporte, cuentas, flota y documentos quedan fuera de la lista que evita el reporte SQL normal. Una excepción no capturada puede registrar consulta, parámetros y datos de conexión; en rutas sin render específico, debug agravaría exposición HTTP. No se inspeccionaron logs productivos ni se afirma una filtración ocurrida. | Homogeneizar el reporte seguro por SQLSTATE/código y mensajes HTTP; añadir regresión para rutas omitidas y comprobar que ni parámetros sensibles ni detalles internos aparecen en logs/respuestas. Mantener logs privados. No registrar excepciones completas para lograr trazabilidad. | No. | Sí: cerrar esta brecha de cobertura antes de introducir datos sensibles. |
+| P0-04. Corregido: saneamiento centralizado de errores SQL | `bootstrap/app.php`, callbacks `report(QueryException)` y `render(QueryException)`; `tests/Feature/QueryExceptionSafetyTest.php` | Alta (hallazgo original; resuelto en código) | Se eliminó la caída al reporte SQL predeterminado. Todas las rutas y consola registran únicamente evento fijo y SQLSTATE validado; las respuestas genéricas no contienen payload de debug. | Mantener la regresión y verificar configuración productiva según P0-01. Se conservan los contratos HTTP específicos de los módulos y el 500 para fallos genéricos. | No. | No: corrección y regresiones verificadas; no implica que los demás bloqueos estén resueltos. |
 | P0-05. Decisión pendiente: facturación interna no sustituye emisión fiscal | `docs/facturacion-administrativa-y-pagos.md`, límites; `ARCHITECTURE.md`, Facturación administrativa | Alta | Utilizar documentos internos como comprobantes legales produciría un uso no soportado. | Mantener identificación interna; acordar proceso externo legal/fiscal y conciliación o aprobar una entrega fiscal posterior. No agregar impuestos/numeración por inferencia. | Sí. | Sí para sustituir facturación legal; no bloquea por sí sola un piloto interno con proceso fiscal externo definido. |
 | P0-06. Decisión pendiente: correcciones posteriores a factura y reversión de pagos | `docs/facturacion-administrativa-y-pagos.md`, límites; `BillingAndPayments/Application/BillingPayments.php`; migración `000360` | Alta | Un error financiero confirmado no dispone del circuito aprobado de compensación; editar SQL vulneraría auditoría/saldos. | Aprobar responsables y procedimiento compensatorio para anulaciones, correcciones y pagos erróneos antes de operar cobros reales. Conservar la inmutabilidad actual. | Sí. | Sí para operación financiera real sin un procedimiento seguro aprobado. |
 | P1-01. Riesgo por verificar: permisos efectivos y custodia de secretos | `config/database.php`; `.gitignore`; `AccessAndPersonnel/Console/BootstrapAdministrator.php`; `AGENTS.md`, §8 | Alta | Un usuario SQL propietario/superusuario puede eludir protecciones; pérdida de claves o acceso administrativo compromete recuperación y confidencialidad. | Separar usuario de aplicación, migración, administración y respaldo; verificar privilegios mínimos y permisos de archivos. Crear administrador por comando interactivo; custodiar y rotar secretos fuera de Git. Verificar recuperación de acceso sin inventar cuentas por defecto. Solo `.env.example` está versionado; no se hizo análisis forense completo del historial Git. | No; acordar responsables de custodia. | Sí: comprobar antes del despliegue. |
@@ -81,7 +81,7 @@ Los prefijos de evidencia `AccessAndPersonnel/`, `TransportAndDispatch/`,
 
 ## Condiciones para autorizar producción
 
-1. Resolver P0-04; acreditar P0-01/02/03 y P1-01/02 en el destino, sin inferirlos
+1. P0-04 está corregido; acreditar P0-01/02/03 y P1-01/02 en el destino, sin inferirlos
    del éxito de las pruebas locales. No hace falta repetir todas las suites: usar
    regresiones específicas para cambios y smoke tests del despliegue.
 2. Definir el uso financiero permitido y resolver P0-05/06 antes de cobrar/facturar
@@ -99,4 +99,30 @@ controladores de sesión, servicios transaccionales/reportes/auditoría, persist
 PWA y respaldo. Comprobación remota de `main`; verificación de referencias y
 `git diff --check`. No se repitieron suites, no se ejecutaron migraciones/restauraciones
 ni se añadieron dependencias. La publicación de esta entrega incluye solo este Markdown;
-ningún hallazgo fue corregido todavía.
+ningún hallazgo fue corregido durante la auditoría original. La corrección posterior de P0-04 se detalla a continuación.
+
+## Corrección posterior de P0-04
+
+Se modificó únicamente el manejo central de `QueryException` en `bootstrap/app.php`.
+El evento `database.operation_failed` conserva diagnóstico mediante SQLSTATE de cinco
+caracteres alfanuméricos mayúsculos; valores inválidos se sustituyen por `unknown`.
+No se pasan al logger la excepción, mensaje de PostgreSQL, SQL, parámetros, conexión,
+credenciales ni ruta solicitada. El callback detiene el reporte predeterminado también
+fuera de HTTP. Los errores siguen siendo errores: no se convierten en respuestas exitosas.
+
+Se conservaron los mapeos y cuerpos específicos de Transporte y los demás módulos.
+Las rutas sin mapeo previo devuelven un 500 genérico JSON o texto, con no-store/nosniff,
+incluso con debug activado. Las validaciones y excepciones funcionales ya gestionadas
+por los servicios no cambian; no hay migraciones, dependencias ni reglas nuevas.
+
+Regresión: `tests/Feature/QueryExceptionSafetyTest.php` verifica superficies existentes
+y futuras, HTML/JSON con debug, logs HTTP/consola, SQLSTATE no confiable, contratos
+409/422/503/500 y un error real PostgreSQL con parámetro sintético sensible.
+
+Validación aislada: `bash tests/run-postgres.sh` con filtro
+`QueryExceptionSafetyTest|TransportApiTest|FleetDocumentApiTest|AccountSecurityTest|AccessAdministrationTest|BillingPaymentsTest`:
+**71 pruebas correctas, 1.921 aserciones**. No se repitió la validación integral.
+Regresión final tras ampliar la comprobación HTML: **4 pruebas correctas, 1.103
+aserciones** (incluidas en el alcance anterior, no se suman como pruebas distintas).
+`vendor/bin/pint --test` y `git diff --check`: correctos.
+No se modificaron `.env`, `transporte_db` ni los demás hallazgos.
