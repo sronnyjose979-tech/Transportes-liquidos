@@ -115,3 +115,71 @@ termine de instalarse. El navegador puede borrar datos si el usuario limpia el
 sitio, usa modo privado o elimina almacenamiento; la aplicación no puede garantizar
 recuperación de bytes eliminados externamente. IndexedDB no cifra frente a XSS
 ni protege contra alguien con acceso al perfil local: usar dispositivos confiables.
+
+## Pulido móvil y estados del conductor
+
+Base de esta entrega: `0d8544e`. Cambios limitados a `System/DriverTrips.vue`,
+la integración del conductor en `System/SystemApp.vue` y sus pruebas. Se conservan
+IndexedDB, Web Locks, claves idempotentes, comprobantes, contexto de asignaciones,
+service worker y contratos del servidor. No hay migraciones ni dependencias nuevas.
+
+Problemas corregidos:
+
+- Guardar un formulario borraba también borradores de los otros. Ahora, después
+  de confirmar la escritura local, solo se limpian los campos de esa operación.
+  Un reporte no borra kilometraje ni gastos/comprobantes sin enviar; los dos inputs
+  de comprobantes tienen generaciones independientes. Si falla IndexedDB se mantienen
+  los datos introducidos, sin anunciar que se guardaron.
+- La presencia de una captura sincronizada antigua disparaba una confirmación verde
+  durante un intento nuevo fallido. Ahora se cuentan únicamente las capturas que
+  recibieron confirmación en el intento actual; se elimina el mensaje anterior al
+  iniciar otro intento/captura. La persistencia local y la confirmación del servidor
+  siguen siendo estados diferentes.
+- Se distinguen conexión, pendientes, enviando, sincronizadas, conflictos y rechazos
+  con texto, recuentos y señales visuales. Sin conexión se explica que hay que recuperar
+  conexión y mantener abierta la aplicación. El botón manual no se ofrece como acción
+  efectiva cuando no hay conexión o solo hay conflictos/rechazos. Estos permanecen
+  disponibles para descargar y revisar con oficina, sin editar ni reenviar sus datos.
+- Los datos técnicos de cada captura se consultan mediante un desplegable. Textos
+  largos, controles de fecha/archivo y paginación se ajustan a anchos pequeños, sin
+  ocultar contenido con un recorte horizontal global.
+- El aviso antes de salir incluye capturas con error/conflicto y aclara que no es
+  obligatorio sincronizarlas primero. Sin conexión, la salida responde inmediatamente
+  con una explicación y libera el botón; **no afirma que cerró la sesión del servidor**.
+  Se puede cerrar la aplicación conservando sus datos y volver con conexión. La salida
+  efectiva y el cambio de cuenta requieren conexión y conservan la coordinación de
+  sesión existente. Un cambio desde otra pestaña informa que las capturas se conservan
+  para la cuenta original.
+
+### Verificación de esta entrega
+
+| Prueba ejecutada | Resultado |
+| --- | --- |
+| Portal, IndexedDB/Web Locks y sistema, Chromium con HTTP sintético | 19 pruebas correctas: 7 de portal, 8 de almacenamiento y 4 de sistema |
+| Pantallas pequeñas | 320/360/390 px con ruta/textos largos, JSON desplegado, comprobante seleccionado y borradores conservados; sin desbordamiento horizontal |
+| E2E PWA, Chromium persistente + Laravel + PostgreSQL 18 aislado | 3 escenarios correctos: reinicio offline con comprobante/sincronización; conflictos/actualización del SW; expiración/cambio de cuenta/recuperación, este último a 320 px |
+| TypeScript, build y diff check | Correctos; se conserva el aviso previo de importación estática/dinámica de `DriverPortal/local.ts` |
+
+Los tests nuevos cubren borradores de otros formularios y archivos, fallo de cuota,
+estado enviando sin éxito prematuro, conflicto después de un envío anterior confirmado,
+aviso de salida offline y el reintento existente con la misma clave. El primer E2E
+no arrancó por falta de espacio en `/tmp`; se trasladaron clústeres sintéticos anteriores,
+comprobados como detenidos, al volumen de trabajo, conservándolos. Una vez arrancado,
+el caso de reinicio/comprobante pasó; dos selectores quedaron desactualizados por el
+desplegable y el mensaje nuevo. Se adaptaron y se repitieron solo esos dos casos,
+que pasaron, incluyendo las verificaciones del SW e historial originales.
+
+No se repitieron suites backend generales ni se modificó PHP; las comprobaciones
+reales del servidor fueron las del E2E aislado. No hubo cambios de `.env`,
+`transporte_db` ni configuración del servidor.
+
+### Límites que se conservan
+
+Las dimensiones anteriores son viewports automatizados, **no teléfonos físicos**.
+Queda probar teclado/selector de archivos, instalación, suspensión, batería y cuota
+con los dispositivos y navegadores de la empresa, especialmente Safari/iOS si se
+pretende admitirlos. Sincronizar exige la aplicación abierta y conexión; cerrar la
+aplicación no garantiza ejecución en segundo plano. Los borradores sin capturar solo
+están en memoria: esta entrega no añade guardado automático ni preservación entre
+cuentas. Las capturas confirmadas en IndexedDB se conservan según las reglas anteriores;
+borrar el almacenamiento del navegador sigue pudiendo perder pendientes.

@@ -3,6 +3,7 @@ Run: bash tests/run-postgres.sh --e2e-driver-offline (after a production build).
 No API success mocks; the existing fault proxy can discard a committed response.
 """
 import asyncio
+import re
 import os
 import tempfile
 import unittest
@@ -97,6 +98,7 @@ class DriverOfflineE2E(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(any(p.startswith('/api/') or p=='/mis-viajes' for p in keys))
 
     async def test_session_expiry_account_change_and_reauthentication_preserve_queue(self):
+        await self.page.set_viewport_size({'width':320,'height':740})
         await self.ready();await self.report_offline('Reporte privado de cuenta original')
         # End server session without invoking UI cleanup, simulating session expiry.
         # Clear cookies while offline, then resume so the first sync sees expiry.
@@ -109,7 +111,8 @@ class DriverOfflineE2E(unittest.IsolatedAsyncioTestCase):
         await expect(self.page.get_by_role('button',name='Cerrar sesión',exact=True)).to_be_visible()
         await expect(self.page.get_by_text('Reporte privado de cuenta original',exact=False)).to_have_count(0)
         await self.out();await self.login('driver',self.fixture['driver_login'])
-        await expect(self.page.get_by_role('status').filter(has_text='Registros confirmados por el servidor')).to_be_visible(timeout=30000)
+        await expect(self.page.get_by_role('status').filter(has_text=re.compile(r'confirmados? por el servidor'))).to_be_visible(timeout=30000)
+        self.assertTrue(await self.page.evaluate('document.documentElement.scrollWidth<=innerWidth'))
         history=await self.api('/transport/my-records')
         self.assertTrue(any(r['information'].get('observation')=='Reporte privado de cuenta original' for r in history['body']['data']['reports']))
 
@@ -121,6 +124,7 @@ class DriverOfflineE2E(unittest.IsolatedAsyncioTestCase):
         await expect(self.page.get_by_text('en conflicto',exact=True)).to_be_visible(timeout=30000)
         await self.page.reload()
         await expect(self.page.get_by_text('en conflicto',exact=True)).to_be_visible()
+        await self.page.get_by_text('Ver datos de esta captura',exact=True).click()
         await expect(self.page.get_by_text('Conservar ante cancelación y liberación',exact=False)).to_be_visible()
         self.assertEqual(before,self.expenses('snapshot',self.fixture))
         worker=support.ROOT/'public/build/driver-sw.js'
