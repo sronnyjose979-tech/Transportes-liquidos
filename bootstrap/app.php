@@ -23,6 +23,12 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        // Local TLS terminates at Nginx; only the loopback proxy may supply these headers.
+        $middleware->trustProxies(
+            at: ['127.0.0.1'],
+            headers: Request::HEADER_X_FORWARDED_FOR | Request::HEADER_X_FORWARDED_HOST
+                | Request::HEADER_X_FORWARDED_PORT | Request::HEADER_X_FORWARDED_PROTO,
+        );
         $middleware->prependToPriorityList(
             AuthenticatesSessions::class,
             EnsureActiveAccount::class,
