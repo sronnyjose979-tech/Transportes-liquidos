@@ -17,7 +17,7 @@ class SupplyCatalogBrowserTest(unittest.IsolatedAsyncioTestCase):
         browser_support.FleetDocumentsBrowserTest.tearDownClass.__func__(cls)
 
     async def asyncSetUp(self):
-        self.records = {'customers': [], 'spare-parts': [], 'suppliers': []}
+        self.records = {key: [] for key in ['customers','spare-parts','suppliers','routes','operation-sites','liquid-products']}
         self.writes = []
         self.rejection = None
         self.hold = None
@@ -71,6 +71,20 @@ class SupplyCatalogBrowserTest(unittest.IsolatedAsyncioTestCase):
     async def open_catalog(self, kind):
         await self.page.goto(self.base + '/administracion/catalogos')
         await self.page.get_by_label('Catálogo', exact=True).select_option(kind)
+
+    async def test_routes_entry_explains_missing_sites_and_preserves_selected_catalog(self):
+        await self.page.goto(self.base+'/administracion/catalogos?catalogo=routes')
+        await expect(self.page.get_by_role('heading',name='Rutas de transporte',exact=True)).to_be_visible()
+        await expect(self.page.get_by_role('button',name='Registrar ruta',exact=True)).to_be_disabled()
+        await expect(self.page.get_by_role('status').filter(has_text='Todavía no hay sitios')).to_be_visible()
+        await self.page.get_by_role('button',name='Registrar sitios de origen y destino',exact=True).click()
+        await expect(self.page.get_by_role('button',name='Registrar sitio',exact=True)).to_be_visible()
+        self.assertIn('catalogo=operation-sites',self.page.url)
+        await self.page.reload()
+        await expect(self.page.get_by_role('heading',name='Sitios operativos',exact=True)).to_be_visible()
+        await self.page.set_viewport_size({'width':390,'height':844})
+        self.assertTrue(await self.page.evaluate('document.documentElement.scrollWidth<=innerWidth'))
+        self.assertEqual([],self.writes)
 
     async def test_fleet_pending_write_cannot_close_form_and_validation_retains_data(self):
         self.hold=asyncio.Event()

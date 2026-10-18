@@ -13,6 +13,20 @@ LOAD='40000000-0000-4000-8000-000000000004'
 ITEM='40000000-0000-4000-8000-000000000005'
 
 class TransportBrowserTest(unittest.IsolatedAsyncioTestCase):
+    async def test_catalog_preparation_links_respect_office_role(self):
+        for role in ['administrator','secretary']:
+            self.role=role
+            await self.page.goto(self.base+'/transporte')
+            await self.page.get_by_role('button',name='Solicitudes',exact=True).click()
+            await self.page.get_by_role('button',name='Registrar solicitud',exact=True).click()
+            link=self.page.get_by_role('link',name='Registrar rutas de transporte',exact=True)
+            if role=='administrator':
+                await expect(link).to_have_attribute('href','/administracion/catalogos?catalogo=routes')
+                await expect(self.page.get_by_role('link',name='Registrar sitios operativos',exact=True)).to_have_attribute('href','/administracion/catalogos?catalogo=operation-sites')
+            else:
+                await expect(link).to_have_count(0)
+                await expect(self.page.get_by_text('solicita su registro al administrador',exact=False)).to_be_visible()
+        self.assertEqual([],self.writes)
     @classmethod
     def setUpClass(cls): support.FleetDocumentsBrowserTest.setUpClass.__func__(cls)
     @classmethod

@@ -51,7 +51,7 @@ onBeforeUnmount(() => controller?.abort());
 </div>
 <template v-if="creating||editing">
 <CommandForm :creation="editing?undefined:'request'" :key="editing?.id??'create'" :title="editing?'Editar solicitud':'Registrar solicitud'" :fields="fields" :submit="save"/>
-<p class="notice-info">El producto histórico no se cambia. Las rutas deben existir previamente; esta API permite seleccionarlas, no crearlas.</p>
+<aside class="notice-info space-y-2"><p>Selecciona cliente, producto y una ruta ya registrada. El producto histórico no se cambia.</p><template v-if="ctx.admin.value"><p>Si falta una ruta, primero registra sus sitios de origen y destino en Catálogos operativos. Guarda allí los datos y vuelve a abrir esta solicitud para actualizar las opciones.</p><div class="flex flex-wrap gap-3"><a href="/administracion/catalogos?catalogo=operation-sites" class="underline">Registrar sitios operativos</a><a href="/administracion/catalogos?catalogo=routes" class="underline">Registrar rutas de transporte</a></div></template><p v-else>Si faltan clientes, productos o rutas, solicita su registro al administrador en Catálogos operativos. Después vuelve a abrir Transporte para actualizar las opciones.</p></aside>
 <button class="btn-secondary" :disabled="ctx.busy.value" @click="creating=false;editing=null">Cerrar formulario</button>
 </template>
 <section class="panel">

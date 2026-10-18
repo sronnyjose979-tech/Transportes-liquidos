@@ -44,14 +44,14 @@ class DocumentModuleE2E(unittest.IsolatedAsyncioTestCase):
             raise RuntimeError('Ejecuta exclusivamente bash tests/run-postgres.sh --e2e.')
         if not (ROOT / 'public/build/manifest.json').exists():
             raise RuntimeError('Ejecuta npm run build antes de la suite E2E.')
-        cls.artifacts = cls.workspace / 'browser'
-        cls.artifacts.mkdir()
+        cls.artifacts = cls.workspace / 'browser' / cls.__name__
+        cls.artifacts.mkdir(parents=True)
         sock = socket.socket()
         sock.bind(('127.0.0.1', 0))
         cls.port = sock.getsockname()[1]
         sock.close()
         cls.base = f'http://127.0.0.1:{cls.port}'
-        cls.log = (cls.workspace / 'http.log').open('w')
+        cls.log = (cls.workspace / ('http-' + cls.__name__ + '.log')).open('w')
         env = dict(os.environ, PHP_CLI_SERVER_WORKERS='4')
         cls.server = subprocess.Popen(['php', '-d', 'upload_max_filesize=12M', '-d', 'post_max_size=14M',
                                       '-S', f'127.0.0.1:{cls.port}', str(ROOT / 'tests/E2E/server.php')],
@@ -67,7 +67,7 @@ class DocumentModuleE2E(unittest.IsolatedAsyncioTestCase):
                             return
                 except OSError:
                     time.sleep(.1)
-            raise RuntimeError(f'No inició Laravel E2E. Registro: {cls.workspace / "http.log"}')
+            raise RuntimeError(f'No inició Laravel E2E. Registro: {cls.log.name}')
         except BaseException:
             os.killpg(cls.server.pid, signal.SIGTERM)
             cls.server.wait(timeout=10)

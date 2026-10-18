@@ -14,6 +14,7 @@ interface TransportRoute {
 }
 interface OperationSite { id: string; name: string; address: string }
 const ctx = useAdmin();
+const emit = defineEmits<{ sites: [] }>();
 const rows = ref<TransportRoute[]>([]), sites = ref<OperationSite[]>([]);
 const search = ref(''), page = ref(1), loading = ref(false), opening = ref(false), form = ref(false);
 const current = ref<TransportRoute | null>(null), name = ref(''), origin = ref(''), destination = ref('');
@@ -83,10 +84,12 @@ onMounted(() => load());
 <template>
     <section class="space-y-5">
         <div class="panel flex flex-wrap items-center gap-3">
-            <button class="btn-primary" :disabled="disabled" @click="open()">Registrar ruta</button>
+            <button class="btn-primary" :disabled="disabled || !sites.length" @click="open()">Registrar ruta</button>
             <button class="btn-secondary" :disabled="disabled" @click="load()">Actualizar rutas</button>
+            <button v-if="!form" class="btn-secondary" :disabled="disabled" @click="emit('sites')">Registrar sitios de origen y destino</button>
         </div>
         <p class="notice-info">Las rutas utilizan sitios operativos existentes. Las rutas vinculadas a solicitudes se consultan sin editar: su modificación histórica requiere una definición pendiente.</p>
+        <p v-if="!loading&&!sites.length" role="status">Todavía no hay sitios operativos. Registra los sitios de origen y destino antes de crear una ruta.</p>
         <p v-if="opening" role="status">Consultando ruta…</p>
         <form v-if="form" class="panel space-y-4" aria-label="Registro de ruta" @submit.prevent="save">
             <h2 class="text-lg font-semibold">{{ readonly ? 'Consultar ruta' : current ? 'Editar ruta' : 'Nueva ruta' }}</h2>
