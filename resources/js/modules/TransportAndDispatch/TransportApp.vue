@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import ExpirationIndicators from '../DocumentAlerts/ExpirationIndicators.vue';
 import SharedNavigation from '../System/SharedNavigation.vue';
-import { computed, onMounted, provide, ref } from 'vue';
+import WorkOverview from '../System/WorkOverview.vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, provide, ref, watch } from 'vue';
 import { getSession, login, logout, refreshCsrf } from '../FleetAndDocuments/api';
 import type { Session } from '../FleetAndDocuments/contracts';
 import { ApiError, failure, getLookups, getRequests, getTrips } from './api';
@@ -21,8 +22,10 @@ const fields = ref<Record<string, string[]>>({});
 const csrfExpired = ref(false);
 const username = ref('');
 const password = ref('');
-const view = ref('dashboard');
-const selectedTrip = ref('');
+function locationView(): {view:string;trip:string} { const params = new URLSearchParams(window.location.search); const trip = params.get('viaje') ?? ''; const tab = params.get('vista'); return {view:trip ? 'trips' : tab && ['dashboard','requests','trips'].includes(tab) ? tab : 'dashboard',trip}; }
+const initialLocation = locationView();
+const view = ref(initialLocation.view);
+const selectedTrip = ref(initialLocation.trip);
 const initialRequest = ref('');
 const requestFilter = ref('');
 const counts = ref<{
@@ -33,6 +36,23 @@ const lookups = ref<Lookups>({ customers: [], products: [], sites: [], routes: [
 const admin = computed(() => session.value?.roles.includes('administrator') ?? false);
 const office = computed(() => session.value?.roles.some(r => ['administrator', 'secretary'].includes(r)) ?? false);
 let sessionGeneration = 0;
+let restoringLocation = false;
+function writeLocation(replace = false): void {
+    const url = new URL(window.location.href);
+    url.searchParams.set('vista', view.value);
+    if (selectedTrip.value) url.searchParams.set('viaje', selectedTrip.value); else url.searchParams.delete('viaje');
+    if (replace) history.replaceState(null, '', url); else if (url.href !== window.location.href) history.pushState(null, '', url);
+}
+watch([view, selectedTrip], () => { if (!restoringLocation && !initial.value && office.value) writeLocation(); });
+function previousLocation(): void {
+    if (busy.value || uncertain.value) { writeLocation(true); return; }
+    restoringLocation = true;
+    const state = locationView(); view.value = state.view; selectedTrip.value = state.trip;
+    initialRequest.value = ''; requestFilter.value = '';
+    void nextTick(() => { restoringLocation = false; });
+}
+window.addEventListener('popstate', previousLocation);
+onBeforeUnmount(() => window.removeEventListener('popstate', previousLocation));
 function clear(): void {
     sessionGeneration++;
     uncertain.value = false;
@@ -170,7 +190,7 @@ finally {
 <p class="text-sm text-slate-500">Transporte y Despacho</p>
 </div>
 <nav v-if="session&&office" aria-label="Navegación interna" class="flex flex-wrap gap-3">
-<SharedNavigation :session="session" :disabled="busy||uncertain"/>
+<SharedNavigation workspace :session="session" :disabled="busy||uncertain"/>
 <span class="self-center text-sm">{{session.login}} · {{admin?'Administrador':'Secretaria'}}</span>
 <button class="btn-secondary" :disabled="busy" @click="signOut">Cerrar sesión</button>
 </nav>
@@ -204,7 +224,7 @@ finally {
 </section>
 <section v-else-if="!office" class="panel">
 <h1 class="text-xl font-semibold">Acceso no autorizado</h1>
-<p class="mt-3">Esta interfaz administrativa requiere rol de administrador o secretaria. La PWA del conductor todavía no está implementada.</p>
+<p class="mt-3">Esta sección está disponible para Administración y Secretaría. Si eres chofer, accede a Mis viajes desde la navegación autorizada.</p>
 </section>
 <template v-else>
 <nav aria-label="Transporte y Despacho" class="flex flex-wrap gap-2">
@@ -212,6 +232,7 @@ finally {
 </nav>
 <section v-if="view==='dashboard'" class="space-y-5">
 <h1 class="text-2xl font-semibold">Panel general</h1>
+<WorkOverview v-if="!admin" :session="session" office :disabled="busy||uncertain"/>
 <div v-if="counts" class="grid gap-4 sm:grid-cols-2">
 <article class="panel">
 <h2 class="text-sm text-slate-500">Solicitudes registradas</h2>

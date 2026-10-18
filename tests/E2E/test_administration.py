@@ -1,5 +1,5 @@
 """Real Chromium, Laravel session/CSRF and isolated PostgreSQL 18; no API mocks.
-Run bash tests/run-postgres.sh --e2e-administration after npm run build.
+Run bash tests/run-postgres.sh --e2e-administration after pnpm run build.
 """
 import asyncio
 import os
@@ -187,11 +187,11 @@ class AdministrationE2E(unittest.IsolatedAsyncioTestCase):
         await self.save(row.get_by_role('button',name='Desactivar',exact=True),'/users/'+user['id']+'/activation','PATCH',200)
         await expect(row.get_by_role('button',name='Activar',exact=True)).to_be_visible()
         await self.page.get_by_role('button',name='Cerrar sesión',exact=True).click()
-        await self.page.goto(self.base+'/administracion/personal')
         await expect(self.page.get_by_role('heading',name='Acceso a Administración',exact=True)).to_be_visible()
+        await self.page.goto(self.base+'/administracion/personal')
+        await expect(self.page).to_have_url(self.base+'/login')
         await expect(self.page.get_by_role('button',name='Nueva cuenta',exact=True)).to_have_count(0)
         await expect(self.page.get_by_role('form',name='Registro de personal')).to_have_count(0)
-        await self.page.get_by_role('link',name='Iniciar sesión',exact=True).click()
         await expect(self.page.get_by_role('heading',name='Iniciar sesión',exact=True)).to_be_visible()
         await self.login('secretary')
         for name in ['Flota','Personal','Catálogos']:
@@ -262,5 +262,34 @@ class AdministrationE2E(unittest.IsolatedAsyncioTestCase):
         await expect(form.get_by_label('Destino',exact=True)).to_have_value(sites[1]['id'])
         await self.page.set_viewport_size({'width':768,'height':1024})
         self.assertTrue(await self.page.evaluate('document.documentElement.scrollWidth<=innerWidth'))
+
+    async def test_guided_driver_registration_recovers_lost_response_without_partial_personnel(self):
+        await self.login()
+        await self.page.goto(self.base+'/administracion/personal')
+        await self.page.get_by_role('button',name='Registrar personal con acceso',exact=True).click()
+        form=self.page.get_by_role('form',name='Alta guiada de personal')
+        await form.get_by_label('Nombre completo',exact=True).fill(self.tag+'-Guiado')
+        await form.get_by_role('button',name='Continuar',exact=True).click()
+        await form.get_by_label('Usuario de acceso',exact=True).fill(self.tag+'-guided')
+        await form.get_by_label('Correo electrónico',exact=True).fill(self.tag+'@guided.invalid')
+        await form.get_by_label('Contraseña',exact=True).fill(support.PASSWORD)
+        await form.get_by_label('Confirmar contraseña',exact=True).fill(support.PASSWORD)
+        await form.get_by_role('button',name='Continuar',exact=True).click()
+        self.proxy.drop_response_path='/api/users'
+        self.proxy.drop_response_statuses=(201,)
+        await form.get_by_role('button',name='Registrar persona y acceso',exact=True).click()
+        await expect(form.get_by_role('button',name='Registrar persona y acceso')).to_be_disabled()
+        await self.page.get_by_role('button',name='Consultar estado confirmado',exact=True).click()
+        await self.page.get_by_label('Buscar personal',exact=True).fill(self.tag+'-Guiado')
+        await expect(self.page.get_by_role('row').filter(has_text=self.tag+'-Guiado')).to_have_count(1)
+        response=await self.context.request.get(self.base+'/api/users?per_page=100',headers={'Accept':'application/json'})
+        self.assertEqual(200,response.status)
+        accounts=[r for r in (await response.json())['data'] if r['login']==self.tag+'-guided']
+        self.assertEqual(1,len(accounts))
+        response=await self.context.request.get(self.base+'/api/employees?per_page=100',headers={'Accept':'application/json'})
+        workers=[r for r in (await response.json())['data'] if str(r['user_id'])==accounts[0]['id']]
+        self.assertEqual(1,len(workers))
+        self.assertEqual(accounts[0]['employee_id'],workers[0]['id'])
+        self.assertEqual({'driver'},{r['name'] for r in accounts[0]['roles']})
 
 if __name__=='__main__': unittest.main(verbosity=2)

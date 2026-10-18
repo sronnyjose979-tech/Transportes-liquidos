@@ -77,7 +77,7 @@ activación después del alta; no gestionar Inventario, Compras o datos fiscales
 Salvo rutas, que comprueban los valores originales mediante `expected`, las APIs de
 administración actuales no exponen ETag/versiones para edición optimista;
 la UI respeta sus bloqueos y validaciones, sin afirmar protección adicional contra todas
-las ediciones obsoletas entre pestañas. Cuenta/empleado no se guardan en transacción conjunta.
+las ediciones obsoletas entre pestañas. Las altas separadas de cuenta y empleado siguen disponibles. El alta guiada descrita abajo guarda ambos dentro de una transacción conjunta.
 
 ## Pruebas reproducibles
 
@@ -121,3 +121,101 @@ Resultados ejecutados:
 
 No se modifica .env, transporte_db ni los contratos JSON/migraciones existentes.
 No se realizó commit ni push.
+
+
+## Rediseño de experiencia por rol
+
+Diagnóstico: Personal obligaba a coordinar dos altas; el menú plano mezclaba áreas;
+Secretaría entraba en Transporte sin accesos orientados a su jornada; el detalle de
+Chofer exponía formularios largos y referencias técnicas en primer plano. Se
+reutilizaron SearchSelect, FieldError, contexto de permisos y patrones de resúmenes
+de Taller. No se cambiaron componentes ni lógica del módulo de Mecánico.
+
+Orden aplicado: alta guiada de Personal y validaciones; navegación por áreas y
+accesos autorizados; contexto de listas/detalles en URL; presentación móvil del
+conductor. La UI no muestra perfiles ni tareas que la API no ofrece.
+
+### Alta guiada y contrato compatible
+
+En Personal, «Registrar personal con acceso» guía por persona/perfil, credenciales
+y revisión. El nombre inicial se envía explícitamente a cuenta y empleado; las dos
+entidades conservan identidad independiente y pueden editarse con sus operaciones
+existentes. Los formularios independientes siguen disponibles para cuentas sin
+empleado y para vincular cuentas existentes.
+
+POST `/api/users` admite opcionalmente:
+
+```json
+{"employee":{"name":"Persona sintética","is_active":true}}
+```
+
+Es un complemento a los campos de cuenta existentes, no una solicitud completa.
+Sin `employee` el contrato anterior no cambia. Solo se admite en creación; no en
+PATCH. No acepta user_id, UUID ni atributos adicionales dentro del objeto.
+La respuesta conserva el Resource existente, incluido employee_id. No hay rutas,
+columnas, migraciones ni permisos nuevos.
+
+Justificación técnica: dos POST consecutivos no garantizan que la cuenta y el
+empleado se confirmen juntos. AccountAdministration conserva el lock 873210 y
+revalida al administrador. Crea cuenta, roles y empleado dentro de su transacción
+existente; un fallo del último paso revierte todo. Los logs administrativos se
+programan después del commit y no incluyen contraseñas. Las restricciones vigentes
+impiden repetir login/correo y vincular una cuenta a dos empleados.
+
+Esto no añade recibos idempotentes a Personal: ante respuesta perdida la UI bloquea
+nuevas escrituras, limpia contraseñas y exige consultar el estado antes de otro alta.
+No reenvía automáticamente ni declara éxito sin un vínculo identificable. Se
+comprueban rollback real, repetición, campos protegidos y accesos no autorizados.
+
+### Navegación, oficina y celular
+
+El menú lateral de escritorio agrupa solo enlaces devueltos por `/api/navigation`.
+Taller conserva su presentación original. El administrador tiene accesos a tareas
+junto a los conteos existentes; Secretaría conserva su inicio `/transporte` con
+«Mi jornada de oficina». No se le concede `/api/dashboard` ni se inventan métricas.
+Personal conserva pestaña, estado y página en la URL; no almacena credenciales ni
+formularios en el navegador. Transporte conserva vista/viaje, admite recarga y
+Atrás del navegador y bloquea cambio de contexto con operación en curso o incierta.
+
+Chofer conserva sus acciones y etiquetas, con botones táctiles, formularios
+separados y accesos a kilometraje, reporte, gasto y comprobantes del viaje abierto.
+Las referencias técnicas y ayudas detalladas se consultan bajo demanda. No se
+modificaron IndexedDB, UUID, backoff, service worker, permisos, cola ni conflictos.
+No se creó ningún registro en la base real para validar este rediseño.
+
+### Verificación del rediseño (17 de octubre de 2026)
+
+- `bash tests/run-postgres.sh`: 407 pruebas PHP aprobadas, 5.301 aserciones.
+  Tras completar los mensajes y rechazar objetos de empleado vacíos/incompletos,
+  `bash tests/run-postgres.sh --filter 'GuidedPersonnelTest|AccessAdministrationTest|EmployeeAccountLinkTest'`:
+  22 aprobadas, 196 aserciones. Cada ejecución creó y detuvo su propio PostgreSQL 18
+  temporal, por socket privado; no se utilizó la base de la aplicación.
+- `pnpm run test:frontend`: 136 pruebas Chromium aprobadas. Después se añadió
+  la persistencia del filtro a Personal y se ejecutaron sus 6 casos, todos aprobados
+  (`python -m unittest discover -s tests/Frontend -p test_personnel_guided.py -v`
+  con el Python de Playwright). Cobertura consolidada: 137 casos frontend distintos;
+  las repeticiones no se suman como casos nuevos.
+- `pnpm run test:frontend-api`: 29 contratos Node aprobados.
+- E2E real: 55 casos distintos cubiertos mediante `bash tests/run-postgres.sh`
+  y sus opciones `--e2e-administration`, `--e2e-navigation`, `--e2e-driver-offline`,
+  `--e2e-transport`, `--e2e-workshop`, `--e2e-workshop-execution`,
+  `--e2e-workshop-circuit`, `--e2e-billing`, `--e2e-purchase-requests`,
+  `--e2e-supply`, `--e2e-expenses-driver`, `--e2e-document-alerts`,
+  `--e2e-reports`, `--e2e-audit` y `--e2e`. Incluyen alta guiada con respuesta
+  perdida después del commit, permisos, Mecánico y tres casos offline reales.
+  En la primera pasada aprobaron 52 y fallaron 3 expectativas de prueba:
+  redirección al login tras logout, UUID ahora desplegable y carrera entre consultas
+  paralelas que reciben 401 al vencer la sesión. Se adaptaron las expectativas
+  conservando las aserciones de seguridad; los 3 casos aprobaron al repetirse
+  individualmente. No se presenta la primera pasada como totalmente exitosa.
+- `pnpm run typecheck`, `pnpm run build`, Pint sobre los PHP modificados y
+  `git diff --check`: correctos. Vite conserva el aviso no bloqueante de importación
+  estática/dinámica de `DriverPortal/local.ts`.
+
+Resultado consolidado: 628 casos distintos aprobados (407 PHP, 137 frontend,
+29 contratos y 55 E2E); ninguno omitido. Registros de esta ejecución en
+`/tmp/transport-qa/ux-*.log` y `/tmp/transport-qa/ux-e2e-results/`; son artefactos
+temporales locales. Chromium verificó escritorio y vista móvil, incluidos capturas
+y desplazamiento a formularios. No se realizó una prueba manual en un celular físico.
+No se instalaron dependencias ni se modificaron infraestructura, datos reales,
+migraciones, permisos o implementación de almacenamiento/sincronización offline.

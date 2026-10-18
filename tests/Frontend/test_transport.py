@@ -334,3 +334,25 @@ class TransportBrowserTest(unittest.IsolatedAsyncioTestCase):
         self.role='administrator';await self.page.set_viewport_size({'width':768,'height':1024})
         await self.page.reload();await expect(self.page.get_by_role('heading',name='Panel general')).to_be_visible()
         self.assertTrue(await self.page.evaluate('document.documentElement.scrollWidth <= window.innerWidth'))
+
+    async def test_office_home_only_shows_authorized_tasks_and_preserves_view_on_reload(self):
+        self.role = 'secretary'
+        await self.page.goto(self.base + '/transporte')
+        await expect(self.page.get_by_role('heading', name='Mi jornada de oficina', exact=True)).to_be_visible()
+        tasks = self.page.get_by_label('Mi jornada de oficina', exact=True)
+        await expect(tasks.get_by_role('link', name='Personal', exact=False)).to_have_count(0)
+        await expect(tasks.get_by_role('link', name='Facturación', exact=False)).to_be_visible()
+        await self.page.get_by_role('button', name='Solicitudes', exact=True).click()
+        await expect(self.page).to_have_url(self.base + '/transporte?vista=requests')
+        await self.page.reload()
+        await expect(self.page.get_by_role('button', name='Solicitudes', exact=True)).to_have_attribute('aria-pressed', 'true')
+        self.assertEqual([], self.writes)
+
+    async def test_trip_location_survives_reload_and_browser_back_returns_to_list(self):
+        await self.open_trip()
+        await expect(self.page).to_have_url(self.base + '/transporte?vista=trips&viaje=' + ID)
+        await self.page.reload()
+        await expect(self.page.get_by_role('button', name='Volver a viajes', exact=True)).to_be_visible()
+        await self.page.go_back()
+        await expect(self.page.get_by_role('button', name='Abrir viaje', exact=True)).to_be_visible()
+        self.assertEqual([], self.writes)

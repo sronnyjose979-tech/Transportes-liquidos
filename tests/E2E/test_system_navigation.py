@@ -91,6 +91,7 @@ class SystemNavigationE2E(unittest.IsolatedAsyncioTestCase):
         await self.page.get_by_role('button',name='Cerrar sesión',exact=True).click()
         await self.page.wait_for_url('**/login')
         await self.login('driver',fixture['driver_login'])
+        await self.page.get_by_text('Referencia del viaje',exact=True).click()
         await expect(self.page.get_by_text('Viaje '+tripid,exact=True)).to_be_visible()
         own=await self.api('/transport/my-trips')
         self.assertEqual(1,own['body']['meta']['total'])

@@ -164,3 +164,15 @@ class DriverPortalBrowserTest(unittest.IsolatedAsyncioTestCase):
         await self.page.get_by_role('button',name='Sincronizar pendientes').click()
         await expect(self.page.get_by_role('status').filter(has_text='confirmado')).to_be_visible()
         self.assertEqual(self.posts[0],self.posts[1])
+
+    async def test_mobile_trip_actions_navigate_to_existing_forms_without_writes(self):
+        self.role = 'driver'
+        await self.page.set_viewport_size({'width': 390, 'height': 900})
+        await self.page.goto(self.base + '/mis-viajes')
+        await self.page.get_by_role('button', name='Consultar viaje y registrar información', exact=True).click()
+        actions = self.page.get_by_role('navigation', name='Acciones del viaje', exact=True)
+        await actions.get_by_role('link', name='Registrar kilometraje', exact=True).click()
+        await expect(self.page.get_by_label('Kilometraje', exact=True)).to_be_in_viewport()
+        await actions.get_by_role('link', name='Registrar gasto', exact=True).click()
+        await expect(self.page.get_by_label('Concepto', exact=True)).to_be_in_viewport()
+        self.assertTrue(await self.page.evaluate('document.documentElement.scrollWidth<=innerWidth'))

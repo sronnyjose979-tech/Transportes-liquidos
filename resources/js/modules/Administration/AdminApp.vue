@@ -45,7 +45,7 @@ onMounted(loadSession);
 <div class="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-4 py-5">
 <div><p class="font-semibold text-blue-950">Transportes Líquidos</p><p class="text-sm text-blue-700">{{titles[section]}}</p></div>
 <nav class="flex flex-wrap items-center gap-4" aria-label="Navegación interna">
-<SharedNavigation :session="session" :disabled="busy||uncertain"/>
+<SharedNavigation workspace :session="session" :disabled="busy||uncertain"/>
 <button v-if="session" class="btn-secondary" :disabled="busy" @click="signOut">Cerrar sesión</button>
 </nav></div>
 </header>

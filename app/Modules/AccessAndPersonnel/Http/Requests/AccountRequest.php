@@ -38,15 +38,28 @@ class AccountRequest extends FormRequest
         ];
         if ($this->isMethod('POST')) {
             $rules['is_active'] = ['required', 'boolean'];
+            $rules['employee'] = ['sometimes', 'array:name,is_active', 'required_array_keys:name,is_active'];
+            $rules['employee.name'] = ['required_with:employee', 'string', 'max:255'];
+            $rules['employee.is_active'] = ['required_with:employee', 'boolean'];
         }
 
         return $rules;
+    }
+
+    public function attributes(): array
+    {
+        return ['name' => 'nombre completo', 'login' => 'usuario de acceso', 'email' => 'correo electrónico',
+            'password' => 'contraseña', 'password_confirmation' => 'confirmación de contraseña',
+            'roles' => 'perfil de trabajo', 'employee' => 'datos de la persona',
+            'employee.name' => 'nombre completo', 'employee.is_active' => 'estado del empleado'];
     }
 
     public function messages(): array
     {
         return [
             'required' => 'El campo :attribute es obligatorio.', 'string' => 'El campo :attribute debe ser texto.',
+            'required_with' => 'El campo :attribute es obligatorio.',
+            'required_array_keys' => 'Completa el nombre y el estado de la persona.',
             'max' => 'El campo :attribute supera el límite permitido.', 'min' => 'El campo :attribute no alcanza el mínimo permitido.',
             'email' => 'El correo no es válido.', 'unique' => 'El valor de :attribute ya está en uso.',
             'boolean' => 'El campo :attribute debe ser verdadero o falso.', 'array' => 'El campo :attribute debe ser una lista.',

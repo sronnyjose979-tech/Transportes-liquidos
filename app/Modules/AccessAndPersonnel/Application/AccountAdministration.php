@@ -3,6 +3,7 @@
 namespace App\Modules\AccessAndPersonnel\Application;
 
 use App\Models\User;
+use App\Modules\AccessAndPersonnel\Models\Employee;
 use App\Modules\AccessAndPersonnel\Models\Role;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
@@ -24,6 +25,11 @@ class AccountAdministration
                 Gate::forUser($freshActor)->authorize('manage-personnel');
                 $user = $id === null ? new User : User::query()->lockForUpdate()->findOrFail($id);
                 $roles = $data['roles'] ?? null;
+                $employee = $data['employee'] ?? null;
+                unset($data['employee']);
+                if ($employee !== null && $id !== null) {
+                    throw ValidationException::withMessages(['employee' => 'El alta guiada solo está disponible al registrar una cuenta nueva.']);
+                }
                 if ($roles !== null && Role::query()->whereIn('id', $roles)->whereIn('name', Role::SUPPORTED_NAMES)->count() !== count($roles)) {
                     throw ValidationException::withMessages(['roles' => 'Uno de los roles no está permitido.']);
                 }
@@ -48,6 +54,17 @@ class AccountAdministration
                 $user->forceFill($data)->save();
                 if ($roles !== null) {
                     $user->roles()->sync($roles);
+                }
+                if ($employee !== null) {
+                    // Guided registration commits the account, roles and employee together.
+                    // The caller cannot supply a foreign user_id or other employee attributes.
+                    $record = Employee::query()->create([
+                        'name' => $employee['name'],
+                        'is_active' => $employee['is_active'],
+                        'user_id' => $user->id,
+                    ]);
+                    $employeeContext = ['actor_id' => $actor->id, 'target_id' => $record->id, 'fields' => ['name', 'is_active', 'user_id']];
+                    DB::afterCommit(fn () => Log::info('administration.employee.created', $employeeContext));
                 }
                 if (($data['is_active'] ?? null) === false && config('session.driver') === 'database') {
                     DB::connection(config('session.connection'))->table(config('session.table', 'sessions'))->where('user_id', $user->id)->delete();

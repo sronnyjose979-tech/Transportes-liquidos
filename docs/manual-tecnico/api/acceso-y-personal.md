@@ -100,6 +100,17 @@ Listado obtenido del router de Laravel después de cargar los archivos reales. `
 
 ## POST /api/users
 
+Alta guiada compatible: además de los campos de cuenta anteriores, admite el objeto
+opcional `employee` con solo `name` (texto obligatorio, máximo 255) e `is_active`
+(booleano obligatorio). Se crean cuenta, roles y empleado en una sola transacción.
+El servidor asigna user_id al empleado: el cliente no puede aportarlo. Si falla
+cualquier escritura se revierte todo; los permisos siguen siendo manage-personnel.
+La respuesta 201 conserva el Resource y su employee_id. Sin el objeto, el alta de
+cuenta funciona como antes. No se permite este objeto en PATCH. Los duplicados
+siguen rechazándose mediante las restricciones y validaciones existentes; no se
+promete replay idempotente. Ante resultado incierto se consulta antes de reenviar.
+
+
 - **Nombre Laravel:** sin nombre.
 - **Entrada:** [AccountController::store](../../../app/Modules/AccessAndPersonnel/Http/Controllers/AccountController.php)().
 - **Form Request identificado en la firma:** [AccountRequest](../../../app/Modules/AccessAndPersonnel/Http/Requests/AccountRequest.php).

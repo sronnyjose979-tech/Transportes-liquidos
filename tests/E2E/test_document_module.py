@@ -365,7 +365,8 @@ class DocumentModuleE2E(unittest.IsolatedAsyncioTestCase):
         # Wait for outstanding summary requests, which legitimately refresh session activity.
         await self.page.wait_for_load_state('networkidle')
         self.assertGreater(self.command('expire-sessions', {'role': 'secretary'})['expired'], 0)
-        async with self.page.expect_response(lambda r: '/documents?' in r.url and r.status == 401) as event:
+        # Either parallel document query may expire the session first and cancel the others.
+        async with self.page.expect_response(lambda r: ('/documents?' in r.url or '/documents/missing?' in r.url) and r.status == 401) as event:
             await self.page.get_by_role('button', name='Actualizar', exact=True).click()
         self.assertEqual(401, (await event.value).status)
         await expect(self.page.get_by_role('heading', name='Acceso a documentación')).to_be_visible()
