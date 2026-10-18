@@ -5,6 +5,7 @@ use App\Modules\AccessAndPersonnel\Http\Controllers\EmployeeController;
 use App\Modules\AccessAndPersonnel\Http\Controllers\SessionController;
 use App\Modules\AccessAndPersonnel\Http\Controllers\SystemController;
 use App\Modules\AccessAndPersonnel\Http\Middleware\EnsureActiveAccount;
+use App\Modules\AccessAndPersonnel\Http\Middleware\EnsureSessionIdentity;
 use App\Modules\AccessAndPersonnel\Http\Middleware\PrivatePage;
 use App\Modules\AdministrativeAudit\Http\Controllers\AuditController;
 use App\Modules\AdministrativeReports\Http\Controllers\ReportController;
@@ -26,7 +27,7 @@ use Illuminate\Support\Facades\Route;
 Route::prefix('api')->group(function () {
     Route::get('csrf', fn () => response()->noContent()->header('Cache-Control', 'no-store'));
     Route::post('login', [SessionController::class, 'store'])->middleware('throttle:login');
-    Route::middleware(['auth', EnsureActiveAccount::class, 'auth.session'])->group(function () {
+    Route::middleware(['auth', EnsureActiveAccount::class, 'auth.session', EnsureSessionIdentity::class])->group(function () {
         Route::prefix('audit')->middleware([PrivatePage::class, 'can:view-administrative-audit'])->group(function () {
             Route::get('/', [AuditController::class, 'index']);
             Route::get('{source}/{id}', [AuditController::class, 'show'])->where('source', '[a-z]+')->whereUuid('id');

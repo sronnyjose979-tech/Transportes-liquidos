@@ -1,3 +1,4 @@
+import { sessionFetch as fetch } from '../System/sessionIdentity';
 import { ApiError, refreshCsrf } from '../FleetAndDocuments/api';
 import { authorization, entry, lookup, object, page, requestRecord, single, tripRecord } from './contracts';
 import type { Authorization, Availability, Entry, Json, Lookup, Page, TransportRequest, Trip } from './contracts';

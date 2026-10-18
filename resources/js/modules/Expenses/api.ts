@@ -1,3 +1,4 @@
+import { sessionFetch as fetch } from '../System/sessionIdentity';
 import {ApiError,failure} from '../Administration/api';
 import {refreshCsrf} from '../FleetAndDocuments/api';
 /** Same session/CSRF policy as existing APIs; retain original File in memory for explicit recovery. */

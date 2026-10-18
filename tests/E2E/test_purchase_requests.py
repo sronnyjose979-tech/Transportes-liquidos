@@ -44,6 +44,9 @@ class PurchaseRequestsE2E(unittest.IsolatedAsyncioTestCase):
         self.proxy.drop_response_path='/api/purchasing/requests'
         await form.get_by_role('button',name='Guardar solicitud',exact=True).click()
         await expect(self.page.get_by_role('button',name='Reintentar la misma operación',exact=True)).to_be_visible()
+        # Pending is displayed before sending; wait until the lost response settles.
+        await expect(self.page.get_by_role('button',name='Reintentar la misma operación',exact=True)).to_be_enabled()
+        self.assertEqual(1,self.proxy.committed_uploads)
         before=await self.purchasing('requests')
         self.assertEqual(200,before['status'],before['body'])
         matches=[r for r in before['body']['data'] if r['reason']==reason]

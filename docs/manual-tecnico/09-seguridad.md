@@ -13,6 +13,85 @@ Las contraseñas se guardan mediante **hash**, transformación unidireccional pa
 
 `EnsureActiveAccount` vuelve a comprobar la cuenta; si fue desactivada, cierra/invalida sesión y responde 403. Cuenta activa y empleado activo son controles distintos. Activar una cuenta no convierte automáticamente al empleado en conductor elegible.
 
+### Sesión compartida entre pestañas
+
+Laravel utiliza el guard `web` de sesión. Las pestañas del mismo perfil y sitio
+comparten cookies: no representan sesiones independientes. Abrir `/login` con una
+sesión válida consulta `/api/session` y `/api/navigation` y lleva esa pestaña al
+inicio autorizado. Para probar simultáneamente cuentas distintas, utilizar perfiles
+de navegador separados. No guardar tokens ni credenciales por pestaña.
+
+El fallo detectado era de estado en memoria: cada raíz Vue conservaba su usuario y
+sus datos; no existía un aviso común de login/logout. Solo la PWA escuchaba cambios
+de `driver-offline-active-v1`. No hay Vue Router, BroadcastChannel ni código que
+cierre ventanas; la navegación usa documentos y `history` en Transporte. Los usos
+existentes de sessionStorage corresponden a recuperación/idempotencia, no a sesión.
+
+`SessionBoundary` envuelve las raíces existentes. Tras login/logout confirmado, una
+notificación aleatoria en `transport-session-changed-v1` avisa a otras pestañas sin
+guardar identidad ni secretos. Cada receptora oculta e inhabilita el contenido
+mientras consulta la sesión real. Si cambió usuario o roles, desmonta el contenido
+anterior y pide recargar explícitamente; no cierra ni navega otras pestañas. Volver
+al foco/visibilidad o restaurar desde la caché de navegación vuelve a verificar la
+identidad. Una respuesta tardía de la identidad anterior se descarta.
+
+Los clientes HTTP comparten `sessionFetch`, que añade `X-Session-User` con la
+identidad consultada por esa pantalla. `EnsureSessionIdentity`, dentro del grupo
+autenticado, compara el valor con el usuario de la cookie y responde 409 con
+`code: session_changed` antes de ejecutar el controlador si difieren. Añade el
+usuario efectivo a las respuestas para detectar también cruces en lecturas. El
+header es una precondición adicional, **nunca una credencial ni autorización**:
+auth, cuenta activa, auth.session, Gates/Policies y CSRF siguen vigentes. Los clientes
+sin header conservan el contrato y las comprobaciones anteriores.
+
+Una desconexión ordinaria conserva el modo offline existente. Un cambio de sesión
+notificado mantiene ocultos los datos anteriores aunque falle su verificación.
+No se cambian service worker, esquema IndexedDB, UUID, reintentos ni resolución de
+conflictos; las capturas pendientes permanecen vinculadas a su autor original.
+Una operación que ya llegó al servidor puede estar confirmada: consultar su estado
+antes de repetirla. El navegador no puede comprobar cambios remotos mientras está
+sin conexión; la sincronización sigue revalidando identidad y permisos en servidor.
+
+La regresión E2E reproduce el problema con dos páginas del mismo BrowserContext y
+el bundle anterior: tras logout de la segunda, Personal seguía visible en la
+primera. Las nuevas pruebas comprueban ocultación, URL estable, pestaña abierta,
+redirección de `/login`, permisos del usuario actual, cambio sin notificación y
+aislamiento de perfiles. Las pruebas PHP cubren lectura, escritura y logout con
+identidad anterior, incluso entre dos administradores, y demuestran que el header
+no autentica invitados ni concede permisos.
+
+Verificación ejecutada el 17 de octubre de 2026, con usuarios sintéticos y
+PostgreSQL 18 temporal por socket privado (sin acceso a la base de la aplicación):
+
+| Comprobación | Comando | Resultado consolidado |
+| --- | --- | --- |
+| Backend completo | `bash tests/run-postgres.sh` | 411 aprobadas, 5.334 aserciones |
+| Frontend Chromium | `pnpm run test:frontend` | 137 casos ejecutados: 133 aprobados inicialmente; los cuatro de revocación aprobaron al adaptar sus expectativas al aviso común y repetirlos |
+| Contratos y concurrencia de identidad | `pnpm run test:frontend-api` | 35 aprobados; seis nuevos casos de identidad |
+| E2E real | `bash tests/run-postgres.sh --e2e-navigation` y las otras 14 suites existentes | 57 casos ejecutados: 55 aprobados inicialmente; los otros dos aprobaron al repetirse según se explica debajo |
+| Tipos y compilación | `pnpm run typecheck`, `pnpm run build` | Correctos; aviso preexistente de importación estática/dinámica de `DriverPortal/local.ts` |
+| Formato y diff | Pint sobre middleware/rutas/prueba PHP; `git diff --check` | Correctos |
+
+Los cuatro casos frontend actualizados son las revocaciones de Documentación,
+Inventario, Transporte y Taller; conservan las comprobaciones de contenido privado,
+escrituras y CSRF correspondientes. La primera ejecución frontend se interrumpió
+al detectar que el harness de IndexedDB no copiaba el nuevo módulo compartido; se
+actualizó su lista de archivos y sus ocho casos aprobaron, además de completar la
+suite de 137 casos. Esa ejecución interrumpida no cuenta como aprobada.
+
+En E2E, Taller agotó la espera de carga de cinco segundos con consultas todavía
+pendientes y presión de memoria/swap durante las suites simultáneas; el mismo caso
+aprobó con menos carga, sin cambiar código ni timeout. Compras comprobaba persistencia
+cuando el botón de recuperación ya era visible pero seguía deshabilitado por un
+envío en curso: ahora espera que esté habilitado y comprueba que el proxy recibió
+la respuesta confirmada antes de consultar la persistencia. La repetición aprobó.
+
+Cobertura final consolidada: **640 casos distintos aprobados, ninguno omitido**;
+no se suman las repeticiones. Los registros iniciales, finales y trazas temporales
+se conservan bajo `/tmp/transport-qa/tabs-*` y los directorios de artefactos que
+indican esos registros. No se declara exitosa la primera pasada con fallos.
+Se verificó Chromium local, no otros navegadores ni un celular físico.
+
 ## Gates, Policies y recurso concreto
 
 Un **Gate** es una condición nombrada registrada en [`AppServiceProvider`](../../app/Providers/AppServiceProvider.php). Una **Policy** agrupa condiciones para un recurso. `TransportCorePolicy` y `WorkshopWorkOrderPolicy` complementan los Gates; `WorkshopAccess` vuelve a comprobar roles/participación en operaciones.

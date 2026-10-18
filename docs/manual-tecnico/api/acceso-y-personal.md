@@ -4,6 +4,14 @@
 
 Listado obtenido del router de Laravel después de cargar los archivos reales. `GET|HEAD` es una sola declaración con dos métodos. Los parámetros entre llaves se sustituyen por identificadores; no son texto literal. Una ruta registrada no demuestra por sí sola que todas sus operaciones sean accesibles al rol actual.
 
+Control común entre pestañas: al middleware listado para cada API autenticada se
+suma `EnsureSessionIdentity`. El cliente puede enviar `X-Session-User` con el ID
+consultado por su pantalla. Si difiere del usuario de la cookie, recibe 409 con
+`code: session_changed`, sin ejecutar la operación. Las respuestas que atraviesan
+este middleware incluyen `X-Session-User` con el actor efectivo. No aplica a login
+ni CSRF, no sustituye autenticación/autorización y no cambia los cuerpos JSON
+existentes. Ver [sesión compartida entre pestañas](../09-seguridad.md#sesión-compartida-entre-pestañas).
+
 ## GET|HEAD /api/dashboard
 
 - **Nombre Laravel:** sin nombre.

@@ -1,3 +1,4 @@
+import { sessionFetch as fetch } from '../System/sessionIdentity';
 import { ApiError, request, write } from './api';
 import type { RecordRow } from './api';
 import { refreshCsrf } from '../FleetAndDocuments/api';

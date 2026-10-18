@@ -291,8 +291,9 @@ class TransportBrowserTest(unittest.IsolatedAsyncioTestCase):
         form=self.page.get_by_role('form',name='Iniciar viaje oficialmente')
         await form.get_by_label('Motivo / confirmación').fill('Inicio')
         await form.get_by_role('button',name='Guardar').click()
-        await expect(self.page.get_by_role('heading',name='Acceso no autorizado')).to_be_visible()
+        await expect(self.page.get_by_role('heading',name='La sesión cambió en este navegador')).to_be_visible()
         await expect(self.page.get_by_role('heading',name='Viaje · Agua')).to_have_count(0)
+        self.assertEqual([],self.writes)
 
     async def test_empty_historical_operation_is_unknown_not_zero_and_cannot_finalize(self):
         self.trip.update(execution_status='in_progress',officially_started_at='2026-10-12T14:00:00Z')

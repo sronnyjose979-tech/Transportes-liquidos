@@ -354,7 +354,7 @@ class FleetDocumentsBrowserTest(unittest.IsolatedAsyncioTestCase):
         self.role = 'driver'
         self.forced[('GET', f'/api/fleet-assets/{ASSET}/documents')] = (403, {})
         await self.page.get_by_role('button', name='Actualizar', exact=True).click()
-        await expect(self.page.get_by_role('heading', name='Acceso no autorizado')).to_be_visible()
+        await expect(self.page.get_by_role('heading', name='La sesión cambió en este navegador')).to_be_visible()
         await expect(self.page.get_by_role('button', name='Registrar documento', exact=True)).to_have_count(0)
 
     async def test_csrf_expiration_requires_explicit_refresh_without_auto_resubmit(self):

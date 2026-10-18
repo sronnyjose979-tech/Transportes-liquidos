@@ -196,7 +196,7 @@ class SupplyBrowserTest(unittest.IsolatedAsyncioTestCase):
         await self.prepare_correction()
         self.role = 'driver'
         await self.page.get_by_role('button', name='Guardar operación', exact=True).click()
-        await expect(self.page.get_by_text('No tienes acceso a este módulo.')).to_be_visible()
+        await expect(self.page.get_by_role('heading', name='La sesión cambió en este navegador')).to_be_visible()
         await expect(self.page.get_by_role('heading', name='Existencias reales')).to_have_count(0)
         self.assertEqual([], self.writes)
 

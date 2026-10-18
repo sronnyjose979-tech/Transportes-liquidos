@@ -51,6 +51,54 @@ class SystemNavigationE2E(unittest.IsolatedAsyncioTestCase):
     async def api(self,path,body=None):
         return await self.page.evaluate('''async({path,body})=>{const headers={Accept:'application/json'};if(body!==null){headers['Content-Type']='application/json';headers['X-XSRF-TOKEN']=decodeURIComponent(document.cookie.split('; ').find(c=>c.startsWith('XSRF-TOKEN='))?.slice(11)??'');}const r=await fetch('/api'+path,{method:body===null?'GET':'POST',credentials:'same-origin',headers,...(body===null?{}:{body:JSON.stringify(body)})});return {status:r.status,body:r.status===204?null:await r.json()};}''',{'path':path,'body':body})
 
+    async def test_shared_tabs_hide_old_user_without_navigating_or_closing_each_other(self):
+        await self.login('administrator')
+        await self.page.goto(self.base+'/administracion/personal')
+        await expect(self.page.get_by_role('button',name='Registrar personal con acceso',exact=True)).to_be_visible()
+        await self.page.get_by_role('button',name='Cuentas y roles',exact=True).click()
+        await expect(self.page.get_by_role('row').filter(has_text='e2e-administrator')).to_be_visible()
+        old_url=self.page.url
+        second=await self.context.new_page()
+        await second.goto(self.base+'/login')
+        await expect(second).to_have_url(self.base+'/dashboard')
+        await second.get_by_role('button',name='Cerrar sesión',exact=True).click()
+        await expect(second).to_have_url(self.base+'/login')
+        await expect(self.page.get_by_role('heading',name='La sesión cambió en este navegador',exact=True)).to_be_visible()
+        await expect(self.page.get_by_role('button',name='Registrar personal con acceso',exact=True)).to_have_count(0)
+        await expect(self.page.get_by_role('row').filter(has_text='e2e-administrator')).to_have_count(0)
+        self.assertEqual(old_url,self.page.url)
+        self.assertFalse(self.page.is_closed())
+        await second.get_by_label('Usuario',exact=True).fill('e2e-secretary')
+        await second.get_by_label('Contraseña',exact=True).fill(support.PASSWORD)
+        await second.get_by_role('button',name='Iniciar sesión',exact=True).click()
+        await expect(second).to_have_url(self.base+'/transporte')
+        self.assertEqual(403,(await self.api('/users'))['status'])
+        self.assertEqual(old_url,self.page.url)
+        await self.page.goto(self.base+'/login')
+        await expect(self.page).to_have_url(self.base+'/transporte')
+        await expect(self.page.get_by_text('Mi jornada de oficina',exact=True)).to_be_visible()
+
+    async def test_focus_detects_cookie_change_without_storage_notification_and_profiles_are_separate(self):
+        await self.login('administrator')
+        old_url=self.page.url
+        previous=(await self.api('/session'))['body']['data']['id']
+        # An HTTP client can change the shared cookie without emitting an application signal.
+        token=await self.page.evaluate("decodeURIComponent(document.cookie.split('; ').find(c=>c.startsWith('XSRF-TOKEN='))?.slice(11)??'')")
+        response=await self.context.request.post(self.base+'/api/login',headers={'X-XSRF-TOKEN':token},data={'login':'e2e-secretary','password':support.PASSWORD})
+        self.assertEqual(200,response.status)
+        stale=await self.context.request.get(self.base+'/api/session',headers={'X-Session-User':previous,'Accept':'application/json'})
+        self.assertEqual(409,stale.status)
+        self.assertEqual('session_changed',(await stale.json())['code'])
+        await self.page.evaluate("window.dispatchEvent(new Event('focus'))")
+        await expect(self.page.get_by_role('heading',name='La sesión cambió en este navegador',exact=True)).to_be_visible()
+        await expect(self.page.get_by_label('Resumen general')).to_have_count(0)
+        self.assertEqual(old_url,self.page.url)
+        other=await self.browser.new_context()
+        try:
+            self.assertEqual(401,(await other.request.get(self.base+'/api/session',headers={'Accept':'application/json'})).status)
+            self.assertEqual(200,(await self.context.request.get(self.base+'/api/session')).status)
+        finally:await other.close()
+
     async def test_role_landings_all_authorized_pages_and_server_denials(self):
         for role in ['administrator','secretary','mechanic','driver']:
             await self.login(role)

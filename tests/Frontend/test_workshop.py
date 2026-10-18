@@ -219,7 +219,7 @@ class WorkshopBrowserTest(unittest.IsolatedAsyncioTestCase):
         self.role='driver'
         self.forced[('GET','/api/workshop/orders')]=(403,{})
         await self.page.get_by_role('button',name='Órdenes',exact=True).click()
-        await expect(self.page.get_by_role('heading',name='Acceso no autorizado')).to_be_visible()
+        await expect(self.page.get_by_role('heading',name='La sesión cambió en este navegador')).to_be_visible()
         self.forced.pop(('GET','/api/workshop/orders'));self.role='administrator'
         await self.page.reload()
         await expect(self.page.get_by_role('heading',name='Inicio de Taller')).to_be_visible()

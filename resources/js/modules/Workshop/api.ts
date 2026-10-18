@@ -1,3 +1,4 @@
+import { sessionFetch as fetch } from '../System/sessionIdentity';
 import { ApiError, refreshCsrf } from '../FleetAndDocuments/api';
 import { object, page } from '../TransportAndDispatch/contracts';
 import type { Page } from '../TransportAndDispatch/contracts';

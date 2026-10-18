@@ -21,7 +21,7 @@ class OfflineStorageTest(unittest.IsolatedAsyncioTestCase):
         cls.temp = tempfile.TemporaryDirectory(prefix='driver-offline-')
         cls.directory = Path(cls.temp.name)
         script = """const fs=require('node:fs'),path=require('node:path'),{stripTypeScriptTypes}=require('node:module');
-for(const file of ['DriverPortal/offline','DriverPortal/local','Administration/api','FleetAndDocuments/api','FleetAndDocuments/contracts']){
+for(const file of ['DriverPortal/offline','DriverPortal/local','Administration/api','FleetAndDocuments/api','FleetAndDocuments/contracts','System/sessionIdentity']){
  const source=fs.readFileSync('resources/js/modules/'+file+'.ts','utf8');
  const js=stripTypeScriptTypes(source,{mode:'transform'}).replace(/(from\\s+['"])(\\.[^'"]+)(['"])/g,'$1$2.js$3');
  const target=path.join(process.argv[1],file+'.js');fs.mkdirSync(path.dirname(target),{recursive:true});fs.writeFileSync(target,js);

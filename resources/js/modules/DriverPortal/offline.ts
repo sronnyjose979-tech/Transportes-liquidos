@@ -1,3 +1,4 @@
+import { sessionFetch as fetch } from '../System/sessionIdentity';
 import type {Session} from '../FleetAndDocuments/contracts';
 import {getSession, refreshCsrf} from '../FleetAndDocuments/api';
 import {ApiError, failure} from '../Administration/api';

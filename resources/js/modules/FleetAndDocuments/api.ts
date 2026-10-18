@@ -1,3 +1,5 @@
+import { sessionFetch as fetch } from '../System/sessionIdentity';
+import { announceSessionChange, rememberSession } from '../System/sessionIdentity';
 import { documentType, fleetAsset, fleetDocument, page, session, single } from './contracts';
 import type { FieldErrors, Page, FleetAsset, DocumentType, FleetDocument, Session, TypeConfiguration, Validity } from './contracts';
 
@@ -54,11 +56,17 @@ function json(method: string, body: unknown): RequestInit {
     return { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) };
 }
 function query(values: Record<string, string | number>): string { return new URLSearchParams(Object.entries(values).map(([k, v]) => [k, String(v)])).toString(); }
-export const getSession = async (): Promise<Session> => session(await request('/api/session'));
+export const getSession = async (): Promise<Session> => {
+    const actor = session(await request('/api/session'));
+    rememberSession(actor);
+    return actor;
+};
 export async function login(username: string, password: string): Promise<Session> {
     const local = await import('../DriverPortal/local');
     return local.sessionLock(async () => {
         const actor = session(await request('/api/login', json('POST', { login: username, password })));
+        rememberSession(actor, true);
+        announceSessionChange();
         const previous = local.offlineActor();
         if (previous && previous.id !== actor.id) {
             local.lockLocal();
@@ -73,6 +81,8 @@ export async function logout(): Promise<void> {
         if (!csrfToken()) await refreshCsrf();
         await checked(await fetch('/api/logout', { method: 'POST', credentials: 'same-origin', cache: 'no-store',
             headers: { Accept: 'application/json', 'X-XSRF-TOKEN': csrfToken() } }));
+        rememberSession(null, true);
+        announceSessionChange();
         const actor = local.offlineActor();
         local.lockLocal();
         if (actor) await local.forgetReadCache(actor.id);
