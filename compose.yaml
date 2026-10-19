@@ -1,0 +1,101 @@
+name: transporte-azure-testing
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+x-app: &app
+  image: transporte-app:${IMAGE_TAG:-testing}
+  build:
+    context: .
+    target: app
+  env_file: ${AZURE_ENV_FILE:-.env.azure-testing}
+  environment:
+    APP_ENV: staging
+    APP_DEBUG: "false"
+    DB_CONNECTION: pgsql
+    DB_URL: ""
+    DB_SSLMODE: verify-full
+    DB_SSLROOTCERT: /run/secrets/oracle-ca.crt
+    CACHE_STORE: file
+    SESSION_DRIVER: file
+    SESSION_SECURE_COOKIE: "true"
+    LOG_CHANNEL: stderr
+  secrets:
+    - source: oracle_ca
+      target: oracle-ca.crt
+  volumes:
+    - private-files:/var/www/html/storage/app
+    - framework:/var/www/html/storage/framework
+    - logs:/var/www/html/storage/logs
+  # Compiled views are disposable and must not survive a new application image.
+  tmpfs:
+    - /var/www/html/storage/framework/views:uid=33,gid=33,mode=0750,size=64m
+  restart: unless-stopped
+  init: true
+  stop_grace_period: 90s
+  logging: *logging
+  networks: [backend]
+
+services:
+  app:
+    <<: *app
+    cpus: 1.5
+    mem_limit: 3g
+
+  scheduler:
+    <<: *app
+    command: [scheduler]
+    scale: 1
+    cpus: 0.5
+    mem_limit: 512m
+
+  worker:
+    <<: *app
+    profiles: [worker]
+    command: [php, artisan, queue:work, --sleep=3, --tries=3, --timeout=60, --max-time=3600, --no-interaction]
+    cpus: 0.5
+    mem_limit: 512m
+
+  web:
+    image: transporte-web:${IMAGE_TAG:-testing}
+    build:
+      context: .
+      target: web
+    environment:
+      APP_DOMAIN: ${APP_DOMAIN:?Configure APP_DOMAIN using --env-file}
+    ports: ["80:80", "443:443"]
+    volumes:
+      - certificates:/etc/letsencrypt:ro
+      - acme:/var/www/acme:ro
+    depends_on: [app]
+    restart: unless-stopped
+    cpus: 0.5
+    mem_limit: 256m
+    logging: *logging
+    networks: [backend]
+
+  certbot:
+    image: certbot/certbot:v5.8.0
+    profiles: [tls]
+    volumes:
+      - certificates:/etc/letsencrypt
+      - acme:/var/www/acme
+    logging: *logging
+    networks: [backend]
+
+secrets:
+  oracle_ca:
+    file: ${ORACLE_CA_FILE:?Configure ORACLE_CA_FILE using --env-file}
+
+volumes:
+  private-files:
+  framework:
+  logs:
+  certificates:
+  acme:
+
+networks:
+  backend:

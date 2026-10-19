@@ -1,0 +1,10 @@
+server {
+    listen 80 default_server;
+    server_name ${APP_DOMAIN};
+    server_tokens off;
+    location ^~ /.well-known/acme-challenge/ {
+        root /var/www/acme;
+        default_type text/plain;
+    }
+    location / { return 308 https://${APP_DOMAIN}$request_uri; }
+}

@@ -807,3 +807,9 @@ sin publicar secretos. No se ha declarado ejecutada esa segunda pasada.
 
 No se modificaron base, usuarios, credenciales, servicios ni certificados durante
 esta corrección. Se actualizó el script externo y esta documentación.
+
+## Despliegue de pruebas con Docker en Azure
+
+La configuración separada para Azure Ubuntu 24.04 se describe en
+[Docker Compose en Azure](../despliegue/AZURE-PRUEBAS.md). Usa PostgreSQL externo
+en Oracle y no requiere modificar este entorno local.

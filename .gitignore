@@ -42,3 +42,6 @@ Thumbs.db
 *.dump
 *.sql.gz
 *.backup-key
+
+# Azure testing runtime secrets stay outside version control.
+.env.azure-testing
