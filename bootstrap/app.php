@@ -1,8 +1,10 @@
 <?php
 
+use App\Http\Middleware\MeasureSystemRequests;
 use App\Modules\AccessAndPersonnel\Http\Middleware\EnsureActiveAccount;
 use App\Modules\TransportAndDispatch\Http\Middleware\TransportApiErrors;
 use App\Modules\Workshop\Http\Middleware\WorkshopApiErrors;
+use App\Support\RequestPerformance;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Contracts\Session\Middleware\AuthenticatesSessions;
@@ -23,6 +25,7 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        $middleware->prepend(MeasureSystemRequests::class);
         // Local TLS terminates at Nginx; only the loopback proxy may supply these headers.
         $middleware->trustProxies(
             at: ['127.0.0.1'],
@@ -40,9 +43,11 @@ return Application::configure(basePath: dirname(__DIR__))
             // Never pass the exception, SQL, bindings or connection details to the logger.
             // Cover HTTP and console alike, including routes added in the future.
             $state = $exception->errorInfo[0] ?? null;
+            $metrics = RequestPerformance::current();
+            $metrics?->failed($exception);
             Log::warning('database.operation_failed', [
                 'sqlstate' => is_string($state) && preg_match('/\A[A-Z0-9]{5}\z/D', $state) ? $state : 'unknown',
-            ]);
+            ] + ($metrics?->correlation() ?? []));
 
             return false;
         });

@@ -9,8 +9,12 @@ use App\Modules\TransportAndDispatch\Policies\TransportCorePolicy;
 use App\Modules\Workshop\Application\WorkshopAccess;
 use App\Modules\Workshop\Models\WorkshopWorkOrder;
 use App\Modules\Workshop\Policies\WorkshopWorkOrderPolicy;
+use App\Support\RequestPerformance;
 use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Database\Events\ConnectionEstablished;
+use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
@@ -30,6 +34,17 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        if (config('performance.enabled')) {
+            Event::listen(ConnectionEstablished::class, function (ConnectionEstablished $event): void {
+                $event->connection->beforeExecuting(function (): void {
+                    RequestPerformance::current()?->beforeQuery();
+                });
+            });
+            Event::listen(QueryExecuted::class, function (QueryExecuted $event): void {
+                RequestPerformance::current()?->queryCompleted($event->time);
+            });
+        }
+
         Gate::policy(WorkshopWorkOrder::class, WorkshopWorkOrderPolicy::class);
         Gate::define('access-workshop', function (User $actor): bool {
             app(WorkshopAccess::class)->module($actor);
