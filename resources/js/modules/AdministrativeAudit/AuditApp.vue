@@ -2,7 +2,9 @@
 import {computed,onBeforeUnmount,ref,watch} from 'vue';
 import type {Session} from '../FleetAndDocuments/contracts';
 import {registrationDate} from '../FleetAndDocuments/presentation';
-import {all,request,failure} from '../Administration/api';
+import { useModuleRequests } from '../Office/useModuleRequests';
+import {failure} from '../Administration/api';
+const {all,request}=useModuleRequests();
 import SearchSelect from '../Workshop/components/SearchSelect.vue';
 import {modules,links,parseAudit,parseDetail} from './contracts';
 import type {AuditPage,AuditDetail,AuditEvent} from './contracts';

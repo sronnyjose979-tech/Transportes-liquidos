@@ -10,6 +10,7 @@ import { logout } from '../FleetAndDocuments/api';
 export function createOfficeWorkspace(initial: OfficeContext, components: Record<OfficePage, () => Promise<{ default: Component }>>) {
     const context = shallowRef<OfficeContext | null>(initial);
     const pending = ref(false), error = ref(''), dirty = ref(false);
+    const failedDestination=ref<string|null>(null);
     const blockers = new Set<() => boolean>();
     const blockerVersion=ref(0);
     const blocked=computed(()=>{void blockerVersion.value;return [...blockers].some(check=>check());});
@@ -47,10 +48,13 @@ export function createOfficeWorkspace(initial: OfficeContext, components: Record
         pending.value = false;
         const initialEntry = firstEntry && !from.matched.length && to.path === officePaths[initial.page];
         firstEntry = false;
-        if (to.path === from.path && context.value) return ![...blockers].some(blocked => blocked());
+        if (to.path === from.path && context.value) {
+            if(to.name==='catalogs'&&to.query.catalogo!==from.query.catalogo){if(!mayLeave())return false;dirty.value=false;}
+            return ![...blockers].some(blocked => blocked());
+        }
         if (!initialEntry && !(to.path === from.path && !context.value) && !mayLeave()) return false;
         controller = new AbortController();
-        pending.value = true; error.value = '';
+        pending.value = true; error.value = '';failedDestination.value=null;
         try {
             if (initialEntry) {
                 await load(initial.page);
@@ -78,7 +82,7 @@ export function createOfficeWorkspace(initial: OfficeContext, components: Record
             verified.set(to, next);
             return true;
         } catch (problem) {
-            if (run === sequence) { pending.value = false; error.value = problem instanceof Error && !problem.message.includes('import') ? problem.message : 'No se pudo cargar el módulo. Reintenta sin abandonar el contenido actual.'; }
+            if (run === sequence) { failedDestination.value=to.fullPath;pending.value = false; error.value = problem instanceof Error && !problem.message.includes('import') ? problem.message : 'No se pudo cargar el módulo. Reintenta sin abandonar el contenido actual.'; }
             return false;
         }
     });
@@ -117,7 +121,7 @@ export function createOfficeWorkspace(initial: OfficeContext, components: Record
         else leaving = true;
     }
     function input(event: Event): void {
-        if (event.target instanceof Element && event.target.closest('form:not([data-office-filter])')) dirty.value = true;
+        if (event.target instanceof Element && !event.target.closest('[data-office-filter]') && event.target.closest('form,[data-office-dirty]')) dirty.value = true;
     }
     function beforeUnload(event: BeforeUnloadEvent): void {
         if (!leaving && (dirty.value || [...blockers].some(blocked => blocked()) || hasRecovery())) { event.preventDefault(); event.returnValue = ''; }
@@ -130,5 +134,5 @@ export function createOfficeWorkspace(initial: OfficeContext, components: Record
         catch { error.value = 'No se pudo confirmar el cierre de sesión. Vuelve a intentarlo.'; }
         finally { pending.value = false; }
     }
-    return { router, host, context, pending, blocked, error, click, input, beforeUnload, dispose, signOut };
+    return { router, host, context, pending, blocked, error, failedDestination, click, input, beforeUnload, dispose, signOut };
 }

@@ -1,7 +1,10 @@
 <script setup lang="ts">
 import FieldError from '../FleetAndDocuments/components/FieldError.vue';
 import {computed,onMounted,onBeforeUnmount,ref,watch,useId} from 'vue';
-import {request as raw} from '../Workshop/api';
+import {request as fetchRaw} from '../Workshop/api';
+const controller=new AbortController();
+onBeforeUnmount(()=>controller.abort());
+const raw:typeof fetchRaw=(path,method='GET',body,signal)=>fetchRaw(path,method,body,method==='GET'?signal??controller.signal:signal);
 import SearchSelect from '../Workshop/components/SearchSelect.vue';
 import {instant,localInstant} from '../Workshop/presentation';
 import {registrationDate} from '../FleetAndDocuments/presentation';

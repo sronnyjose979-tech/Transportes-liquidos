@@ -3,7 +3,9 @@ import {useOffice} from '../Office/context';
 import {computed,onBeforeUnmount,ref,watch} from 'vue';
 import {getSession} from '../FleetAndDocuments/api';
 import type {Session} from '../FleetAndDocuments/contracts';
-import {all,request,failure,paginated,ApiError} from '../Administration/api';
+import { useModuleRequests } from '../Office/useModuleRequests';
+import {failure,ApiError} from '../Administration/api';
+const {all,request,paginated}=useModuleRequests();
 import {calendarDate,registrationDate} from '../FleetAndDocuments/presentation';
 import SearchSelect from '../Workshop/components/SearchSelect.vue';
 interface Alert {id:string;document_type_id:string;document_type:string;asset:{id:string;code:string;type:string};expires_on:string;days_remaining:number;status:'expired'|'expiring_soon';review:null|{at:string;by:{id:string;name:string};validity_at_review:string};original_href:string}

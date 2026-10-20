@@ -11,7 +11,7 @@ function object(value: unknown): Record<string, unknown> {
     if (value === null || typeof value !== 'object' || Array.isArray(value)) throw failure(value);
     return value as Record<string, unknown>;
 }
-async function fetchValue(path: string, method = 'GET', body?: unknown): Promise<unknown> {
+async function fetchValue(path: string, method = 'GET', body?: unknown, signal?: AbortSignal): Promise<unknown> {
     const headers = new Headers({ Accept: 'application/json' });
     if (method !== 'GET') {
         const token = () => decodeURIComponent(document.cookie.split('; ').find(c => c.startsWith('XSRF-TOKEN='))?.slice(11) ?? '');
@@ -19,7 +19,7 @@ async function fetchValue(path: string, method = 'GET', body?: unknown): Promise
         headers.set('X-XSRF-TOKEN', token()); headers.set('Content-Type', 'application/json');
     }
     let response: Response;
-    try { response = await fetch(`/api${path}`, { method, headers, credentials: 'same-origin', cache: 'no-store', ...(body === undefined ? {} : { body: JSON.stringify(body) }) }); }
+    try { response = await fetch(`/api${path}`, { method, headers, credentials: 'same-origin', cache: 'no-store', signal: signal ?? null, ...(body === undefined ? {} : { body: JSON.stringify(body) }) }); }
     catch (error) { throw failure(error); }
     const value: unknown = await response.json().catch(() => null);
     if (!response.ok) {
@@ -32,15 +32,15 @@ async function fetchValue(path: string, method = 'GET', body?: unknown): Promise
     return value;
 }
 /** Laravel Resources and raw paginator endpoints both expose data. */
-export async function request<T>(path: string, method = 'GET', body?: unknown): Promise<T> {
-    const value = object(await fetchValue(path, method, body));
+export async function request<T>(path: string, method = 'GET', body?: unknown, signal?: AbortSignal): Promise<T> {
+    const value = object(await fetchValue(path, method, body, signal));
     if (!('data' in value)) throw failure(value);
     return value.data as T;
 }
-export async function all<T>(path: string): Promise<T[]> {
+export async function all<T>(path: string, signal?: AbortSignal): Promise<T[]> {
     const result: T[] = [];
     for (let page = 1; ; page++) {
-        const value = object(await fetchValue(`${path}${path.includes('?') ? '&' : '?'}per_page=100&page=${page}`));
+        const value = object(await fetchValue(`${path}${path.includes('?') ? '&' : '?'}per_page=100&page=${page}`, 'GET', undefined, signal));
         if (!Array.isArray(value.data) || value.data.some(v => !v || typeof v !== 'object' || !['string','number'].includes(typeof v.id))) throw failure(value);
         result.push(...value.data as T[]);
         const last = value.meta ? object(value.meta).last_page : value.last_page ?? 1;
@@ -50,8 +50,8 @@ export async function all<T>(path: string): Promise<T[]> {
 }
 
 /** Read the complete paginator envelope without losing server pagination. */
-export async function paginated<T>(path: string): Promise<{data:T[];meta:{current_page:number;last_page:number;total?:number}}> {
-    const value = object(await fetchValue(path));
+export async function paginated<T>(path: string, signal?: AbortSignal): Promise<{data:T[];meta:{current_page:number;last_page:number;total?:number}}> {
+    const value = object(await fetchValue(path, 'GET', undefined, signal));
     const meta = object(value.meta);
     if (!Array.isArray(value.data) || !Number.isInteger(meta.current_page) || !Number.isInteger(meta.last_page)) throw failure(value);
     return {data:value.data as T[],meta:{current_page:meta.current_page as number,last_page:meta.last_page as number,...(typeof meta.total==='number'?{total:meta.total}:{})}};

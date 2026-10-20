@@ -42,6 +42,7 @@ function retry():void {host.navigate(location.pathname+location.search);}
     </header>
     <p v-if="pending" role="status" class="p-4">Consultando destino autorizado…</p>
     <p v-if="error" role="alert" class="notice-error p-4">{{ error }}</p>
+    <button v-if="context&&workspace.failedDestination.value" type="button" :disabled="pending" @click="host.navigate(workspace.failedDestination.value!)">Reintentar destino</button>
     <main v-if="!context" class="p-6"><p>El contenido privado se ha ocultado.</p><a href="/login">Iniciar sesión</a><button type="button" @click="retry">Volver a comprobar</button></main>
     <div id="office-content" tabindex="-1" :inert="pending" :aria-busy="pending">
         <RouterView v-if="context" v-slot="{ Component }"><component :is="Component" :key="context.page" v-bind="bindings()"/></RouterView>

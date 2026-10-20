@@ -89,7 +89,7 @@ class OfficeNavigationBrowserTest(unittest.IsolatedAsyncioTestCase):
             await route.fulfill(json=self.pagination([],{'per_page':['100'],'page':['1']}))
         elif path=='/api/purchasing/lookups':
             await route.fulfill(json={'data':{'parts':[],'suppliers':[]}})
-        elif path in ['/api/users','/api/employees','/api/roles','/api/catalogs/customers','/api/catalogs/spare-parts','/api/catalogs/suppliers','/api/workshop/material-needs','/api/purchasing/requests','/api/reports/trips','/api/inventory/stock','/api/inventory/custody','/api/inventory/corrections','/api/inventory/movements','/api/purchasing/orders','/api/billing/trips','/api/billing/invoices','/api/expenses','/api/document-alerts']:
+        elif path in ['/api/users','/api/employees','/api/roles','/api/catalogs/liquid-products','/api/catalogs/customers','/api/catalogs/spare-parts','/api/catalogs/suppliers','/api/workshop/material-needs','/api/purchasing/requests','/api/reports/trips','/api/inventory/stock','/api/inventory/custody','/api/inventory/corrections','/api/inventory/movements','/api/purchasing/orders','/api/billing/trips','/api/billing/invoices','/api/expenses','/api/document-alerts']:
             await route.fulfill(json=self.pagination([],{'per_page':['100'],'page':['1']}))
         else:
             await transport.TransportBrowserTest.api(self, route)
@@ -162,11 +162,12 @@ class OfficeNavigationBrowserTest(unittest.IsolatedAsyncioTestCase):
         await self.page.get_by_label('Código del activo', exact=True).fill('PENDIENTE')
         self.accept_dialogs = True
         await self.page.get_by_role('button', name='Guardar activo', exact=True).click()
-        await self.link('Inicio')
+        await expect(self.page.get_by_role('link',name='Inicio',exact=True)).to_have_attribute('aria-disabled','true')
+        await self.page.locator('#office-content').evaluate("el=>{const a=document.createElement('a');a.href='/dashboard';el.append(a);a.click();a.remove();}")
         await expect(self.page.get_by_role('alert')).to_contain_text('operación pendiente')
         self.write_gate.set()
         await expect(self.page.get_by_role('button', name='Consultar estado confirmado')).to_be_visible()
-        await self.link('Inicio')
+        await self.page.get_by_role('link',name='Inicio',exact=True).click(force=True)
         self.assertEqual('/administracion/flota', urlparse(self.page.url).path)
         self.assertEqual([], self.transitions)
 
@@ -270,6 +271,8 @@ class OfficeNavigationBrowserTest(unittest.IsolatedAsyncioTestCase):
         await self.enter_path('/taller')
         await expect(self.page.get_by_role('navigation',name='Módulos del sistema')).to_have_count(1)
         await expect(self.page.get_by_role('navigation',name='Navegación Taller')).to_be_visible()
+        await self.page.locator('.workshop-brand').click()
+        await expect(self.page.get_by_label('Resumen general')).to_be_visible()
         await self.enter_path('/transporte')
         self.assertEqual(['/dashboard'],self.documents_seen)
         self.assertEqual([],self.session_reads)
@@ -313,7 +316,7 @@ class OfficeNavigationBrowserTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(['/dashboard'],self.documents_seen)
 
     async def test_catalog_query_and_filter_navigation_keep_router_history(self):
-        await self.page.goto(self.base+'/administracion/catalogos?catalogo=products')
+        await self.page.goto(self.base+'/administracion/catalogos?catalogo=liquid-products')
         await expect(self.page.get_by_role('heading',name='Catálogos operativos',exact=True)).to_be_visible()
         await self.enter_path('/administracion/catalogos?catalogo=customers')
         await self.enter_path('/reportes')
@@ -321,3 +324,35 @@ class OfficeNavigationBrowserTest(unittest.IsolatedAsyncioTestCase):
         await expect(self.page).to_have_url(self.base+'/administracion/catalogos?catalogo=customers')
         await self.page.reload()
         await expect(self.page).to_have_url(self.base+'/administracion/catalogos?catalogo=customers')
+
+    async def test_abandoned_audit_read_is_cancelled_without_hiding_new_module(self):
+        started=asyncio.Event()
+        release=asyncio.Event()
+        cancelled=asyncio.Event()
+        async def delayed(route):
+            started.set()
+            await release.wait()
+            await route.fulfill(status=403,json={'message':'Acceso rechazado'})
+        self.page.on('requestfailed',lambda request:cancelled.set() if urlparse(request.url).path=='/api/users' else None)
+        await self.page.route('**/api/users?*',delayed)
+        await self.page.goto(self.base+'/dashboard')
+        await expect(self.page.get_by_label('Resumen general')).to_be_visible()
+        await self.enter_path('/auditoria')
+        await asyncio.wait_for(started.wait(),10)
+        await self.enter_path('/transporte')
+        await asyncio.wait_for(cancelled.wait(),10)
+        release.set()
+        await expect(self.page.get_by_role('heading',name='Solicitudes registradas')).to_be_visible()
+        await expect(self.page.get_by_text('El contenido privado se ha ocultado.',exact=True)).to_have_count(0)
+
+    async def test_catalog_query_cannot_discard_modified_form_before_confirmation(self):
+        await self.page.goto(self.base+'/administracion/catalogos?catalogo=customers')
+        await self.page.get_by_role('button',name='Registrar cliente',exact=True).click()
+        await self.page.get_by_role('form',name='Registro de catálogo').get_by_label('Nombre',exact=True).fill('Sin guardar')
+        await self.page.get_by_label('Catálogo',exact=True).select_option('liquid-products')
+        await expect(self.page.get_by_role('form',name='Registro de catálogo').get_by_label('Nombre',exact=True)).to_have_value('Sin guardar')
+        await expect(self.page).to_have_url(self.base+'/administracion/catalogos?catalogo=customers')
+        self.accept_dialogs=True
+        await self.page.get_by_label('Catálogo',exact=True).select_option('liquid-products')
+        await expect(self.page).to_have_url(self.base+'/administracion/catalogos?catalogo=liquid-products')
+        await expect(self.page.get_by_role('form',name='Registro de catálogo')).to_have_count(0)

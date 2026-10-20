@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import {onMounted,onBeforeUnmount,ref} from 'vue';
 import {useOffice} from './context';
-import {request,failure} from '../Administration/api';
+import { useModuleRequests } from '../Office/useModuleRequests';
+import {failure} from '../Administration/api';
+const {request}=useModuleRequests();
 import WorkOverview from '../System/WorkOverview.vue';
 import ExpirationIndicators from '../DocumentAlerts/ExpirationIndicators.vue';
 const host=useOffice();

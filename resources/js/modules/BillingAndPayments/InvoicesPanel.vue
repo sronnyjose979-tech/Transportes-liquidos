@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import FieldError from '../FleetAndDocuments/components/FieldError.vue';
 import {computed,onMounted,onBeforeUnmount,ref,watch,useId} from 'vue';
-import {all,paginated,request} from '../Administration/api';
+import { useModuleRequests } from '../Office/useModuleRequests';
+const {all,paginated,request}=useModuleRequests();
 import {date,money,paymentLabels,type Invoice} from './contracts';
 const props=defineProps<{locked:boolean;epoch:number;errors:Record<string,string[]>}>();const emit=defineEmits<{command:[title:string,path:string,body:Record<string,unknown>];error:[error:unknown]}>();
 const rows=ref<Invoice[]>([]),customers=ref<{id:string;name:string}[]>([]),customer=ref(''),status=ref(''),from=ref(''),to=ref(''),search=ref(''),loading=ref(false),page=ref(1),last=ref(1),selected=ref<Invoice|null>(null),amount=ref(''),paidAt=ref(''),reason=ref(''),method=ref('');let generation=0;

@@ -1,74 +1,131 @@
-# Navegación persistente de oficina · fase 1
+# Navegación persistente de oficina
 
-Alcance: `/dashboard`, `/transporte` y `/administracion/flota`. Las demás rutas,
-incluida `/mis-viajes`, conservan navegación de documento. No se cambian API,
-reglas de negocio, persistencia ni procesos offline.
+La extensión parte de `882698b`. Integra 14 destinos en una raíz Vue con Vue
+Router, navegación compartida y carga diferida:
 
-## Límites y estructura
+| Destino | Componente de contenido |
+| --- | --- |
+| `/dashboard` | OfficeDashboard |
+| `/transporte` | TransportApp |
+| `/administracion/flota` | AdminApp: Flota |
+| `/administracion/personal` | AdminApp: Personal |
+| `/administracion/catalogos` | AdminApp: Catálogos |
+| `/administracion/compras` | AdminApp: solicitudes administrativas |
+| `/inventario` | SupplyApp: Inventario |
+| `/compras` | SupplyApp: Compras |
+| `/taller` | WorkshopApp |
+| `/facturacion` | BillingApp |
+| `/gastos` | ExpensesApp |
+| `/alertas` | AlertsApp |
+| `/auditoria` | AuditApp |
+| `/reportes` | ReportsApp |
 
-- `OfficePage` (Acceso y personal): representación HTML o contexto JSON después
-  de los middleware y Gates de la ruta existente. No concede permisos.
-- `resources/views/office.blade.php`: raíz y contexto inicial autorizado,
-  codificado de forma segura, con respuesta privada sin caché.
-- `resources/js/modules/Office`: contrato de contexto, registro de rutas,
-  coordinación de transiciones y raíz persistente. Vue Router gestiona historial.
-- Los módulos reciben la sesión validada al entrar y registran sus bloqueos de
-  salida mediante un contexto inyectado. Conservan validaciones de escrituras.
-- `SessionBoundary` permanece por encima de la oficina: mantiene verificación
-  por foco, pestañas y cambios de identidad. No hay caché global de permisos.
+Administración de Compras conserva su Gate administrativo; no adquiere los
+permisos más amplios de `/compras`. `/mis-viajes` y su PWA permanecen independientes.
 
-## Contrato nuevo de representación
+## Arquitectura y autorización
 
-GET a una de las tres rutas con `X-Office-Navigation: 1`, `Accept: application/json`
-y, cuando existe identidad conocida, `X-Session-User`. Devuelve `data` con `page`,
-`session` (`id`, `login`, `roles`) y `navigation` (`home`, `modules`). Se ejecutan
-autenticación, cuenta activa, sesión, identidad esperada y el Gate del destino.
-Sin esa cabecera se entrega HTML para acceso directo y recarga.
+- `OfficePage`: representa HTML o contexto JSON después de los middleware y
+  Gates existentes. Las rutas Laravel siguen disponibles para URL directa y recarga.
+- `office.blade.php`: codifica de forma segura el contexto inicial autorizado.
+- `Office/bootstrap.ts`: monta SessionBoundary y OfficeApp una sola vez.
+- `Office/context.ts` y `pages.ts`: catálogo de destinos y componentes diferidos.
+- `Office/workspace.ts`: autorización del destino, historial, bloqueos y recuperación.
+- `Office/useModuleRequests.ts`: cancela lecturas al desmontar componentes. Las
+  escrituras conservan su respuesta definitiva o incierta; no se cancelan al salir.
 
-El contexto se obtiene de nuevo en cada cambio de módulo; no se guarda en
-localStorage ni en el service worker. Una transición no necesita consultar luego
-`/api/session` ni `/api/navigation`. Las consultas de los datos del módulo siguen
-autorizándose en sus API actuales.
+Cada cambio de módulo solicita su ruta con `X-Office-Navigation: 1`,
+`Accept: application/json` y la identidad esperada (`X-Session-User`). Se ejecutan
+los controles Laravel de autenticación, cuenta activa, sesión y Gate del destino.
+El contexto contiene `page`, `session` y `navigation`; nunca concede permisos.
+HTML y contexto son privados y no se cachean. No cambian contratos de las API.
 
-## Salida y fallos
+Los módulos reutilizan la sesión y navegación recién autorizadas para entrar,
+sin repetir `/api/session` o `/api/navigation`. Permanecen las verificaciones por
+foco/pestañas de SessionBoundary, las comprobaciones previas a escrituras y las
+revalidaciones del backend. No se guardan permisos globales ni entre peticiones.
+Los cambios de query dentro del módulo conservan sus API autorizadas; no son
+una nueva autorización de acceso a otro módulo.
 
-No se abandona un módulo durante una escritura o con resultado incierto. Los
-formularios modificados requieren confirmación para descartar cambios al salir
-del módulo. Los cambios de módulo por atrás, adelante y enlaces usan las mismas
-protecciones. Una respuesta tardía no puede
-instalar el contexto de una transición cancelada. Los errores de sesión/acceso
-ocultan el contenido privado; los errores de red conservan el módulo de origen.
-Los módulos se desmontan al salir; no se utiliza `KeepAlive` con datos privados.
+## Salida, operaciones y fallos
 
-## Extensión
+- Los formularios modificados piden confirmación de descarte al salir del módulo.
+  Los formularios de consulta usan `data-office-filter`; ciertos controles de
+  escritura externos a formularios se identifican con `data-office-dirty`.
+- Los bloqueos del módulo impiden salir durante escrituras, resultados inciertos
+  y reservas/adjuntos pendientes. También protegen historial y cierre de sesión.
+- Supply, Facturación, Gastos, solicitudes administrativas y Taller conservan
+  su recuperación en mapas de la instancia de oficina, separados por cuenta.
+  Se conserva el cuerpo original, la clave idempotente y, cuando corresponde,
+  el File. No hay reintentos automáticos ni persistencia nueva de archivos privados.
+- Ante expiración se oculta el módulo. La opción «Volver a comprobar» solicita
+  nuevamente su ruta autorizada y permite recuperar operaciones de la misma
+  cuenta. Si es necesario autenticarse, puede hacerse en otra pestaña y volver
+  a comprobar; un cambio de identidad detectado por SessionBoundary exige recarga.
+- Los mapas no sobreviven al cierre o recarga forzada del documento. Se mantiene
+  un aviso nativo de salida incluso después de ocultar/desmontar el contenido.
+  Este aviso no puede garantizar recuperación ante cierre forzado del navegador.
+  Taller conserva además su protocolo existente de recibos y metadatos de reservas.
+- Las transiciones canceladas no pueden instalar contextos tardíos. Los emisores
+  de componentes anteriores no pueden invalidar otra página/cuenta. Taller
+  cancela sus lecturas y limpia su temporizador; las demás lecturas adaptadas
+  cancelan solicitudes al desmontarse y conservan sus controles de generación.
+- La descarga del destino se prepara antes de abandonar el origen. Si falla,
+  se conserva el origen, el historial y el destino con sus parámetros para un
+  reintento explícito. No se recarga automáticamente para resolver chunks ausentes.
+  Un asset retirado por una futura publicación podría exigir recarga manual;
+  antes deben resolverse los pendientes.
 
-Para incorporar otro módulo: conservar su Gate en Laravel, usar `OfficePage`
-para su representación, registrar ruta/componente en Office, consumir la sesión
-de entrada y registrar los bloqueos del módulo. No añadir otra raíz, gestor de
-sesión ni lógica de historial. El conductor continúa fuera de este registro.
+## Bloqueo de Documentación
 
-## Verificación y límites
+`/documentacion` conserva la entrada tradicional y su autorización. Se excluye
+expresamente de la integración segura de esta entrega.
 
-- PostgreSQL 18 temporal: 43 pruebas distintas de rutas, permisos, identidad,
-  revocación, instrumentación y contratos del conductor, incluidos los nuevos
-  casos de `OfficeNavigationTest`. No se accede a bases reales.
-- 38 pruebas Node de contratos, identidad y reutilización de navegación.
-- 11 pruebas de navegador de oficina: documento persistente, contexto autorizado
-  por transición, ausencia de `/api/session` y `/api/navigation` redundantes,
-  atrás/adelante, recarga, formularios, escritura incierta, sesión expirada,
-  cambio de cuenta, foco, recuperación de red y respuestas tardías. La integración
-  de query strings conserva filtros y la solicitud seleccionada al crear viajes.
-- 16 pruebas de navegador de regresión: páginas tradicionales, historial de
-  Transporte, cierre con pendientes, respuesta perdida y almacenamiento offline.
-- Tipos, Pint y compilación frontend satisfactorios.
+Evidencia: `FleetAndDocuments/components/DocumentUploadForm.vue` envía un archivo
+sin clave idempotente; los contratos de carga del backend tampoco ofrecen una
+clave/recibo para resolver inequívocamente una respuesta perdida. Un desmontaje
+nuevo podría perder el archivo y facilitar repetir una carga ya aplicada.
 
-Las verificaciones legítimas por foco/pestañas y las comprobaciones previas a
-escrituras siguen consultando la sesión. El contenido de un módulo se desmonta
-al abandonarlo; sus consultas de datos vuelven a ejecutarse al regresar. Los
-formularios modificados requieren confirmación conservadora de salida, que
-puede aparecer también después de guardar si hubo entradas de formulario.
+Resolver primero la recuperación de cargas documentales en un trabajo específico:
+acordar identificación de la operación y consulta de resultado, conservar el
+archivo y bloquear resultados inciertos. Esto puede requerir un contrato nuevo,
+fuera de las restricciones actuales. No se simula una confirmación ni se añaden
+reintentos inseguros. Entrar o salir de Documentación aún recarga el documento.
 
-No se midió latencia en Azure. La compilación avisa del bundle principal de unos
-510 kB (147 kB gzip), además de los avisos existentes de fuentes opcionales y una
-importación dinámica inefectiva. No se cambia la política de caché/actualización
-de la PWA para resolver ese tamaño. Esta fase no hace push ni despliegue.
+## Incorporación de módulos
+
+Conservar el Gate Laravel y representar la página con OfficePage. Registrar el
+path/título en `context.ts` y el import dinámico en `pages.ts`. Consumir el contexto
+mediante `useOffice` o el adaptador de props/eventos de OfficeApp; no crear otra
+navegación o verificación inicial de sesión. Registrar bloqueos, usar recuperación
+por cuenta y limpiar lecturas/listeners/temporizadores. Añadir el destino a las
+matrices PHP y de navegador antes de habilitarlo.
+
+## Verificación y tamaño
+
+- 64 pruebas PHP y 1.024 aserciones: rutas directas/contextos, roles, revocación,
+  identidad, sesión, instrumentación, contratos de conductor, facturación y Taller.
+  PostgreSQL 18 temporal y datos sintéticos; sin acceso a bases reales.
+- 38 pruebas Node de contratos, adjuntos, claves, identidad y navegación.
+- 37 pruebas de navegador de oficina: matriz de 196 pares entre los 14 destinos (incluye 14 permanencias),
+  una sola carga de documento y ausencia de consultas iniciales redundantes de
+  sesión/navegación. También historial, URL/recarga, permisos, cuenta cambiada,
+  sesión expirada, formularios, descarga fallida y cancelación de lecturas.
+- Operaciones: doble envío, validación, recuperación tras desmontaje autorizado,
+  mismo cuerpo/clave, y mismos bytes del comprobante de Gastos tras recuperar sesión.
+- Regresión de conductor: 16 pruebas de portal/IndexedDB, respuesta perdida,
+  pendientes, cuentas, expiración, concurrencia y reconexión; además 4 de alertas.
+- Pint, TypeScript y build satisfactorios. No se incorporan dependencias.
+
+Medición local del build: entrada `app` de aproximadamente 14,6 kB. Sumando sus
+imports estáticos y los chunks necesarios de bootstrap/Inicio: 130.994 bytes JS
+(51.947 bytes gzip, 7 archivos). No incluye CSS, fuentes ni respuestas HTTP. Los
+componentes de Administración, Transporte, Taller, Supply, Finanzas, Auditoría y
+Reportes aparecen como entradas dinámicas separadas. La prueba de navegador
+confirma que Inicio no solicita Taller/Auditoría/Reportes hasta entrar en ellos.
+La política de precaché de la PWA permanece intacta; puede descargar assets después
+para uso offline. El tamaño inicial no equivale al total de assets de la aplicación.
+
+No se midió latencia en Azure. Persisten el aviso de fuentes opcionales de Vite y
+los avisos experimentales del transformador TypeScript de Node; no son errores.
+No se realiza push, despliegue ni cambio de infraestructura.

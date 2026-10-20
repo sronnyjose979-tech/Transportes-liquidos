@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { all, request } from '../api';
+import { useModuleRequests } from '../../Office/useModuleRequests';
+const {all,request}=useModuleRequests();
 import { useAdmin } from '../context';
 import FieldError from '../../FleetAndDocuments/components/FieldError.vue';
 

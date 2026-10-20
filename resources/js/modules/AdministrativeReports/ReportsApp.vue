@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import {computed,onBeforeUnmount,ref,watch} from 'vue';
 import type {Session} from '../FleetAndDocuments/contracts';
-import {all,request,failure} from '../Administration/api';
+import { useModuleRequests } from '../Office/useModuleRequests';
+import {failure} from '../Administration/api';
+const {all,request}=useModuleRequests();
 import SearchSelect from '../Workshop/components/SearchSelect.vue';
 import ReportTable from './ReportTable.vue';
 import {names,states,labels,parseReport} from './contracts';

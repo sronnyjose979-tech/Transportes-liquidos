@@ -1,4 +1,5 @@
 """Exercise existing write contracts inside the persistent root, without a database."""
+from email.parser import BytesParser
 import os
 import unittest
 import test_fleet_documents as support
@@ -7,6 +8,7 @@ import test_supply
 import test_billing
 import test_expenses
 import test_workshop
+import test_document_alerts
 from urllib.parse import urlparse
 from playwright.async_api import expect
 from test_office_navigation import PATHS
@@ -81,6 +83,32 @@ class OfficeExpensesBrowserTest(OfficeHarness, unittest.IsolatedAsyncioTestCase)
     test_lost_response_explicit_retry_same_key_no_double_click=test_expenses.ExpensesBrowserTest.test_lost_response_explicit_retry_same_key_no_double_click
     test_secretary_cannot_decide_but_can_correct=test_expenses.ExpensesBrowserTest.test_secretary_cannot_decide_but_can_correct
 
+    async def test_receipt_retains_original_bytes_and_key_through_session_recovery(self):
+        captured=[]
+        async def receipt(route):
+            headers=await route.request.all_headers()
+            message=BytesParser().parsebytes(('Content-Type: '+headers['content-type']+'\r\nMIME-Version: 1.0\r\n\r\n').encode()+route.request.post_data_buffer)
+            captured.append({part.get_param('name',header='content-disposition'):part.get_payload(decode=True) for part in message.get_payload()})
+            status=[500,401,200][len(captured)-1]
+            await route.fulfill(status=status,json={'data':{}})
+        await self.page.route('**/api/expenses/expense-1/receipts',receipt)
+        await self.page.goto(self.base+'/gastos')
+        await self.page.get_by_role('button',name='Ver gasto',exact=True).click()
+        payload=b'%PDF-1.4 synthetic-office-receipt'
+        await self.page.get_by_label('Comprobante PDF, JPG o PNG').set_input_files({'name':'synthetic.pdf','mimeType':'application/pdf','buffer':payload})
+        await self.page.get_by_role('button',name='Adjuntar comprobante',exact=True).click()
+        await expect(self.page.get_by_role('button',name='Reintentar la misma operación')).to_be_visible()
+        await self.page.get_by_role('button',name='Reintentar la misma operación').click()
+        await expect(self.page.get_by_text('El contenido privado se ha ocultado.',exact=True)).to_be_visible()
+        await self.page.get_by_role('button',name='Volver a comprobar',exact=True).click()
+        await expect(self.page.get_by_role('button',name='Reintentar la misma operación')).to_be_visible()
+        await self.page.get_by_role('button',name='Reintentar la misma operación').click()
+        await expect(self.page.get_by_text('Operación confirmada.',exact=False)).to_be_visible()
+        self.assertEqual(3,len(captured))
+        self.assertEqual(captured[0],captured[1])
+        self.assertEqual(captured[0],captured[2])
+        self.assertEqual(payload,captured[0]['file'])
+
 class OfficeWorkshopBrowserTest(OfficeHarness, unittest.IsolatedAsyncioTestCase):
     contract=test_workshop.WorkshopBrowserTest
     enter=test_workshop.WorkshopBrowserTest.enter
@@ -109,3 +137,7 @@ class OfficeWorkshopBrowserTest(OfficeHarness, unittest.IsolatedAsyncioTestCase)
         self.assertEqual(self.sent[0],self.sent[1])
         self.assertEqual(self.sent[0],self.sent[2])
 
+class OfficeAlertsBrowserTest(OfficeHarness, unittest.IsolatedAsyncioTestCase):
+    contract=test_document_alerts.DocumentAlertsBrowserTest
+    test_filters_status_days_original_link_and_review_refresh=test_document_alerts.DocumentAlertsBrowserTest.test_filters_status_days_original_link_and_review_refresh
+    test_unknown_response_requires_same_explicit_review_without_auto_retry=test_document_alerts.DocumentAlertsBrowserTest.test_unknown_response_requires_same_explicit_review_without_auto_retry

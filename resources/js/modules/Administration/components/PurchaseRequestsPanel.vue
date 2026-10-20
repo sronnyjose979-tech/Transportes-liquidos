@@ -1,12 +1,14 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
-import { all, request, failure, ApiError } from '../api';
+import { useModuleRequests } from '../../Office/useModuleRequests';
+import {failure,ApiError} from '../api';
+const {all,request}=useModuleRequests();
 import { useOffice } from '../../Office/context';
 import { useAdmin } from '../context';
 import { getSession } from '../../FleetAndDocuments/api';
 import { registrationDate } from '../../FleetAndDocuments/presentation';
 import SearchSelect from '../../Workshop/components/SearchSelect.vue';
-import { pendingPurchase, rememberPurchase, clearPurchase } from '../purchasingRecovery';
+import { pendingPurchase as legacyPending, rememberPurchase as legacyRemember, clearPurchase as legacyClear } from '../purchasingRecovery';
 import type { PurchasingIntent } from '../purchasingRecovery';
 interface Part {id:string;code:string;description:string;unit:string}
 interface Supplier {id:string;name:string}
@@ -16,6 +18,10 @@ interface Decision {id:string;decision:'approved'|'rejected';reason:string;decid
 interface PurchaseRequest {id:string;supplier:Supplier;reason:string;requested_by:{id:string|number;name:string};registered_at:string;items:PurchaseItem[];decision:Decision|null}
 interface Line {key:string;spare_part_id:string;quantity:string;workshop_material_need_id:string}
 const officeHost=useOffice();
+const recovery=officeHost?.recovery<PurchasingIntent>('administrative-purchasing');
+const pendingPurchase=(actor:string)=>recovery?recovery.get(actor)??null:legacyPending(actor);
+const rememberPurchase=(intent:PurchasingIntent)=>recovery?recovery.set(intent.actor,intent):legacyRemember(intent);
+const clearPurchase=(actor:string)=>recovery?recovery.delete(actor):legacyClear(actor);
 const ctx=useAdmin(), loading=ref(false), rows=ref<PurchaseRequest[]>([]), selected=ref<PurchaseRequest|null>(null);
 const parts=ref<Part[]>([]), suppliers=ref<Supplier[]>([]), needs=ref<Need[]>([]), search=ref(''), page=ref(1), actor=ref('');
 const form=ref(false), supplier=ref(''), reason=ref(''), decision=ref<'approved'|'rejected'>('approved'), deciding=ref(false), confirmed=ref('');

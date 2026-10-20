@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import FieldError from '../FleetAndDocuments/components/FieldError.vue';
 import {computed,onMounted,onBeforeUnmount,ref,watch,useId} from 'vue';
-import {all,request} from '../Administration/api';
+import { useModuleRequests } from '../Office/useModuleRequests';
+const {all,request}=useModuleRequests();
 import SearchSelect from '../Workshop/components/SearchSelect.vue';
 import {instant,localInstant} from '../Workshop/presentation';
 import {registrationDate} from '../FleetAndDocuments/presentation';

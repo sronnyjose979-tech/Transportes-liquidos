@@ -495,7 +495,7 @@ function openRow(row: RecordRow): void { void navigate(view.value === 'orders' ?
     </div>
     <template v-else>
         <aside class="workshop-sidebar">
-<a class="workshop-brand" href="/">TL <span>Transportes Líquidos<small>Gestión operativa</small>
+<a class="workshop-brand" :href="officeHost?.context.value?.navigation.home??'/'">TL <span>Transportes Líquidos<small>Gestión operativa</small>
 </span>
 </a>
 <p class="workshop-eyebrow">TALLER MECÁNICO</p>
