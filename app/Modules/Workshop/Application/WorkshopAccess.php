@@ -3,6 +3,7 @@
 namespace App\Modules\Workshop\Application;
 
 use App\Models\User;
+use App\Modules\AccessAndPersonnel\Application\ReadAuthorizationContext;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Facades\DB;
@@ -12,7 +13,7 @@ final class WorkshopAccess
 {
     public function fresh(User $actor): User
     {
-        $current = User::query()->findOrFail($actor->id);
+        $current = ReadAuthorizationContext::forActor($actor)?->actor ?? User::query()->findOrFail($actor->id);
         if (! $current->is_active) {
             throw new AuthorizationException('Cuenta no activa.');
         }
@@ -28,7 +29,7 @@ final class WorkshopAccess
     public function roles(User $actor, array $roles): void
     {
         $current = $this->fresh($actor);
-        if (! $current->roles()->whereIn('name', $roles)->exists()) {
+        if (! $current->hasAnyRole($roles)) {
             throw new AuthorizationException('Operación de Taller no autorizada.');
         }
     }
@@ -45,7 +46,7 @@ final class WorkshopAccess
 
     public function isOffice(User $actor): bool
     {
-        return $this->fresh($actor)->roles()->whereIn('name', ['administrator', 'secretary'])->exists();
+        return $this->fresh($actor)->hasAnyRole(['administrator', 'secretary']);
     }
 
     public function orders(User $actor, Builder $query, string $column = 'id'): Builder

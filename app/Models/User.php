@@ -3,6 +3,7 @@
 namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
+use App\Modules\AccessAndPersonnel\Application\ReadAuthorizationContext;
 use App\Modules\AccessAndPersonnel\Models\Employee;
 use App\Modules\AccessAndPersonnel\Models\Role;
 use Database\Factories\UserFactory;
@@ -24,6 +25,12 @@ class User extends Authenticatable
     public function roles(): BelongsToMany
     {
         return $this->belongsToMany(Role::class, 'user_roles', 'user_id', 'role_id');
+    }
+
+    public function hasAnyRole(array $roles): bool
+    {
+        return ReadAuthorizationContext::forActor($this)?->hasAnyRole($roles)
+            ?? $this->roles()->whereIn('name', $roles)->exists();
     }
 
     public function employee(): HasOne

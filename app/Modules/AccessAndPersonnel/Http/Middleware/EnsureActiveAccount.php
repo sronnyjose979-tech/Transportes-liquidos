@@ -2,6 +2,7 @@
 
 namespace App\Modules\AccessAndPersonnel\Http\Middleware;
 
+use App\Modules\AccessAndPersonnel\Application\ReadAuthorizationContext;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -20,7 +21,13 @@ class EnsureActiveAccount
             abort(403, 'La cuenta no está activa.');
         }
         Auth::guard('web')->setUser($user);
-
-        return $next($request);
+        if ($request->isMethod('GET')) {
+            $request->attributes->set(ReadAuthorizationContext::class, new ReadAuthorizationContext($user));
+        }
+        try {
+            return $next($request);
+        } finally {
+            $request->attributes->remove(ReadAuthorizationContext::class);
+        }
     }
 }

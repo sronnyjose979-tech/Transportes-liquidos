@@ -10,7 +10,7 @@ final class SystemNavigation
 {
     public function links(User $actor): array
     {
-        $actor = $actor->fresh();
+        $actor = ReadAuthorizationContext::forActor($actor)?->actor ?? $actor->fresh();
         abort_unless($actor?->is_active, 403);
         $definitions = [
             ['dashboard', 'Inicio', '/dashboard', 'manage-personnel'],
@@ -46,7 +46,12 @@ final class SystemNavigation
 
     public function home(User $actor): string
     {
-        $links = array_column($this->links($actor), 'href', 'key');
+        return $this->homeFromLinks($this->links($actor));
+    }
+
+    public function homeFromLinks(array $modules): string
+    {
+        $links = array_column($modules, 'href', 'key');
         foreach (['dashboard', 'transport', 'workshop', 'driver'] as $key) {
             if (isset($links[$key])) {
                 return $links[$key];

@@ -75,6 +75,38 @@ class DocumentAlertsTest extends PostgresTestCase
         $this->getJson('/api/document-alerts?status=expired')->assertOk()->assertJsonPath('meta.total', 2);
     }
 
+    public function test_summary_matches_original_filters_in_one_query_including_reviews_and_renewals(): void
+    {
+        $this->actingAs($this->actor());
+        CarbonImmutable::setTestNow('2026-10-16T05:59:59Z');
+        $reviewed = $this->document('2026-10-14');
+        $this->document('2026-10-15');
+        $this->document('2026-10-30', kind: 'tanker');
+        $this->document('2026-10-31');
+        $this->document(null, false);
+        $this->document('2026-10-10', false);
+        $old = $this->document('2026-10-13');
+        Document::create(['fleet_asset_id' => $old->fleet_asset_id, 'document_type_id' => $old->document_type_id, 'storage_key' => 'fleet/new.pdf', 'expires_on' => '2026-11-01', 'uploaded_by_id' => auth()->id()]);
+        app(DocumentAlerts::class)->review(auth()->user(), $reviewed->id);
+        $alerts = app(DocumentAlerts::class);
+        foreach (['2026-10-16T05:59:59Z', '2026-10-16T06:00:00Z'] as $time) {
+            CarbonImmutable::setTestNow($time);
+            $at = CarbonImmutable::now('America/Costa_Rica');
+            $expected = ['expired' => $alerts->query(['status' => 'expired'], $at)->count(),
+                'expiring_soon' => $alerts->query(['status' => 'expiring_soon'], $at)->count(),
+                'unreviewed' => $alerts->query(['attention' => 'unreviewed'], $at)->count(),
+                'as_of' => $at->toDateString(), 'timezone' => 'America/Costa_Rica', 'personnel_supported' => false];
+            DB::flushQueryLog();
+            DB::enableQueryLog();
+            try {
+                $this->assertSame($expected, $alerts->summary());
+                $this->assertCount(1, DB::getQueryLog());
+            } finally {
+                DB::disableQueryLog();
+            }
+        }
+    }
+
     public function test_filters_and_validation_are_based_on_expiration_dates(): void
     {
         $this->actingAs($this->actor());

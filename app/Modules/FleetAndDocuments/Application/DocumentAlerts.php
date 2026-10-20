@@ -52,11 +52,14 @@ final class DocumentAlerts
     public function summary(): array
     {
         $at = CarbonImmutable::now('America/Costa_Rica');
-        $expired = $this->query(['status' => 'expired'], $at)->count();
-        $soon = $this->query(['status' => 'expiring_soon'], $at)->count();
+        $query = DB::query();
+        foreach (['expired' => ['status' => 'expired'], 'expiring_soon' => ['status' => 'expiring_soon'], 'unreviewed' => ['attention' => 'unreviewed']] as $key => $filters) {
+            $query->selectSub($this->query($filters, $at)->toBase()->reorder()->select(DB::raw('count(*)')), $key);
+        }
+        $counts = $query->first();
 
-        return ['expired' => $expired, 'expiring_soon' => $soon,
-            'unreviewed' => $this->query(['attention' => 'unreviewed'], $at)->count(),
+        return ['expired' => (int) $counts->expired, 'expiring_soon' => (int) $counts->expiring_soon,
+            'unreviewed' => (int) $counts->unreviewed,
             'as_of' => $at->toDateString(), 'timezone' => 'America/Costa_Rica', 'personnel_supported' => false];
     }
 

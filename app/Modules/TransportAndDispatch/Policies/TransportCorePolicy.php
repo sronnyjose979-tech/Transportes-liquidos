@@ -3,6 +3,7 @@
 namespace App\Modules\TransportAndDispatch\Policies;
 
 use App\Models\User;
+use App\Modules\AccessAndPersonnel\Application\ReadAuthorizationContext;
 use App\Modules\TransportAndDispatch\Models\Trip;
 
 class TransportCorePolicy
@@ -30,6 +31,10 @@ class TransportCorePolicy
 
     private function hasRole(User $user, array $roles): bool
     {
+        if ($context = ReadAuthorizationContext::forActor($user)) {
+            return $context->hasAnyRole($roles);
+        }
+
         return User::query()->whereKey($user->id)->where('is_active', true)
             ->whereHas('roles', fn ($query) => $query->whereIn('name', $roles))->exists();
     }

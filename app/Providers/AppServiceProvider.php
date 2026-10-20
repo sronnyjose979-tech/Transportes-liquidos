@@ -52,23 +52,23 @@ class AppServiceProvider extends ServiceProvider
             return true;
         });
         foreach (['access-purchasing', 'manage-purchase-requests'] as $ability) {
-            Gate::define($ability, fn (User $user): bool => $user->is_active && $user->roles()->whereIn('name', ['administrator', 'secretary'])->exists());
+            Gate::define($ability, fn (User $user): bool => $user->is_active && $user->hasAnyRole(['administrator', 'secretary']));
         }
-        Gate::define('decide-purchase-request', fn (User $user): bool => $user->is_active && $user->roles()->where('name', 'administrator')->exists());
-        Gate::define('view-assigned-trips', fn (User $user): bool => $user->is_active && $user->roles()->whereIn('name', ['administrator', 'driver'])->exists());
-        Gate::define('access-inventory', fn (User $user): bool => $user->is_active && $user->roles()->whereIn('name', ['administrator', 'secretary', 'mechanic'])->exists());
-        Gate::define('manage-catalogs', fn (User $user): bool => $user->is_active && $user->roles()->where('name', 'administrator')->exists()
+        Gate::define('decide-purchase-request', fn (User $user): bool => $user->is_active && $user->hasAnyRole(['administrator']));
+        Gate::define('view-assigned-trips', fn (User $user): bool => $user->is_active && $user->hasAnyRole(['administrator', 'driver']));
+        Gate::define('access-inventory', fn (User $user): bool => $user->is_active && $user->hasAnyRole(['administrator', 'secretary', 'mechanic']));
+        Gate::define('manage-catalogs', fn (User $user): bool => $user->is_active && $user->hasAnyRole(['administrator'])
         );
-        Gate::define('manage-personnel', fn (User $user): bool => $user->is_active && $user->roles()->where('name', 'administrator')->exists());
+        Gate::define('manage-personnel', fn (User $user): bool => $user->is_active && $user->hasAnyRole(['administrator']));
         // Provisional fleet permissions approved for this stage.
-        Gate::define('manage-fleet', fn (User $user): bool => $user->is_active && $user->roles()->where('name', 'administrator')->exists());
-        Gate::define('manage-document-types', fn (User $user): bool => $user->is_active && $user->roles()->where('name', 'administrator')->exists());
-        Gate::define('manage-fleet-documents', fn (User $user): bool => $user->is_active && $user->roles()->whereIn('name', ['administrator', 'secretary'])->exists());
+        Gate::define('manage-fleet', fn (User $user): bool => $user->is_active && $user->hasAnyRole(['administrator']));
+        Gate::define('manage-document-types', fn (User $user): bool => $user->is_active && $user->hasAnyRole(['administrator']));
+        Gate::define('manage-fleet-documents', fn (User $user): bool => $user->is_active && $user->hasAnyRole(['administrator', 'secretary']));
         // Persistence permissions only; driver ownership awaits assignments in 5.2B.
         foreach (['manage-transport-core', 'request-transport-authorization', 'correct-transport-record', 'record-transport-information', 'resolve-transport-warning'] as $ability) {
             Gate::define($ability, [TransportCorePolicy::class, 'manage']);
         }
-        Gate::define('access-expenses', fn (User $user): bool => $user->is_active && $user->roles()->whereIn('name', ['administrator', 'secretary', 'driver'])->exists());
+        Gate::define('access-expenses', fn (User $user): bool => $user->is_active && $user->hasAnyRole(['administrator', 'secretary', 'driver']));
         Gate::define('manage-expenses', [TransportCorePolicy::class, 'manage']);
         Gate::define('approve-expenses', [TransportCorePolicy::class, 'decide']);
         Gate::define('view-administrative-audit', [TransportCorePolicy::class, 'decide']);
