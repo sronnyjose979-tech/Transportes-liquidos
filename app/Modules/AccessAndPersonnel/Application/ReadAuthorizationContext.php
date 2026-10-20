@@ -35,8 +35,11 @@ final class ReadAuthorizationContext
 
     public function hasAnyRole(array $roles): bool
     {
-        $this->roles ??= $this->actor->roles()->pluck('name')->all();
+        return $this->actor->is_active && array_intersect($roles, $this->roleNames()) !== [];
+    }
 
-        return $this->actor->is_active && array_intersect($roles, $this->roles) !== [];
+    public function roleNames(): array
+    {
+        return $this->roles ??= $this->actor->roles()->pluck('name')->all();
     }
 }

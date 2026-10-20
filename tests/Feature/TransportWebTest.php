@@ -14,7 +14,7 @@ class TransportWebTest extends PostgresTestCase
         $actor = User::factory()->create(['is_active' => true]);
         $actor->roles()->attach(Role::firstOrCreate(['name' => 'secretary']));
         $this->actingAs($actor);
-        $response = $this->get('/transporte')->assertOk()->assertViewIs('transport')->assertSee('transport-app')->assertSee('lang="es"', false)->assertSee('viewport');
+        $response = $this->get('/transporte')->assertOk()->assertViewIs('office')->assertSee('office-app')->assertSee('lang="es"', false)->assertSee('viewport');
         $this->assertStringContainsString('no-store', $response->headers->get('Cache-Control'));
         $response->assertDontSee('storage_key')->assertDontSee('requested_liters')->assertDontSee('password');
     }

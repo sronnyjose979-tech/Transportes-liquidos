@@ -34,7 +34,8 @@ class TransportBrowserTest(unittest.IsolatedAsyncioTestCase):
     pagination=support.FleetDocumentsBrowserTest.pagination
     async def asyncSetUp(self):
         await support.FleetDocumentsBrowserTest.asyncSetUp(self)
-        self.page.on('dialog',lambda dialog:asyncio.create_task(dialog.accept()))
+        if not getattr(self, 'office_dialog_control', False):
+            self.page.on('dialog',lambda dialog:asyncio.create_task(dialog.accept()))
         self.request_row=dict(id=REQUEST,customer_id=ID,liquid_product_id=ID,route_id=ID,requested_liters='1000.25',requested_at='2026-10-12T14:00:00.000000Z',registered_by_id=7,version=1,trips_count=1)
         self.trip=dict(id=ID,transport_request_id=REQUEST,product_name_snapshot='Agua',planning_status='scheduled',execution_status='pending',administrative_status='open',version=1,scheduled_start_at=None,scheduled_end_at=None,officially_started_at=None,officially_completed_at=None,cancelled_at=None,cancellation_reason=None,closed_at=None,request=self.request_row,load=None,unload=None,current_driver_assignments=[dict(id='driver-assignment',employee_id=ID)],current_asset_assignments=[dict(id='head-assignment',fleet_asset_id=support.ASSET,asset_type='tractor_unit'),dict(id='tank-assignment',fleet_asset_id=support.OTHER,asset_type='tanker')])
         self.auth=[]

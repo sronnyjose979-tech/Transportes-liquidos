@@ -9,8 +9,10 @@ import FleetPanel from './components/FleetPanel.vue';
 import PersonnelPanel from './components/PersonnelPanel.vue';
 import CatalogPanel from './components/CatalogPanel.vue';
 import PurchaseRequestsPanel from './components/PurchaseRequestsPanel.vue';
+import { useOffice } from '../Office/context';
+const officeHost = useOffice(() => busy.value || uncertain.value);
 const root = document.getElementById('administration-app');
-const section = root?.dataset.section ?? 'flota';
+const section = officeHost ? 'flota' : root?.dataset.section ?? 'flota';
 const titles: Record<string,string> = { flota: 'Administración de Flota', personal: 'Administración de Personal', catalogos: 'Catálogos operativos', compras:'Solicitudes de compra' };
 const session = ref<Session | null>(null), checking = ref(true), busy = ref(false), uncertain = ref(false);
 const errors = ref<Record<string,string[]>>({}), message = ref(''), success = ref(''), csrfExpired = ref(false), revision = ref(0);
@@ -20,7 +22,7 @@ async function report(error: unknown): Promise<void> {
     const problem = failure(error); message.value = problem.message; success.value = ''; errors.value = problem.fields;
     if (problem.status === 0 || problem.status >= 500 || problem.status === 409) uncertain.value = true;
     if (problem.status === 419) csrfExpired.value = true;
-    if ([401,403].includes(problem.status)) { session.value = null; revision.value++; await loadSession(); }
+    if ([401,403].includes(problem.status)) { session.value = null; revision.value++; if(officeHost)officeHost.invalidate();else await loadSession(); }
 }
 async function mutate(title: string, work: () => Promise<void>): Promise<boolean> {
     if (busy.value || uncertain.value || !allowed.value || !window.confirm(`¿Confirmar ${title}?`)) return false;
@@ -36,12 +38,12 @@ async function recover(): Promise<void> { if (busy.value) return; busy.value = t
 async function csrf(): Promise<void> { busy.value = true; try { await refreshCsrf(); csrfExpired.value = false; message.value = 'Seguridad actualizada. Puedes revisar y reenviar el formulario.'; } catch (error) { await report(error); } finally { busy.value = false; } }
 async function signOut(): Promise<void> { if (busy.value) return; busy.value = true; try { await logout(); session.value = null; revision.value++; uncertain.value = false; errors.value = {}; success.value = ''; message.value = ''; } catch (error) { await report(error); } finally { busy.value = false; } }
 provide(adminKey, { busy, uncertain, errors, mutate, report });
-onMounted(loadSession);
+onMounted(() => { if (officeHost?.context.value) { session.value = officeHost.context.value.session; checking.value = false; } else void loadSession(); });
 </script>
 <template>
 <div class="administration-shell">
 <a class="sr-only focus:not-sr-only" href="#admin-main">Ir al contenido principal</a>
-<header class="border-b border-blue-200 bg-white">
+<header v-if="!officeHost" class="border-b border-blue-200 bg-white">
 <div class="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-4 py-5">
 <div><p class="font-semibold text-blue-950">Transportes Líquidos</p><p class="text-sm text-blue-700">{{titles[section]}}</p></div>
 <nav class="flex flex-wrap items-center gap-4" aria-label="Navegación interna">

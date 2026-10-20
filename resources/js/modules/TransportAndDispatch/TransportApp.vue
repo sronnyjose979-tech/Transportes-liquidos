@@ -11,6 +11,10 @@ import { contextKey } from './context';
 import RequestBoard from './components/RequestBoard.vue';
 import TripBoard from './components/TripBoard.vue';
 import TripDetail from './components/TripDetail.vue';
+import {useOffice} from '../Office/context';
+import {useRoute} from 'vue-router';
+const officeHost=useOffice(()=>busy.value||uncertain.value);
+const officeRoute=officeHost?useRoute():null;
 const session = ref<Session | null>(null);
 const initial = ref(true);
 const busy = ref(false);
@@ -41,7 +45,8 @@ function writeLocation(replace = false): void {
     const url = new URL(window.location.href);
     url.searchParams.set('vista', view.value);
     if (selectedTrip.value) url.searchParams.set('viaje', selectedTrip.value); else url.searchParams.delete('viaje');
-    if (replace) history.replaceState(null, '', url); else if (url.href !== window.location.href) history.pushState(null, '', url);
+    if(officeHost){ if(url.href!==window.location.href)officeHost.navigate(url.pathname+url.search,replace); }
+    else if (replace) history.replaceState(null, '', url); else if (url.href !== window.location.href) history.pushState(null, '', url);
 }
 watch([view, selectedTrip], () => { if (!restoringLocation && !initial.value && office.value) writeLocation(); });
 function previousLocation(): void {
@@ -51,8 +56,14 @@ function previousLocation(): void {
     initialRequest.value = ''; requestFilter.value = '';
     void nextTick(() => { restoringLocation = false; });
 }
-window.addEventListener('popstate', previousLocation);
-onBeforeUnmount(() => window.removeEventListener('popstate', previousLocation));
+if(officeRoute)watch(()=>officeRoute.fullPath,()=>{
+    if(officeRoute.path!=='/transporte')return;
+    const target=locationView();
+    // Our own query update must not erase the selected request or list filter.
+    if(target.view!==view.value||target.trip!==selectedTrip.value)previousLocation();
+});
+else window.addEventListener('popstate', previousLocation);
+onBeforeUnmount(() => { sessionGeneration++; window.removeEventListener('popstate', previousLocation); });
 function clear(): void {
     sessionGeneration++;
     uncertain.value = false;
@@ -74,6 +85,7 @@ async function report(error: unknown): Promise<void> { const problem = failure(e
     csrfExpired.value = true; if ([401, 403].includes(problem.status)) {
     session.value = null;
     clear();
+    if(officeHost){officeHost.invalidate();return;}
     if (problem.status === 403) {
         initial.value = true;
         try {
@@ -170,7 +182,7 @@ function navigate(target: string): void {
     success.value = '';
 }
 onMounted(async () => { try {
-    session.value = await getSession();
+    session.value = officeHost?.context.value?.session ?? await getSession();
     await load();
 }
 catch (error) {
@@ -183,7 +195,7 @@ finally {
 </script>
 <template>
 <a href="#transport-main" class="sr-only focus:not-sr-only">Ir al contenido principal</a>
-<header class="border-b border-slate-200 bg-white">
+<header v-if="!officeHost" class="border-b border-slate-200 bg-white">
 <div class="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-4 py-5 sm:px-6">
 <div>
 <p class="font-semibold">Transporte de Líquidos</p>

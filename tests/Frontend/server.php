@@ -61,6 +61,24 @@ foreach (['flota', 'personal', 'catalogos', 'compras'] as $section) {
 }
 if (isset($pages[$uri])) {
     [$view, $data] = $pages[$uri];
+    if (getenv('TRANSPORTE_BROWSER_OFFICE') === '1' && in_array($uri, ['/dashboard', '/transporte', '/administracion/flota'], true)) {
+        // Synthetic bootstrap only; transition and data requests are intercepted by Playwright.
+        $role = ($_GET['office_role'] ?? '') === 'secretary' ? 'secretary' : 'administrator';
+        $modules = [
+            ['key' => 'dashboard', 'label' => 'Inicio', 'href' => '/dashboard'],
+            ['key' => 'transport', 'label' => 'Transporte', 'href' => '/transporte'],
+            ['key' => 'fleet', 'label' => 'Flota', 'href' => '/administracion/flota'],
+            ['key' => 'driver', 'label' => 'Mis viajes', 'href' => '/mis-viajes'],
+            ['key' => 'personnel', 'label' => 'Personal', 'href' => '/administracion/personal'],
+        ];
+        if ($role === 'secretary') {
+            $modules = [$modules[1]];
+        }
+        $view = 'office';
+        $data = ['context' => ['page' => ['/dashboard' => 'dashboard', '/transporte' => 'transport', '/administracion/flota' => 'fleet'][$uri],
+            'session' => ['id' => '7', 'login' => $role, 'roles' => [$role]],
+            'navigation' => ['home' => $role === 'secretary' ? '/transporte' : '/dashboard', 'modules' => $modules]]];
+    }
     response()->view($view, $data)->header('Cache-Control', 'private, no-store')->header('Set-Cookie', 'XSRF-TOKEN=browser-contract-only; Path=/; SameSite=Lax')->send();
 } else {
     $app->handleRequest(Request::capture());

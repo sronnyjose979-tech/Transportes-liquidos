@@ -15,9 +15,12 @@ class AdministrationWebTest extends PostgresTestCase
         $actor->roles()->attach(Role::firstOrCreate(['name' => 'administrator']));
         $this->actingAs($actor);
         foreach (['flota', 'personal', 'catalogos', 'compras'] as $section) {
-            $response = $this->get('/administracion/'.$section)->assertOk()->assertViewIs('administration')
-                ->assertSee('administration-app')->assertSee('data-section="'.$section.'"', false)
+            $response = $this->get('/administracion/'.$section)->assertOk()->assertViewIs($section === 'flota' ? 'office' : 'administration')
+                ->assertSee($section === 'flota' ? 'office-app' : 'administration-app')
                 ->assertDontSee('password')->assertDontSee('storage_key')->assertDontSee('employee_id');
+            if ($section !== 'flota') {
+                $response->assertSee('data-section="'.$section.'"', false);
+            }
             $this->assertStringContainsString('no-store', $response->headers->get('Cache-Control'));
         }
         $this->get('/administracion/otra')->assertNotFound();

@@ -1,6 +1,10 @@
 import { createApp, h } from 'vue';
 import type { Component } from 'vue';
 import SessionBoundary from './modules/System/SessionBoundary.vue';
+import OfficeApp from './modules/Office/OfficeApp.vue';
+import { createOfficeWorkspace } from './modules/Office/workspace';
+import { decodeOfficeContext, officePaths } from './modules/Office/context';
+import { rememberSession } from './modules/System/sessionIdentity';
 function application(component: Component) { return createApp({ render: () => h(SessionBoundary, null, { default: () => h(component) }) }); }
 import FleetDocumentsApp from './modules/FleetAndDocuments/FleetDocumentsApp.vue';
 
@@ -26,3 +30,16 @@ if (supplyRoot) application(SupplyApp).mount(supplyRoot);
 import SystemApp from './modules/System/SystemApp.vue';
 const systemRoot = document.getElementById('system-app');
 if (systemRoot) application(SystemApp).mount(systemRoot);
+
+const officeRoot = document.getElementById('office-app');
+if (officeRoot) {
+    try {
+        const context = decodeOfficeContext(JSON.parse(document.getElementById('office-context')?.textContent ?? 'null'));
+        if (officePaths[context.page] !== window.location.pathname) throw new Error('Destino inválido.');
+        rememberSession(context.session);
+        const workspace = createOfficeWorkspace(context, { dashboard: SystemApp, transport: TransportApp, fleet: AdminApp });
+        createApp({ render: () => h(SessionBoundary, null, { default: () => h(OfficeApp, { workspace }) }) }).use(workspace.router).mount(officeRoot);
+    } catch {
+        officeRoot.textContent = 'No se pudo iniciar la oficina. Vuelve a cargar la página para comprobar la sesión.';
+    }
+}

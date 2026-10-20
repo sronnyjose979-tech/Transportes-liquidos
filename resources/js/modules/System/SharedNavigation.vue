@@ -3,10 +3,14 @@ import {computed,ref,watch,onBeforeUnmount} from 'vue';
 import type {Session} from '../FleetAndDocuments/contracts';
 import {useNavigation} from './useNavigation';
 import type {ModuleLink} from './navigation';
+import {useOffice} from '../Office/context';
+import {useRoute} from 'vue-router';
 export type {ModuleLink} from './navigation';
 const navigation=useNavigation();
 const props=defineProps<{session:Session|null;disabled?:boolean;workspace?:boolean}>();
-const currentPath=window.location.pathname;
+const officeHost=useOffice();
+const route=officeHost?useRoute():null;
+const currentPath=computed(()=>route?.path??window.location.pathname);
 const links=ref<ModuleLink[]>([]),error=ref('');let generation=0;
 watch(()=>props.session,async actor=>{const current=++generation;links.value=[];error.value='';if(!actor){navigation.clear();return;}try{const result=await navigation.get(actor);if(current===generation)links.value=result.modules;}catch{if(current===generation)error.value='No se pudo consultar la navegación autorizada.';}},{immediate:true,deep:true});
 const areas = computed(() => {
