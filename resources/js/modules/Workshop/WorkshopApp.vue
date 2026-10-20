@@ -1,6 +1,7 @@
 <script setup lang="ts">
+import { useOffice } from '../Office/context';
 import SharedNavigation from '../System/SharedNavigation.vue';
-import { computed, onMounted, onUnmounted, ref } from 'vue';
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import { getSession, login, logout, refreshCsrf } from '../FleetAndDocuments/api';
 import type { Session } from '../FleetAndDocuments/contracts';
 import { registrationDate } from '../FleetAndDocuments/presentation';
@@ -51,6 +52,12 @@ const currentPage = ref(1), lastPage = ref(1), total = ref(0), search = ref(''),
 const timeTotals = ref<unknown>(null), costTotals = ref<unknown>(null), summaryWarning=ref(''), evidencePending=ref(false);
 const originReport = ref<RecordRow | null>(null);
 const command = ref<Command | null>(null), frozen = ref<Record<string, unknown> | null>(null), uncertain = ref(false), stale = ref(false);
+const officeHost=useOffice(()=>busy.value||uncertain.value||evidencePending.value);
+interface Recovery {command:Command|null; frozen:Record<string,unknown>|null; view:View; selected:RecordRow|null; uncertain:boolean}
+const recovery=officeHost?.recovery<Recovery>('workshop')??new Map<string,Recovery>();
+function saveRecovery():void {if(session.value)recovery.set(session.value.id,{command:command.value,frozen:frozen.value,view:view.value,selected:selected.value?{id:selected.value.id}:null,uncertain:uncertain.value});}
+watch(evidencePending,value=>{if(value)saveRecovery();else if(session.value&&!uncertain.value&&!busy.value){recovery.delete(session.value.id);officeHost?.markClean();}},{flush:'sync'});
+let active=true;
 let controller: AbortController | undefined, timer: ReturnType<typeof setInterval> | undefined, generation = 0;
 const admin = computed(() => session.value?.roles.includes('administrator') ?? false);
 const office = computed(() => session.value?.roles.some(r => ['administrator', 'secretary'].includes(r)) ?? false);
@@ -71,7 +78,10 @@ function applied(d: RecordRow): boolean { return applications.value.some(a => a.
 function authorizationState(row: RecordRow): string { const d = decisionFor(row); return d ? applied(d) ? 'Aplicada' : labels[String(d.decision)] ?? text(d.decision) : 'Pendiente'; }
 function clearPrivate(preserveRecovery=false): void { if(!preserveRecovery)clearAttachmentRecovery(session.value?.id);timeTotals.value=null;costTotals.value=null;summaryWarning.value='';evidencePending.value=false; controller?.abort(); generation++; rows.value = []; related.value = {}; selected.value = null; decisions.value = []; applications.value = []; assets.value = []; employees.value = []; parts.value=[];suppliers.value=[];linkableReports.value=[];linkableAdmissions.value=[];vehicle.value=null;lookupWarning.value=''; counts.value = {}; command.value = null; frozen.value = null; uncertain.value = false; originReport.value = null; loading.value = false; }
 async function handle(e: unknown): Promise<void> {
-    const f = failure(e); error.value = f.message; fieldErrors.value = f.fields; csrfExpired.value = f.status === 419;
+    if(!active)return;
+    const f = failure(e);
+    if(officeHost&&[401,403,419].includes(f.status)){officeHost.invalidate();return;}
+    error.value = f.message; fieldErrors.value = f.fields; csrfExpired.value = f.status === 419;
     if (f.status === 401) {const interrupted=evidencePending.value;clearPrivate(true);session.value=null;if(interrupted)error.value+=' La reserva permanece en el servidor. Inicia sesión con la misma cuenta para consultar su recibo y recuperar la carga.';}
     if (f.status === 403) {
         try {
@@ -161,14 +171,15 @@ async function dashboard(signal: AbortSignal): Promise<void> {
     if (failed?.status === 'rejected')
         throw failed.reason;
 }
-async function refresh(): Promise<boolean> {
+async function refresh(initialActor?:Session): Promise<boolean> {
+    if(!active)return false;
     controller?.abort();
     controller = new AbortController();
     const signal = controller.signal, run = ++generation;
     loading.value = true;
     error.value = '';
     try {
-        const nextSession = await getSession();
+        const nextSession = initialActor??await getSession();
         if (signal.aborted || run !== generation)
             return false;
         if (session.value && (session.value.id !== nextSession.id || [...session.value.roles].sort().join(',') !== [...nextSession.roles].sort().join(','))) {
@@ -333,17 +344,20 @@ async function submit(values: Record<string, unknown>): Promise<void> {
     if (busy.value || stale.value || !command.value)
         return;
     const c = command.value;
+    const recovering=recovery.has(c.actor);let attempted=false;
     const payload:Record<string,unknown>={...c.extra};
     if(c.transform) Object.assign(payload,c.transform(Object.fromEntries(Object.entries(values).filter(([,value])=>typeof value==='string')) as Record<string,string>));
     else for(const [key,value] of Object.entries(values))if(value!=='' && value!==undefined)payload[key]=typeof value==='string' && ['occurred_at','created_at','starts_at','performed_at','admitted_at','ends_at'].includes(key)?instant(value):value;
     if (!frozen.value)
         frozen.value = { ...payload, request_key: c.key };
     busy.value = true;
+    saveRecovery();
     error.value = '';
     fieldErrors.value = {};
     try {
         const current = await getSession();
         if (current.id !== c.actor || [...current.roles].sort().join(',') !== c.roles) {
+            if(!recovering)recovery.delete(c.actor);
             clearPrivate();
             session.value = current;
             view.value = 'dashboard';
@@ -355,7 +369,9 @@ async function submit(values: Record<string, unknown>): Promise<void> {
         let body=frozen.value;
         if(path==='assets/pending/admissions'){path=`assets/${encodeURIComponent(String(body.fleet_asset_id))}/admissions`;body={...body};delete body.fleet_asset_id;}
         if(path==='orders/pending/admission-links'){path=`orders/${encodeURIComponent(String(body.work_order_id))}/admission-links`;body={...body};delete body.work_order_id;}
+        attempted=true;
         const result = await write(path, c.method, body);
+        recovery.delete(c.actor);officeHost?.markClean();
         uncertain.value = false;
         command.value = null;
         frozen.value = null;
@@ -376,7 +392,8 @@ async function submit(values: Record<string, unknown>): Promise<void> {
     }
     catch (e) {
         const f = failure(e);
-        uncertain.value = f.status === 0 || f.status >= 500;
+        uncertain.value = recovering || (attempted && (f.status === 0 || f.status >= 500 || f.status === 419));
+        if(uncertain.value)saveRecovery();else recovery.delete(c.actor);
         if (!uncertain.value)
             frozen.value = null;
         await handle(e);
@@ -441,8 +458,10 @@ catch (e) {
     await handle(e);
 } }
 onMounted(async () => { try {
-    session.value = await getSession();
-    await refresh();
+    session.value = officeHost?.context.value?.session??await getSession();
+    const saved=recovery.get(session.value.id);
+    if(saved){command.value=saved.command;frozen.value=saved.frozen;view.value=saved.view;selected.value=saved.selected;uncertain.value=!!saved.frozen;}
+    await refresh(session.value);
 }
 catch (e) {
     if (failure(e).status !== 401)
@@ -450,9 +469,9 @@ catch (e) {
 }
 finally {
     booting.value = false;
-} timer = setInterval(() => { if (session.value && !denied.value && !command.value && !loading.value && !busy.value && !evidencePending.value && !document.hidden)
+} if(!active)return;timer = setInterval(() => { if (session.value && !denied.value && !command.value && !loading.value && !busy.value && !evidencePending.value && !document.hidden)
     void refresh(); }, 30000); });
-onUnmounted(() => { controller?.abort(); if (timer)
+onUnmounted(() => { active=false;generation++;controller?.abort(); if (timer)
     clearInterval(timer); });
 const orderColumns = [{ key: 'id', label: 'Orden' }, { key: 'fleet_asset_id', label: 'Vehículo' }, { key: 'description', label: 'Reparación' }, { key: 'status', label: 'Estado' }, { key: 'priority', label: 'Prioridad' }];
 function openRow(row: RecordRow): void { void navigate(view.value === 'orders' ? 'order' : view.value === 'reports' ? 'report' : view.value === 'authorizations' ? 'authorization' : view.value === 'admissions' ? 'admission' : 'impediment', { id: row.id }); }
@@ -484,14 +503,14 @@ function openRow(row: RecordRow): void { void navigate(view.value === 'orders' ?
 <button v-for="item in (office?['dashboard','orders','reports','admissions','authorizations','impediments'] as const:['dashboard','orders','reports','authorizations','impediments'] as const)" :key="item" :aria-current="activeNavigation===item?'page':undefined" :disabled="busy || uncertain || evidencePending || denied" @click="navigate(item)">
 <WorkshopIcon :name="item" /> {{ {dashboard:'Inicio',orders:'Órdenes',reports:'Averías',authorizations:'Autorizaciones',impediments:'Impedimentos',admissions:'Ingresos y salidas'}[item] }}</button>
 </nav>
-<SharedNavigation :session="session" :disabled="busy||uncertain||evidencePending||denied"/>
+<SharedNavigation v-if="!officeHost" :session="session" :disabled="busy||uncertain||evidencePending||denied"/>
 <small>Una reparación por orden.<br>Autorización antes de ejecución.</small>
 </aside>
         <main class="workshop-main">
 <header class="workshop-topbar">
 <span>Taller Mecánico</span>
 <div>
-<span>{{ session.login ?? `Usuario ${session.id}` }}</span> <button :disabled="busy || uncertain || evidencePending" @click="signOut">Cerrar sesión</button>
+<span>{{ session.login ?? `Usuario ${session.id}` }}</span> <button v-if="!officeHost" :disabled="busy || uncertain || evidencePending" @click="signOut">Cerrar sesión</button>
 </div>
 </header>
         <div class="workshop-content">
@@ -501,7 +520,7 @@ function openRow(row: RecordRow): void { void navigate(view.value === 'orders' ?
 <h1>{{ denied?'Acceso no autorizado':titles[view] }}</h1>
 <p>{{ office?'Coordinación de Taller':'Consulta de órdenes asignadas' }} · Información del servidor</p>
 </div>
-<button v-if="!denied" :disabled="loading || busy || evidencePending || !!command" @click="refresh">Actualizar datos</button>
+<button v-if="!denied" :disabled="loading || busy || evidencePending || !!command" @click="refresh()">Actualizar datos</button>
 </div>
         <div v-if="error && !command" role="alert" class="workshop-alert">{{ error }}<button v-if="csrfExpired" @click="fixCsrf">Actualizar sesión de seguridad</button>
 </div>
@@ -549,7 +568,7 @@ function openRow(row: RecordRow): void { void navigate(view.value === 'orders' ?
 <button v-if="view==='admissions' && office" :disabled="loading || busy" @click="newAdmission">Registrar ingreso</button>
 <button v-if="view==='orders' && office" :disabled="loading || busy" @click="newOrder()">Crear orden</button>
 </div>
-            <form class="workshop-card workshop-filters" aria-label="Filtros" @submit.prevent="currentPage=1;refresh()">
+            <form data-office-filter class="workshop-card workshop-filters" aria-label="Filtros" @submit.prevent="currentPage=1;refresh()">
 <label v-if="view==='orders'">Estado<select aria-label="Estado" v-model="status">
 <option value="">Todos</option>
 <option v-for="(label,key) in states" :key="key" :value="key">{{ label }}</option>

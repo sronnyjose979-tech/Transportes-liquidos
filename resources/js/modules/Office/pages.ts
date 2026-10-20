@@ -14,6 +14,7 @@ export const pageLoaders: Record<OfficePage, () => Promise<{default: Component}>
     purchasing: () => import('../Supply/SupplyApp.vue'),
     billing: () => import('../BillingAndPayments/BillingApp.vue'),
     expenses: () => import('../Expenses/ExpensesApp.vue'),
+    workshop: () => import('../Workshop/WorkshopApp.vue'),
     alerts: () => import('../DocumentAlerts/AlertsApp.vue'),
 };
 export const receivesSession = new Set<OfficePage>(['audit', 'reports', 'billing', 'expenses', 'alerts']);

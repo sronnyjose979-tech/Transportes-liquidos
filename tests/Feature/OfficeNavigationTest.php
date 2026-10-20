@@ -21,8 +21,8 @@ class OfficeNavigationTest extends PostgresTestCase
         foreach (['administrator', 'secretary', 'mechanic', 'driver'] as $role) {
             $actor = $this->actor($role);
             $this->actingAs($actor);
-            foreach (['/dashboard' => 'dashboard', '/transporte' => 'transport', '/administracion/flota' => 'fleet', '/administracion/personal' => 'personnel', '/administracion/catalogos' => 'catalogs', '/administracion/compras' => 'adminPurchasing', '/auditoria' => 'audit', '/reportes' => 'reports', '/inventario' => 'inventory', '/compras' => 'purchasing', '/facturacion' => 'billing', '/gastos' => 'expenses', '/alertas' => 'alerts'] as $path => $page) {
-                $allowed = $role === 'administrator' || ($role === 'secretary' && in_array($page, ['transport', 'inventory', 'purchasing', 'billing', 'expenses', 'alerts'], true)) || ($role === 'mechanic' && $page === 'inventory');
+            foreach (['/dashboard' => 'dashboard', '/transporte' => 'transport', '/administracion/flota' => 'fleet', '/administracion/personal' => 'personnel', '/administracion/catalogos' => 'catalogs', '/administracion/compras' => 'adminPurchasing', '/auditoria' => 'audit', '/reportes' => 'reports', '/inventario' => 'inventory', '/compras' => 'purchasing', '/facturacion' => 'billing', '/gastos' => 'expenses', '/alertas' => 'alerts', '/taller' => 'workshop'] as $path => $page) {
+                $allowed = $role === 'administrator' || ($role === 'secretary' && in_array($page, ['transport', 'inventory', 'purchasing', 'billing', 'expenses', 'alerts', 'workshop'], true)) || ($role === 'mechanic' && in_array($page, ['inventory', 'workshop'], true));
                 $this->flushHeaders();
                 if ($allowed) {
                     $this->get($path)->assertOk()->assertSee('id="office-app"', false)->assertHeader('Cache-Control', 'no-store, private');
@@ -67,7 +67,7 @@ class OfficeNavigationTest extends PostgresTestCase
         $this->actingAs($this->actor());
         $this->get('/mis-viajes')->assertOk()->assertSee('id="system-app"', false)->assertDontSee('id="office-app"', false);
         $this->get('/administracion/personal')->assertOk()->assertSee('id="office-app"', false);
-        $this->get('/taller')->assertOk()->assertSee('id="workshop-app"', false);
+        $this->get('/taller')->assertOk()->assertSee('id="office-app"', false);
     }
 
     public function test_initial_context_cannot_inject_html(): void

@@ -21,7 +21,7 @@ Route::middleware(['auth', EnsureActiveAccount::class, 'auth.session', PrivatePa
     Route::get('/alertas', fn (Request $request, OfficePage $page) => $page->render($request, 'alerts'))->middleware([EnsureSessionIdentity::class, 'can:manage-fleet-documents']);
     Route::get('/gastos', fn (Request $request, OfficePage $page) => $page->render($request, 'expenses'))->middleware([EnsureSessionIdentity::class, 'can:manage-expenses']);
     Route::get('/facturacion', fn (Request $request, OfficePage $page) => $page->render($request, 'billing'))->middleware([EnsureSessionIdentity::class, 'can:manage-billing']);
-    Route::get('/taller', fn () => view('workshop'))->middleware('can:access-workshop')->name('workshop.web');
+    Route::get('/taller', fn (Request $request, OfficePage $page) => $page->render($request, 'workshop'))->middleware([EnsureSessionIdentity::class, 'can:access-workshop'])->name('workshop.web');
     Route::get('/documentacion', fn () => view('fleet-documents'))->middleware('can:manage-fleet-documents')->name('fleet.documents.web');
     Route::get('/transporte', fn (Request $request, OfficePage $page) => $page->render($request, 'transport'))->middleware([EnsureSessionIdentity::class, 'can:manage-transport-core'])->name('transport.web');
     Route::get('/inventario', fn (Request $request, OfficePage $page) => $page->render($request, 'inventory'))->middleware([EnsureSessionIdentity::class, 'can:access-inventory'])->name('inventory.web');

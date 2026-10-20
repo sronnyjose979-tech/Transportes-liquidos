@@ -8,7 +8,7 @@ from playwright.async_api import expect
 import test_fleet_documents as support
 import test_transport as transport
 
-PATHS = {'/dashboard': 'dashboard', '/transporte': 'transport', '/administracion/flota': 'fleet', '/administracion/personal':'personnel', '/administracion/catalogos':'catalogs', '/administracion/compras':'adminPurchasing', '/auditoria':'audit', '/reportes':'reports', '/inventario':'inventory', '/compras':'purchasing', '/facturacion':'billing', '/gastos':'expenses', '/alertas':'alerts'}
+PATHS = {'/dashboard': 'dashboard', '/transporte': 'transport', '/administracion/flota': 'fleet', '/administracion/personal':'personnel', '/administracion/catalogos':'catalogs', '/administracion/compras':'adminPurchasing', '/auditoria':'audit', '/reportes':'reports', '/inventario':'inventory', '/compras':'purchasing', '/facturacion':'billing', '/gastos':'expenses', '/alertas':'alerts', '/taller':'workshop'}
 
 
 class OfficeNavigationBrowserTest(unittest.IsolatedAsyncioTestCase):
@@ -85,6 +85,8 @@ class OfficeNavigationBrowserTest(unittest.IsolatedAsyncioTestCase):
                 await route.fulfill(status=500, json={'message': 'Resultado incierto'})
             else:
                 await route.fulfill(json=self.pagination([], {'per_page': ['100'], 'page': ['1']}))
+        elif path in ['/api/workshop/lookups/mechanics','/api/workshop/orders','/api/workshop/authorization-requests','/api/workshop/impediments']:
+            await route.fulfill(json=self.pagination([],{'per_page':['100'],'page':['1']}))
         elif path=='/api/purchasing/lookups':
             await route.fulfill(json={'data':{'parts':[],'suppliers':[]}})
         elif path in ['/api/users','/api/employees','/api/roles','/api/catalogs/customers','/api/catalogs/spare-parts','/api/catalogs/suppliers','/api/workshop/material-needs','/api/purchasing/requests','/api/reports/trips','/api/inventory/stock','/api/inventory/custody','/api/inventory/corrections','/api/inventory/movements','/api/purchasing/orders','/api/billing/trips','/api/billing/invoices','/api/expenses','/api/document-alerts']:
@@ -261,3 +263,61 @@ class OfficeNavigationBrowserTest(unittest.IsolatedAsyncioTestCase):
             await expect(self.page.get_by_role('navigation',name='Módulos del sistema')).to_have_count(1)
         self.assertEqual(['/dashboard'],self.documents_seen)
         self.assertEqual([],self.session_reads)
+
+    async def test_workshop_entry_is_persistent_and_does_not_boot_session_twice(self):
+        await self.page.goto(self.base+'/dashboard')
+        await expect(self.page.get_by_label('Resumen general')).to_be_visible()
+        await self.enter_path('/taller')
+        await expect(self.page.get_by_role('navigation',name='Módulos del sistema')).to_have_count(1)
+        await expect(self.page.get_by_role('navigation',name='Navegación Taller')).to_be_visible()
+        await self.enter_path('/transporte')
+        self.assertEqual(['/dashboard'],self.documents_seen)
+        self.assertEqual([],self.session_reads)
+
+    async def test_every_office_pair_preserves_one_document_and_authorizes_destination(self):
+        await self.page.goto(self.base+'/dashboard')
+        await expect(self.page.get_by_label('Resumen general')).to_be_visible()
+        pairs=set()
+        for source in PATHS:
+            await self.enter_path(source)
+            for destination in PATHS:
+                await self.enter_path(destination)
+                pairs.add((source,destination))
+                await self.enter_path(source)
+        self.assertEqual(len(PATHS)**2,len(pairs))
+        self.assertEqual(['/dashboard'],self.documents_seen)
+        self.assertEqual([],self.session_reads)
+        self.assertTrue(set(PATHS)-{'/dashboard'} <= {path for path,_ in self.transitions})
+
+    async def test_failed_lazy_download_preserves_source_and_history(self):
+        blocked=[]
+        async def fail_chunk(route):
+            if 'ReportsApp-' in route.request.url:
+                blocked.append(route.request.url)
+                await route.abort('failed')
+            else:
+                await route.fallback()
+        await self.page.goto(self.base+'/dashboard')
+        await expect(self.page.get_by_label('Resumen general')).to_be_visible()
+        await self.page.route('**/*.js',fail_chunk)
+        await self.page.locator('#office-content').evaluate("el=>{const a=document.createElement('a');a.href='/reportes';el.append(a);a.click();a.remove();}")
+        await expect(self.page.get_by_role('alert')).to_contain_text('módulo')
+        self.assertTrue(blocked)
+        self.assertEqual('/dashboard',urlparse(self.page.url).path)
+        await expect(self.page.get_by_label('Resumen general')).to_be_visible()
+        await expect(self.page.locator('#office-content')).to_have_attribute('aria-busy','false')
+        await self.page.unroute('**/*.js',fail_chunk)
+        await self.enter_path('/transporte')
+        await self.page.go_back()
+        await expect(self.page.get_by_label('Resumen general')).to_be_visible()
+        self.assertEqual(['/dashboard'],self.documents_seen)
+
+    async def test_catalog_query_and_filter_navigation_keep_router_history(self):
+        await self.page.goto(self.base+'/administracion/catalogos?catalogo=products')
+        await expect(self.page.get_by_role('heading',name='Catálogos operativos',exact=True)).to_be_visible()
+        await self.enter_path('/administracion/catalogos?catalogo=customers')
+        await self.enter_path('/reportes')
+        await self.page.go_back()
+        await expect(self.page).to_have_url(self.base+'/administracion/catalogos?catalogo=customers')
+        await self.page.reload()
+        await expect(self.page).to_have_url(self.base+'/administracion/catalogos?catalogo=customers')

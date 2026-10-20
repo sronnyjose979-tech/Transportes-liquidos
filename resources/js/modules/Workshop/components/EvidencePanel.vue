@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import {useOffice} from '../../Office/context';
 import { computed, onUnmounted, ref, watch } from 'vue';
 import type { Session } from '../../FleetAndDocuments/contracts';
 import { getSession, refreshCsrf } from '../../FleetAndDocuments/api';
@@ -21,6 +22,10 @@ const attachmentOptions = computed(() => allRows.value.filter(row => !allRows.va
 const repairOptions = computed(() => externalRepairs.value.map(row => ({ value: row.id, label: String(row.description ?? 'Reparación externa') })));
 // Session-scoped metadata permits explicit recovery; file bytes and credentials are never persisted.
 const pending = ref<AttachmentRecovery>();
+const officeHost=useOffice(()=>busy.value||!!pending.value);
+const recovery=officeHost?.recovery<{operation:AttachmentRecovery;file:File|undefined}>('workshop-evidence')??new Map<string,{operation:AttachmentRecovery;file:File|undefined}>();
+const recoveryKey=()=>`${props.actor.id}:${props.order.id}`;
+function retain():void {if(pending.value)recovery.set(recoveryKey(),{operation:pending.value,file:file.value});}
 let generation = 0;
 function identity(): string { return [...props.actor.roles].sort().join(','); }
 function report(value: unknown): void { const issue = failure(value); error.value = issue.message; fields.value = issue.fields; emit('error', issue); }
@@ -48,10 +53,10 @@ async function refresh(): Promise<void> {
     finally { if (version === generation) loading.value = false; }
 }
 function selectFile(event: Event): void { if (event.target instanceof HTMLInputElement) file.value = event.target.files?.[0]; }
-function complete(text: string): void { clearAttachmentRecovery(props.actor.id, props.order.id); pending.value = undefined; file.value = undefined; correction.value = ''; previousAttachment.value = ''; progress.value = null; emit('pending', false); message.value = text; emit('changed'); }
+function complete(text: string): void { recovery.delete(recoveryKey());officeHost?.markClean(); clearAttachmentRecovery(props.actor.id, props.order.id); pending.value = undefined; file.value = undefined; correction.value = ''; previousAttachment.value = ''; progress.value = null; emit('pending', false); message.value = text; emit('changed'); }
 function rejectedReservation(issue: unknown): never {
     if (!pending.value?.reservation && issue instanceof ApiError && [401, 403, 404, 409, 419, 422].includes(issue.status)) {
-        clearAttachmentRecovery(props.actor.id, props.order.id); pending.value = undefined; emit('pending', false);
+        recovery.delete(recoveryKey());clearAttachmentRecovery(props.actor.id, props.order.id); pending.value = undefined; emit('pending', false);
     }
     throw issue;
 }
@@ -77,6 +82,7 @@ async function upload(requestCorrection = false): Promise<void> {
             saveAttachmentRecovery(pending.value);
             emit('pending', true);
         }
+        retain();
         const operation = pending.value;
         const selected = await describeFile(file.value, operation.metadata.category, operation.metadata.reason, operation.metadata.external_repair_id);
         if (JSON.stringify(attachmentChanges(selected)) !== JSON.stringify(attachmentChanges(operation.metadata))) throw new ApiError(422, 'Selecciona el archivo original: la reserva exige el mismo contenido.');
@@ -127,7 +133,9 @@ async function download(row: RecordRow): Promise<void> {
 async function csrf(): Promise<void> { try { await refreshCsrf(); message.value = 'Sesión de seguridad actualizada. Puedes reintentar la misma operación.'; } catch (issue) { report(issue); } }
 watch(() => `${props.order.id}:${props.actor.id}:${identity()}`, () => {
     generation++; pending.value = undefined; rows.value = []; allRows.value = []; externalRepairs.value = []; file.value = undefined; reason.value = ''; externalRepair.value = ''; correction.value = ''; previousAttachment.value = ''; page.value = 1; emit('pending', false); void refresh();
-    const saved = readAttachmentRecovery(props.actor.id, props.order.id, identity());
+    const held=recovery.get(recoveryKey());
+    const saved=held?.operation.roles===identity()?held.operation:readAttachmentRecovery(props.actor.id, props.order.id, identity());
+    if(held&&saved===held.operation)file.value=held.file;
     if (saved) {
         pending.value = saved; category.value = saved.metadata.category; reason.value = saved.metadata.reason; externalRepair.value = saved.metadata.external_repair_id ?? ''; emit('pending', true);
         message.value = 'Operación recuperada. Consulta el recibo y selecciona el archivo original antes de reintentar.';
