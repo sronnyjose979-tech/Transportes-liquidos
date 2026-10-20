@@ -16,8 +16,8 @@ Route::middleware(['auth', EnsureActiveAccount::class, 'auth.session', PrivatePa
     Route::get('/', fn (Request $request, SystemNavigation $navigation) => redirect($navigation->home($request->user())));
     Route::get('/dashboard', fn (Request $request, OfficePage $page) => $page->render($request, 'dashboard'))->middleware([EnsureSessionIdentity::class, 'can:manage-personnel']);
     Route::get('/mis-viajes', fn () => view('system-home', ['section' => 'driver']))->middleware('can:view-assigned-trips');
-    Route::get('/auditoria', fn () => view('system-home', ['section' => 'audit']))->middleware('can:view-administrative-audit');
-    Route::get('/reportes', fn () => view('system-home', ['section' => 'reports']))->middleware('can:view-administrative-reports');
+    Route::get('/auditoria', fn (Request $request, OfficePage $page) => $page->render($request, 'audit'))->middleware([EnsureSessionIdentity::class, 'can:view-administrative-audit']);
+    Route::get('/reportes', fn (Request $request, OfficePage $page) => $page->render($request, 'reports'))->middleware([EnsureSessionIdentity::class, 'can:view-administrative-reports']);
     Route::get('/alertas', fn () => view('system-home', ['section' => 'alerts']))->middleware('can:manage-fleet-documents');
     Route::get('/gastos', fn () => view('system-home', ['section' => 'expenses']))->middleware('can:manage-expenses');
     Route::get('/facturacion', fn () => view('system-home', ['section' => 'billing']))->middleware('can:manage-billing');
@@ -31,7 +31,7 @@ Route::middleware(['auth', EnsureActiveAccount::class, 'auth.session', PrivatePa
             'flota' => 'manage-fleet', 'personal' => 'manage-personnel', default => 'manage-catalogs',
         });
 
-        return $section === 'flota' ? $page->render($request, 'fleet') : view('administration', compact('section'));
+        return $page->render($request, ['flota' => 'fleet', 'personal' => 'personnel', 'catalogos' => 'catalogs', 'compras' => 'adminPurchasing'][$section]);
     })->middleware(EnsureSessionIdentity::class)->whereIn('section', ['flota', 'personal', 'catalogos', 'compras'])->name('administration.web');
 });
 

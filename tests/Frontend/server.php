@@ -61,7 +61,7 @@ foreach (['flota', 'personal', 'catalogos', 'compras'] as $section) {
 }
 if (isset($pages[$uri])) {
     [$view, $data] = $pages[$uri];
-    if (getenv('TRANSPORTE_BROWSER_OFFICE') === '1' && in_array($uri, ['/dashboard', '/transporte', '/administracion/flota'], true)) {
+    if (getenv('TRANSPORTE_BROWSER_OFFICE') === '1' && array_key_exists($uri, ['/dashboard' => 'dashboard', '/transporte' => 'transport', '/administracion/flota' => 'fleet', '/administracion/personal' => 'personnel', '/administracion/catalogos' => 'catalogs', '/administracion/compras' => 'adminPurchasing', '/auditoria' => 'audit', '/reportes' => 'reports'])) {
         // Synthetic bootstrap only; transition and data requests are intercepted by Playwright.
         $role = ($_GET['office_role'] ?? '') === 'secretary' ? 'secretary' : 'administrator';
         $modules = [
@@ -75,7 +75,7 @@ if (isset($pages[$uri])) {
             $modules = [$modules[1]];
         }
         $view = 'office';
-        $data = ['context' => ['page' => ['/dashboard' => 'dashboard', '/transporte' => 'transport', '/administracion/flota' => 'fleet'][$uri],
+        $data = ['context' => ['page' => ['/dashboard' => 'dashboard', '/transporte' => 'transport', '/administracion/flota' => 'fleet', '/administracion/personal' => 'personnel', '/administracion/catalogos' => 'catalogs', '/administracion/compras' => 'adminPurchasing', '/auditoria' => 'audit', '/reportes' => 'reports'][$uri],
             'session' => ['id' => '7', 'login' => $role, 'roles' => [$role]],
             'navigation' => ['home' => $role === 'secretary' ? '/transporte' : '/dashboard', 'modules' => $modules]]];
     }

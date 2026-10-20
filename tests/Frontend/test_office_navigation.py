@@ -8,7 +8,7 @@ from playwright.async_api import expect
 import test_fleet_documents as support
 import test_transport as transport
 
-PATHS = {'/dashboard': 'dashboard', '/transporte': 'transport', '/administracion/flota': 'fleet'}
+PATHS = {'/dashboard': 'dashboard', '/transporte': 'transport', '/administracion/flota': 'fleet', '/administracion/personal':'personnel', '/administracion/catalogos':'catalogs', '/administracion/compras':'adminPurchasing', '/auditoria':'audit', '/reportes':'reports'}
 
 
 class OfficeNavigationBrowserTest(unittest.IsolatedAsyncioTestCase):
@@ -85,6 +85,8 @@ class OfficeNavigationBrowserTest(unittest.IsolatedAsyncioTestCase):
                 await route.fulfill(status=500, json={'message': 'Resultado incierto'})
             else:
                 await route.fulfill(json=self.pagination([], {'per_page': ['100'], 'page': ['1']}))
+        elif path in ['/api/users','/api/employees','/api/roles','/api/catalogs/customers','/api/catalogs/spare-parts','/api/catalogs/suppliers','/api/workshop/material-needs','/api/purchasing/requests','/api/reports/trips']:
+            await route.fulfill(json=self.pagination([],{'per_page':['100'],'page':['1']}))
         else:
             await transport.TransportBrowserTest.api(self, route)
 
@@ -229,3 +231,22 @@ class OfficeNavigationBrowserTest(unittest.IsolatedAsyncioTestCase):
         await self.page.get_by_role('button', name='Crear viaje', exact=True).click()
         await expect(self.page.get_by_role('form', name='Crear viaje asociado').get_by_label('Solicitud de transporte', exact=True)).to_have_value(transport.REQUEST)
         self.assertEqual([], self.transitions)
+
+    async def enter_path(self, path):
+        await self.page.locator('#office-content').evaluate("(element,path)=>{const link=document.createElement('a');link.href=path;link.textContent='Destino de prueba';element.append(link);link.click();link.remove();}", path)
+        await expect(self.page).to_have_url(self.base + path)
+        await expect(self.page.locator('#office-content')).to_have_attribute('aria-busy', 'false')
+
+    async def test_administration_and_queries_share_shell_and_load_only_requested_modules(self):
+        chunks=[]
+        self.page.on('request', lambda request: chunks.append(request.url) if '.js' in urlparse(request.url).path else None)
+        await self.page.goto(self.base+'/dashboard')
+        await expect(self.page.get_by_label('Resumen general')).to_be_visible()
+        self.assertFalse(any('WorkshopApp-' in url or 'AuditApp-' in url or 'ReportsApp-' in url for url in chunks))
+        for path in ['/administracion/personal','/administracion/catalogos','/administracion/compras','/auditoria','/reportes']:
+            await self.enter_path(path)
+            await expect(self.page.get_by_role('navigation',name='Módulos del sistema')).to_have_count(1)
+        self.assertEqual(['/dashboard'],self.documents_seen)
+        self.assertEqual([],self.session_reads)
+        self.assertTrue(any('AuditApp-' in url for url in chunks))
+        self.assertTrue(any('ReportsApp-' in url for url in chunks))

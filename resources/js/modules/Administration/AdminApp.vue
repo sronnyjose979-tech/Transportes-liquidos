@@ -12,7 +12,8 @@ import PurchaseRequestsPanel from './components/PurchaseRequestsPanel.vue';
 import { useOffice } from '../Office/context';
 const officeHost = useOffice(() => busy.value || uncertain.value);
 const root = document.getElementById('administration-app');
-const section = officeHost ? 'flota' : root?.dataset.section ?? 'flota';
+const sections: Record<string,string> = { fleet:'flota', personnel:'personal', catalogs:'catalogos', adminPurchasing:'compras' };
+const section = officeHost ? (sections[officeHost.context.value!.page]??'flota') : root?.dataset.section ?? 'flota';
 const titles: Record<string,string> = { flota: 'Administración de Flota', personal: 'Administración de Personal', catalogos: 'Catálogos operativos', compras:'Solicitudes de compra' };
 const session = ref<Session | null>(null), checking = ref(true), busy = ref(false), uncertain = ref(false);
 const errors = ref<Record<string,string[]>>({}), message = ref(''), success = ref(''), csrfExpired = ref(false), revision = ref(0);
@@ -31,7 +32,7 @@ async function mutate(title: string, work: () => Promise<void>): Promise<boolean
         const previousActor = session.value?.id;
         const current = await getSession(); session.value = current;
         if (current.id !== previousActor || !current.roles.includes('administrator')) { revision.value++; throw new ApiError(403, 'La sesión o los permisos cambiaron. Revisa los registros antes de confirmar una nueva operación.'); }
-        await work(); success.value = 'Operación confirmada y registros actualizados.'; return true;
+        await work(); officeHost?.markClean(); success.value = 'Operación confirmada y registros actualizados.'; return true;
     } catch (error) { await report(error); return false; } finally { busy.value = false; }
 }
 async function recover(): Promise<void> { if (busy.value) return; busy.value = true; try { await loadSession(); revision.value++; uncertain.value = false; errors.value = {}; message.value = 'Consulta los registros actualizados antes de volver a registrar una operación.'; } finally { busy.value = false; } }

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { all, request, failure, ApiError } from '../api';
+import { useOffice } from '../../Office/context';
 import { useAdmin } from '../context';
 import { getSession } from '../../FleetAndDocuments/api';
 import { registrationDate } from '../../FleetAndDocuments/presentation';
@@ -14,6 +15,7 @@ interface PurchaseItem {id:string;spare_part_id:string;code:string;description:s
 interface Decision {id:string;decision:'approved'|'rejected';reason:string;decided_by:{id:string|number;name:string};registered_at:string}
 interface PurchaseRequest {id:string;supplier:Supplier;reason:string;requested_by:{id:string|number;name:string};registered_at:string;items:PurchaseItem[];decision:Decision|null}
 interface Line {key:string;spare_part_id:string;quantity:string;workshop_material_need_id:string}
+const officeHost=useOffice();
 const ctx=useAdmin(), loading=ref(false), rows=ref<PurchaseRequest[]>([]), selected=ref<PurchaseRequest|null>(null);
 const parts=ref<Part[]>([]), suppliers=ref<Supplier[]>([]), needs=ref<Need[]>([]), search=ref(''), page=ref(1), actor=ref('');
 const form=ref(false), supplier=ref(''), reason=ref(''), decision=ref<'approved'|'rejected'>('approved'), deciding=ref(false), confirmed=ref('');
@@ -24,7 +26,7 @@ const supplierOptions=computed(()=>suppliers.value.map(p=>({value:p.id,label:p.n
 const needOptions=computed(()=>needs.value.filter(n=>n.is_effective).map(n=>({value:n.id,label:`${n.description} · ${n.quantity} · Orden ${n.work_order_id}`})));
 const filtered=computed(()=>rows.value.filter(r=>`${r.supplier.name} ${r.reason} ${r.items.map(i=>`${i.code} ${i.description}`).join(' ')}`.toLocaleLowerCase('es').includes(search.value.toLocaleLowerCase('es'))));
 const pages=computed(()=>Math.max(1,Math.ceil(filtered.value.length/10))), visible=computed(()=>filtered.value.slice((page.value-1)*10,page.value*10));
-async function load(propagate=false):Promise<void>{const run=++generation;loading.value=true;try{const session=await getSession();if(!session.roles.includes('administrator'))throw new ApiError(403,'Acceso administrativo requerido.');const [records,p,s,n]=await Promise.all([all<PurchaseRequest>('/purchasing/requests'),all<Part>('/catalogs/spare-parts'),all<Supplier>('/catalogs/suppliers'),all<Need>('/workshop/material-needs?effective=1')]);if(run!==generation)return;actor.value=session.id;rows.value=records;parts.value=p;suppliers.value=s;needs.value=n;pending.value=pendingPurchase(session.id);if(pending.value)ctx.uncertain.value=true;if(selected.value)selected.value=records.find(r=>r.id===selected.value?.id) ?? null;}catch(error){if(propagate)throw error;if(run===generation)await ctx.report(error);}finally{if(run===generation)loading.value=false;}}
+async function load(propagate=false):Promise<void>{const run=++generation;loading.value=true;try{const session=officeHost?.context.value?.session??await getSession();if(!session.roles.includes('administrator'))throw new ApiError(403,'Acceso administrativo requerido.');const [records,p,s,n]=await Promise.all([all<PurchaseRequest>('/purchasing/requests'),all<Part>('/catalogs/spare-parts'),all<Supplier>('/catalogs/suppliers'),all<Need>('/workshop/material-needs?effective=1')]);if(run!==generation)return;actor.value=session.id;rows.value=records;parts.value=p;suppliers.value=s;needs.value=n;pending.value=pendingPurchase(session.id);if(pending.value)ctx.uncertain.value=true;if(selected.value)selected.value=records.find(r=>r.id===selected.value?.id) ?? null;}catch(error){if(propagate)throw error;if(run===generation)await ctx.report(error);}finally{if(run===generation)loading.value=false;}}
 function addLine():void{lines.value.push({key:crypto.randomUUID(),spare_part_id:'',quantity:'',workshop_material_need_id:''});}
 function create():void{if(pending.value)return;form.value=true;deciding.value=false;selected.value=null;supplier.value='';reason.value='';lines.value=[];addLine();ctx.errors.value={};}
 async function consult(row:PurchaseRequest):Promise<void>{try{selected.value=await request<PurchaseRequest>(`/purchasing/requests/${row.id}`);form.value=false;deciding.value=false;}catch(error){await ctx.report(error);}}

@@ -1,17 +1,17 @@
 <script setup lang="ts">
-import {ref,onMounted,onBeforeUnmount} from 'vue';
+import {defineAsyncComponent,ref,onMounted,onBeforeUnmount} from 'vue';
 import {getSession,login,logout,refreshCsrf} from '../FleetAndDocuments/api';
 import type {Session} from '../FleetAndDocuments/contracts';
 import {request,failure} from '../Administration/api';
-import AlertsApp from '../DocumentAlerts/AlertsApp.vue';
+const AlertsApp=defineAsyncComponent(()=>import('../DocumentAlerts/AlertsApp.vue'));
 import ExpirationIndicators from '../DocumentAlerts/ExpirationIndicators.vue';
-import AuditApp from '../AdministrativeAudit/AuditApp.vue';
-import ReportsApp from '../AdministrativeReports/ReportsApp.vue';
-import ExpensesApp from '../Expenses/ExpensesApp.vue';
+const AuditApp=defineAsyncComponent(()=>import('../AdministrativeAudit/AuditApp.vue'));
+const ReportsApp=defineAsyncComponent(()=>import('../AdministrativeReports/ReportsApp.vue'));
+const ExpensesApp=defineAsyncComponent(()=>import('../Expenses/ExpensesApp.vue'));
 import DriverTrips from './DriverTrips.vue';
 import {rememberActor,offlineActor,lockLocal,forgetReadCache,captures} from '../DriverPortal/offline';
 import {registerDriverPwa} from '../DriverPortal/pwa';
-import BillingReview from './BillingReview.vue';
+const BillingReview=defineAsyncComponent(()=>import('./BillingReview.vue'));
 import '../Workshop/workshop.css';
 import SharedNavigation from './SharedNavigation.vue';
 import WorkOverview from './WorkOverview.vue';

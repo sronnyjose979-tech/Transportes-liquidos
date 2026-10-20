@@ -2,7 +2,7 @@ import { nextTick, ref, shallowRef } from 'vue';
 import { createRouter, createWebHistory } from 'vue-router';
 import type { Component } from 'vue';
 import type { OfficeContext, OfficeHost, OfficePage } from './context';
-import { decodeOfficeContext, officePaths } from './context';
+import { decodeOfficeContext, officePaths, officeTitles } from './context';
 import { rememberSession, sessionFetch } from '../System/sessionIdentity';
 import { logout } from '../FleetAndDocuments/api';
 
@@ -85,7 +85,7 @@ export function createOfficeWorkspace(initial: OfficeContext, components: Record
         const next = verified.get(to);
         if (next) { context.value = next; dirty.value = false; }
         if (to.path !== from.path) {
-            document.title = `${to.name === 'fleet' ? 'Flota' : to.name === 'transport' ? 'Transporte' : 'Inicio'} · Transportes Líquidos`;
+            document.title = `${officeTitles[to.name as OfficePage]} · Transportes Líquidos`;
             void nextTick(() => document.getElementById('office-content')?.focus());
         }
     });
@@ -93,7 +93,7 @@ export function createOfficeWorkspace(initial: OfficeContext, components: Record
     const host: OfficeHost = {
         context,
         registerBlocker(blocked) { blockers.add(blocked); return () => blockers.delete(blocked); },
-        navigate(path, replace = false) { void (replace ? router.replace(path) : router.push(path)).catch(() => {}); },
+        navigate(path, replace = false) { const target=router.resolve(path);void router.push({path:target.path,query:target.query,hash:target.hash,replace,force:!context.value}).catch(() => {}); },
         invalidate() { context.value = null; },
         markClean() { dirty.value = false; },
         recovery<T>(scope: string): Map<string, T> {
@@ -117,7 +117,7 @@ export function createOfficeWorkspace(initial: OfficeContext, components: Record
         if (event.target instanceof Element && event.target.closest('form:not([data-office-filter])')) dirty.value = true;
     }
     function beforeUnload(event: BeforeUnloadEvent): void {
-        if (!leaving && (dirty.value || [...blockers].some(blocked => blocked()))) { event.preventDefault(); event.returnValue = ''; }
+        if (!leaving && (dirty.value || [...blockers].some(blocked => blocked()) || [...recoveryStores.values()].some(store=>store.size>0))) { event.preventDefault(); event.returnValue = ''; }
     }
     function dispose(): void { sequence++; controller?.abort(); blockers.clear(); }
     async function signOut(): Promise<void> {

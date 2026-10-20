@@ -21,7 +21,7 @@ class OfficeNavigationTest extends PostgresTestCase
         foreach (['administrator', 'secretary', 'mechanic', 'driver'] as $role) {
             $actor = $this->actor($role);
             $this->actingAs($actor);
-            foreach (['/dashboard' => 'dashboard', '/transporte' => 'transport', '/administracion/flota' => 'fleet'] as $path => $page) {
+            foreach (['/dashboard' => 'dashboard', '/transporte' => 'transport', '/administracion/flota' => 'fleet', '/administracion/personal' => 'personnel', '/administracion/catalogos' => 'catalogs', '/administracion/compras' => 'adminPurchasing', '/auditoria' => 'audit', '/reportes' => 'reports'] as $path => $page) {
                 $allowed = $role === 'administrator' || ($role === 'secretary' && $page === 'transport');
                 $this->flushHeaders();
                 if ($allowed) {
@@ -66,7 +66,7 @@ class OfficeNavigationTest extends PostgresTestCase
         $this->withoutVite();
         $this->actingAs($this->actor());
         $this->get('/mis-viajes')->assertOk()->assertSee('id="system-app"', false)->assertDontSee('id="office-app"', false);
-        $this->get('/administracion/personal')->assertOk()->assertSee('id="administration-app"', false);
+        $this->get('/administracion/personal')->assertOk()->assertSee('id="office-app"', false);
         $this->get('/taller')->assertOk()->assertSee('id="workshop-app"', false);
     }
 

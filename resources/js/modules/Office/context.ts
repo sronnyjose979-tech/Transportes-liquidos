@@ -4,7 +4,8 @@ import type { Session } from '../FleetAndDocuments/contracts';
 import { session as decodeSession } from '../FleetAndDocuments/contracts';
 import type { Navigation } from '../System/navigation';
 
-export const officePaths = { dashboard: '/dashboard', transport: '/transporte', fleet: '/administracion/flota' } as const;
+export const officePaths = { dashboard: '/dashboard', transport: '/transporte', fleet: '/administracion/flota', personnel: '/administracion/personal', catalogs: '/administracion/catalogos', adminPurchasing: '/administracion/compras', audit: '/auditoria', reports: '/reportes' } as const;
+export const officeTitles: Record<keyof typeof officePaths, string> = { dashboard: 'Panel general', transport: 'Transporte', fleet: 'Flota', personnel: 'Personal', catalogs: 'Catálogos', adminPurchasing: 'Solicitudes de compra', audit: 'Auditoría administrativa', reports: 'Reportes administrativos' };
 export type OfficePage = keyof typeof officePaths;
 export interface OfficeContext { page: OfficePage; session: Session; navigation: Navigation }
 export interface OfficeHost {

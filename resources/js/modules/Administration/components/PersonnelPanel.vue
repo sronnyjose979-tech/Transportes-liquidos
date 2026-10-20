@@ -1,4 +1,8 @@
 <script setup lang="ts">
+import {useOffice} from '../../Office/context';
+import {useRoute} from 'vue-router';
+const officeHost=useOffice();
+const officeRoute=officeHost?useRoute():null;
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { all, request } from '../api';
 import { useAdmin } from '../context';
@@ -25,8 +29,9 @@ const total = computed(() => section.value === 'accounts' ? filteredAccounts.val
 const pages = computed(() => Math.max(1, Math.ceil(total.value / 15)));
 const accountOptions = computed(() => accounts.value.filter(item => !item.employee_id || item.employee_id === employeeId.value).map(item => ({ value: item.id, label: `${item.name} (${item.login})${item.is_active ? '' : ' — inactiva'}` })));
 watch([query, section, statusFilter], () => { guided.value = false; page.value = 1; showForm.value = false; clearPasswords(); ctx.errors.value = {}; });
-watch([section, page, statusFilter], () => { const url = new URL(window.location.href); url.searchParams.set('vista', section.value === 'accounts' ? 'cuentas' : 'empleados'); url.searchParams.set('pagina', String(page.value)); url.searchParams.set('estado', statusFilter.value); window.history.replaceState(null, '', url); });
+watch([section, page, statusFilter], () => { const url = new URL(window.location.href); url.searchParams.set('vista', section.value === 'accounts' ? 'cuentas' : 'empleados'); url.searchParams.set('pagina', String(page.value)); url.searchParams.set('estado', statusFilter.value); if(officeHost)officeHost.navigate(url.pathname+url.search,true);else window.history.replaceState(history.state, '', url); });
 watch(section, () => { if (section.value === 'accounts' && statusFilter.value === 'driver') statusFilter.value = 'all'; });
+if(officeRoute)watch(()=>officeRoute.fullPath,()=>{const q=new URLSearchParams(location.search);const next=q.get('vista')==='cuentas'?'accounts':'employees';if(section.value!==next)section.value=next;const target=Number(q.get('pagina')??1);if(Number.isInteger(target)&&target>0)page.value=target;const status=q.get('estado');if(status&&['all','active','inactive','driver'].includes(status))statusFilter.value=status as typeof statusFilter.value;});
 watch(pages, () => { page.value = Math.min(page.value, pages.value); });
 function matchesStatus(active: boolean): boolean { return statusFilter.value === 'active' ? active : statusFilter.value === 'inactive' ? !active : true; }
 function linkedAccount(item: Employee): Account | undefined { return accounts.value.find(value => value.employee_id === item.id); }

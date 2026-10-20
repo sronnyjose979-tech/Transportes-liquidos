@@ -1,4 +1,8 @@
 <script setup lang="ts">
+import {useOffice} from '../../Office/context';
+import {useRoute} from 'vue-router';
+const officeHost=useOffice();
+const officeRoute=officeHost?useRoute():null;
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { all, request } from '../api';
 import { useAdmin } from '../context';
@@ -17,7 +21,8 @@ const pages=computed(()=>Math.max(1,Math.ceil(filtered.value.length/10))), visib
 async function load(propagate = false):Promise<void> {const version=++generation;loading.value=true;try{const result=await all<CatalogRecord>(`/catalogs/${kind.value}`);if(version===generation)rows.value=result;}catch(error){if(propagate)throw error;if(version===generation)await ctx.report(error);}finally{if(version===generation)loading.value=false;}}
 async function change():Promise<void>{form.value=false;current.value=null;rows.value=[];search.value='';page.value=1;if(kind.value!=='routes')await load();}
 function choose(value: Kind): void { if(ctx.busy.value||ctx.uncertain.value||loading.value)return;kind.value=value;void change(); }
-watch(kind,value=>{const url=new URL(window.location.href);url.searchParams.set('catalogo',value);history.replaceState(null,'',url);});
+if(officeRoute)watch(()=>officeRoute.query.catalogo,value=>{const next=String(value??'customers') as Kind;if(kinds.includes(next)&&next!==kind.value)choose(next);});
+watch(kind,value=>{const url=new URL(window.location.href);url.searchParams.set('catalogo',value);if(officeHost)officeHost.navigate(url.pathname+url.search,true);else history.replaceState(history.state,'',url);});
 async function open(row?:CatalogRecord):Promise<void>{if(ctx.busy.value||ctx.uncertain.value)return;ctx.errors.value={};current.value=null;name.value='';address.value='';active.value=true;code.value='';description.value='';unit.value='';if(row){try{current.value=await request<CatalogRecord>(`/catalogs/${kind.value}/${row.id}`);name.value=current.value.name??'';code.value=current.value.code??'';description.value=current.value.description??'';unit.value=current.value.unit??'';address.value=current.value.address??'';active.value=current.value.is_active??true;}catch(error){await ctx.report(error);return;}}form.value=true;}
 async function save():Promise<void>{await ctx.mutate(current.value?'guardar cambios de catálogo':'crear registro de catálogo',async()=>{const payload={...(kind.value==='spare-parts'?{code:code.value,description:description.value,unit:unit.value}:{name:name.value}),...(kind.value==='operation-sites'?{address:address.value}:{}),...(kind.value==='liquid-products'?{is_active:active.value}:{})};await request(`/catalogs/${kind.value}${current.value?`/${current.value.id}`:''}`,current.value?'PUT':'POST',payload);form.value=false;await load(true);});}
 onMounted(()=>{if(kind.value!=='routes')void load();});
