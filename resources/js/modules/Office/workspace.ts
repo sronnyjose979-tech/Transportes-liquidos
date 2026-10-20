@@ -7,15 +7,27 @@ import { rememberSession, sessionFetch } from '../System/sessionIdentity';
 import { logout } from '../FleetAndDocuments/api';
 
 /** No cached authorization: each change of module requests its authorized route. */
-export function createOfficeWorkspace(initial: OfficeContext, components: Record<OfficePage, Component>) {
+export function createOfficeWorkspace(initial: OfficeContext, components: Record<OfficePage, () => Promise<{ default: Component }>>) {
     const context = shallowRef<OfficeContext | null>(initial);
     const pending = ref(false), error = ref(''), dirty = ref(false);
     const blockers = new Set<() => boolean>();
     let sequence = 0, controller: AbortController | null = null, leaving = false;
     const verified = new WeakMap<object, OfficeContext>();
+    const runs = new WeakMap<object, number>();
+    const recoveryStores = new Map<string, Map<string, unknown>>();
+    const loaded = new Map<OfficePage, Promise<{ default: Component }>>();
+    let firstEntry = true;
+    function load(page: OfficePage): Promise<{ default: Component }> {
+        let result = loaded.get(page);
+        if (!result) {
+            result = components[page]().catch(problem => { loaded.delete(page); throw problem; });
+            loaded.set(page, result);
+        }
+        return result;
+    }
     const router = createRouter({
         history: createWebHistory(),
-        routes: Object.entries(officePaths).map(([page, path]) => ({ path, name: page, component: components[page as OfficePage] })),
+        routes: Object.entries(officePaths).map(([page, path]) => ({ path, name: page, component: () => load(page as OfficePage) })),
         scrollBehavior: (_to, _from, saved) => saved ?? { top: 0 },
     });
     function mayLeave(): boolean {
@@ -26,16 +38,21 @@ export function createOfficeWorkspace(initial: OfficeContext, components: Record
         return !dirty.value || window.confirm('Hay cambios de formulario sin guardar. ¿Descartarlos y salir?');
     }
     router.beforeEach(async (to, from) => {
-        // The initial document was already authorized by Laravel.
-        if (!from.matched.length && to.path === officePaths[initial.page]) return true;
-        // Query changes are views within the already active module, not module entry.
-        if (to.path === from.path && context.value) return ![...blockers].some(blocked => blocked());
-        if (!mayLeave()) return false;
         const run = ++sequence;
+        runs.set(to, run);
         controller?.abort();
+        pending.value = false;
+        const initialEntry = firstEntry && !from.matched.length && to.path === officePaths[initial.page];
+        firstEntry = false;
+        if (to.path === from.path && context.value) return ![...blockers].some(blocked => blocked());
+        if (!initialEntry && !mayLeave()) return false;
         controller = new AbortController();
         pending.value = true; error.value = '';
         try {
+            if (initialEntry) {
+                await load(initial.page);
+                return run === sequence;
+            }
             const response = await sessionFetch(to.fullPath, {
                 credentials: 'same-origin', cache: 'no-store', redirect: 'error', signal: controller.signal,
                 headers: { Accept: 'application/json', 'X-Office-Navigation': '1' },
@@ -53,16 +70,17 @@ export function createOfficeWorkspace(initial: OfficeContext, components: Record
             if (officePaths[next.page] !== to.path) throw new Error('El destino recibido no corresponde a la navegación.');
             if (run !== sequence) return false;
             rememberSession(next.session);
+            await load(next.page);
+            if (run !== sequence) return false;
             verified.set(to, next);
             return true;
         } catch (problem) {
-            if (run === sequence) error.value = problem instanceof Error ? problem.message : 'No se pudo consultar el destino.';
+            if (run === sequence) { pending.value = false; error.value = problem instanceof Error && !problem.message.includes('import') ? problem.message : 'No se pudo cargar el módulo. Reintenta sin abandonar el contenido actual.'; }
             return false;
-        } finally {
-            if (run === sequence) pending.value = false;
         }
     });
     router.afterEach((to, from, failure) => {
+        if (runs.get(to) === sequence) pending.value = false;
         if (failure) return;
         const next = verified.get(to);
         if (next) { context.value = next; dirty.value = false; }
@@ -71,11 +89,17 @@ export function createOfficeWorkspace(initial: OfficeContext, components: Record
             void nextTick(() => document.getElementById('office-content')?.focus());
         }
     });
+    router.onError(() => { pending.value = false; error.value = 'No se pudo cargar el módulo. Vuelve a intentarlo.'; });
     const host: OfficeHost = {
         context,
         registerBlocker(blocked) { blockers.add(blocked); return () => blockers.delete(blocked); },
-        navigate(path, replace = false) { void (replace ? router.replace(path) : router.push(path)); },
+        navigate(path, replace = false) { void (replace ? router.replace(path) : router.push(path)).catch(() => {}); },
         invalidate() { context.value = null; },
+        markClean() { dirty.value = false; },
+        recovery<T>(scope: string): Map<string, T> {
+            if (!recoveryStores.has(scope)) recoveryStores.set(scope, new Map());
+            return recoveryStores.get(scope) as Map<string, T>;
+        },
     };
     function click(event: MouseEvent): void {
         if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
@@ -90,7 +114,7 @@ export function createOfficeWorkspace(initial: OfficeContext, components: Record
         else leaving = true;
     }
     function input(event: Event): void {
-        if (event.target instanceof Element && event.target.closest('form')) dirty.value = true;
+        if (event.target instanceof Element && event.target.closest('form:not([data-office-filter])')) dirty.value = true;
     }
     function beforeUnload(event: BeforeUnloadEvent): void {
         if (!leaving && (dirty.value || [...blockers].some(blocked => blocked()))) { event.preventDefault(); event.returnValue = ''; }

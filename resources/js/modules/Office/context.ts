@@ -12,6 +12,8 @@ export interface OfficeHost {
     registerBlocker: (blocked: () => boolean) => () => void;
     navigate: (path: string, replace?: boolean) => void;
     invalidate: () => void;
+    markClean: () => void;
+    recovery: <T>(scope: string) => Map<string, T>;
 }
 export const officeKey: InjectionKey<OfficeHost> = Symbol('office');
 export function useOffice(blocked?: () => boolean): OfficeHost | null {

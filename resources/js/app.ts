@@ -37,7 +37,7 @@ if (officeRoot) {
         const context = decodeOfficeContext(JSON.parse(document.getElementById('office-context')?.textContent ?? 'null'));
         if (officePaths[context.page] !== window.location.pathname) throw new Error('Destino inválido.');
         rememberSession(context.session);
-        const workspace = createOfficeWorkspace(context, { dashboard: SystemApp, transport: TransportApp, fleet: AdminApp });
+        const workspace = createOfficeWorkspace(context, { dashboard: () => import('./modules/System/SystemApp.vue'), transport: () => import('./modules/TransportAndDispatch/TransportApp.vue'), fleet: () => import('./modules/Administration/AdminApp.vue') });
         createApp({ render: () => h(SessionBoundary, null, { default: () => h(OfficeApp, { workspace }) }) }).use(workspace.router).mount(officeRoot);
     } catch {
         officeRoot.textContent = 'No se pudo iniciar la oficina. Vuelve a cargar la página para comprobar la sesión.';
