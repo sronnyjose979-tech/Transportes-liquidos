@@ -21,8 +21,8 @@ class OfficeNavigationTest extends PostgresTestCase
         foreach (['administrator', 'secretary', 'mechanic', 'driver'] as $role) {
             $actor = $this->actor($role);
             $this->actingAs($actor);
-            foreach (['/dashboard' => 'dashboard', '/transporte' => 'transport', '/administracion/flota' => 'fleet', '/administracion/personal' => 'personnel', '/administracion/catalogos' => 'catalogs', '/administracion/compras' => 'adminPurchasing', '/auditoria' => 'audit', '/reportes' => 'reports'] as $path => $page) {
-                $allowed = $role === 'administrator' || ($role === 'secretary' && $page === 'transport');
+            foreach (['/dashboard' => 'dashboard', '/transporte' => 'transport', '/administracion/flota' => 'fleet', '/administracion/personal' => 'personnel', '/administracion/catalogos' => 'catalogs', '/administracion/compras' => 'adminPurchasing', '/auditoria' => 'audit', '/reportes' => 'reports', '/inventario' => 'inventory', '/compras' => 'purchasing', '/facturacion' => 'billing', '/gastos' => 'expenses', '/alertas' => 'alerts'] as $path => $page) {
+                $allowed = $role === 'administrator' || ($role === 'secretary' && in_array($page, ['transport', 'inventory', 'purchasing', 'billing', 'expenses', 'alerts'], true)) || ($role === 'mechanic' && $page === 'inventory');
                 $this->flushHeaders();
                 if ($allowed) {
                     $this->get($path)->assertOk()->assertSee('id="office-app"', false)->assertHeader('Cache-Control', 'no-store, private');

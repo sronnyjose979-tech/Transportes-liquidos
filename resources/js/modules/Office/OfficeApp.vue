@@ -25,7 +25,7 @@ onBeforeUnmount(()=>{stopBlocker();props.workspace.dispose();});
 function bindings():Record<string,unknown>{
     const current=context.value;
     if(!current||!receivesSession.has(current.page))return {};
-    const active=()=>context.value?.page===current.page&&context.value?.session.id===current.session.id;
+    const active=()=>context.value===current;
     return {session:current.session,onLock:(value:boolean)=>{if(active())childLocked.value=value;},
         onDenied:(problem:unknown)=>{if(active()&&[401,403,419].includes(failure(problem).status))host.invalidate();},
         onSession:(actor:typeof current.session)=>{if(active()){try{rememberSession(actor);context.value={...current,session:actor};}catch{host.invalidate();}}}};
@@ -37,8 +37,8 @@ function retry():void {host.navigate(location.pathname+location.search);}
     <header class="bg-white border-b border-blue-200 p-5">
         <p class="font-semibold">Transportes Líquidos</p>
         <h1 v-if="context && (context.page==='dashboard'||receivesSession.has(context.page))" class="text-2xl font-bold">{{officeTitles[context.page]}}</h1>
-        <button v-if="context" type="button" :disabled="pending" @click="workspace.signOut">Cerrar sesión</button>
-        <SharedNavigation workspace :session="context?.session ?? null" :disabled="pending"/>
+        <button v-if="context" type="button" :disabled="pending||workspace.blocked.value" @click="workspace.signOut">Cerrar sesión</button>
+        <SharedNavigation workspace :session="context?.session ?? null" :disabled="pending||workspace.blocked.value"/>
     </header>
     <p v-if="pending" role="status" class="p-4">Consultando destino autorizado…</p>
     <p v-if="error" role="alert" class="notice-error p-4">{{ error }}</p>

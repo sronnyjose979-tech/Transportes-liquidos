@@ -4,8 +4,8 @@ import type { Session } from '../FleetAndDocuments/contracts';
 import { session as decodeSession } from '../FleetAndDocuments/contracts';
 import type { Navigation } from '../System/navigation';
 
-export const officePaths = { dashboard: '/dashboard', transport: '/transporte', fleet: '/administracion/flota', personnel: '/administracion/personal', catalogs: '/administracion/catalogos', adminPurchasing: '/administracion/compras', audit: '/auditoria', reports: '/reportes' } as const;
-export const officeTitles: Record<keyof typeof officePaths, string> = { dashboard: 'Panel general', transport: 'Transporte', fleet: 'Flota', personnel: 'Personal', catalogs: 'Catálogos', adminPurchasing: 'Solicitudes de compra', audit: 'Auditoría administrativa', reports: 'Reportes administrativos' };
+export const officePaths = { dashboard: '/dashboard', transport: '/transporte', fleet: '/administracion/flota', personnel: '/administracion/personal', catalogs: '/administracion/catalogos', adminPurchasing: '/administracion/compras', audit: '/auditoria', reports: '/reportes', inventory: '/inventario', purchasing: '/compras', billing: '/facturacion', expenses: '/gastos', alerts: '/alertas' } as const;
+export const officeTitles: Record<keyof typeof officePaths, string> = { dashboard: 'Panel general', transport: 'Transporte', fleet: 'Flota', personnel: 'Personal', catalogs: 'Catálogos', adminPurchasing: 'Solicitudes de compra', audit: 'Auditoría administrativa', reports: 'Reportes administrativos', inventory: 'Inventario operativo', purchasing: 'Compras de repuestos', billing: 'Facturación y pagos', expenses: 'Gastos', alerts: 'Alertas documentales' };
 export type OfficePage = keyof typeof officePaths;
 export interface OfficeContext { page: OfficePage; session: Session; navigation: Navigation }
 export interface OfficeHost {
@@ -23,7 +23,7 @@ export function useOffice(blocked?: () => boolean): OfficeHost | null {
     let active = true;
     onBeforeUnmount(() => { active = false; });
     if (blocked) onBeforeUnmount(host.registerBlocker(blocked));
-    return { ...host, invalidate: () => { if (active) host.invalidate(); } };
+    return { ...host, markClean: () => { if (active) host.markClean(); }, invalidate: () => { if (active) host.invalidate(); } };
 }
 export function decodeOfficeContext(value: unknown): OfficeContext {
     if (!value || typeof value !== 'object' || !('page' in value) || typeof value.page !== 'string'

@@ -8,7 +8,7 @@ from playwright.async_api import expect
 import test_fleet_documents as support
 import test_transport as transport
 
-PATHS = {'/dashboard': 'dashboard', '/transporte': 'transport', '/administracion/flota': 'fleet', '/administracion/personal':'personnel', '/administracion/catalogos':'catalogs', '/administracion/compras':'adminPurchasing', '/auditoria':'audit', '/reportes':'reports'}
+PATHS = {'/dashboard': 'dashboard', '/transporte': 'transport', '/administracion/flota': 'fleet', '/administracion/personal':'personnel', '/administracion/catalogos':'catalogs', '/administracion/compras':'adminPurchasing', '/auditoria':'audit', '/reportes':'reports', '/inventario':'inventory', '/compras':'purchasing', '/facturacion':'billing', '/gastos':'expenses', '/alertas':'alerts'}
 
 
 class OfficeNavigationBrowserTest(unittest.IsolatedAsyncioTestCase):
@@ -47,7 +47,7 @@ class OfficeNavigationBrowserTest(unittest.IsolatedAsyncioTestCase):
     def context_data(self, path):
         links = [dict(key='dashboard', label='Inicio', href='/dashboard'), dict(key='transport', label='Transporte', href='/transporte'),
                  dict(key='fleet', label='Flota', href='/administracion/flota'), dict(key='driver', label='Mis viajes', href='/mis-viajes'),
-                 dict(key='personnel', label='Personal', href='/administracion/personal')]
+                 dict(key='personnel', label='Personal', href='/administracion/personal'), dict(key='purchasing',label='Compras',href='/compras')]
         if self.role == 'secretary':
             links = [links[1]]
         return dict(page=PATHS[path], session=dict(id=self.actor_id, login='synthetic', roles=[self.role]),
@@ -85,7 +85,9 @@ class OfficeNavigationBrowserTest(unittest.IsolatedAsyncioTestCase):
                 await route.fulfill(status=500, json={'message': 'Resultado incierto'})
             else:
                 await route.fulfill(json=self.pagination([], {'per_page': ['100'], 'page': ['1']}))
-        elif path in ['/api/users','/api/employees','/api/roles','/api/catalogs/customers','/api/catalogs/spare-parts','/api/catalogs/suppliers','/api/workshop/material-needs','/api/purchasing/requests','/api/reports/trips']:
+        elif path=='/api/purchasing/lookups':
+            await route.fulfill(json={'data':{'parts':[],'suppliers':[]}})
+        elif path in ['/api/users','/api/employees','/api/roles','/api/catalogs/customers','/api/catalogs/spare-parts','/api/catalogs/suppliers','/api/workshop/material-needs','/api/purchasing/requests','/api/reports/trips','/api/inventory/stock','/api/inventory/custody','/api/inventory/corrections','/api/inventory/movements','/api/purchasing/orders','/api/billing/trips','/api/billing/invoices','/api/expenses','/api/document-alerts']:
             await route.fulfill(json=self.pagination([],{'per_page':['100'],'page':['1']}))
         else:
             await transport.TransportBrowserTest.api(self, route)
@@ -250,3 +252,12 @@ class OfficeNavigationBrowserTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual([],self.session_reads)
         self.assertTrue(any('AuditApp-' in url for url in chunks))
         self.assertTrue(any('ReportsApp-' in url for url in chunks))
+
+    async def test_supply_finance_and_alerts_share_navigation_and_skip_boot_session(self):
+        await self.page.goto(self.base+'/dashboard')
+        await expect(self.page.get_by_label('Resumen general')).to_be_visible()
+        for path in ['/inventario','/compras','/facturacion','/gastos','/alertas']:
+            await self.enter_path(path)
+            await expect(self.page.get_by_role('navigation',name='Módulos del sistema')).to_have_count(1)
+        self.assertEqual(['/dashboard'],self.documents_seen)
+        self.assertEqual([],self.session_reads)

@@ -61,9 +61,9 @@ foreach (['flota', 'personal', 'catalogos', 'compras'] as $section) {
 }
 if (isset($pages[$uri])) {
     [$view, $data] = $pages[$uri];
-    if (getenv('TRANSPORTE_BROWSER_OFFICE') === '1' && array_key_exists($uri, ['/dashboard' => 'dashboard', '/transporte' => 'transport', '/administracion/flota' => 'fleet', '/administracion/personal' => 'personnel', '/administracion/catalogos' => 'catalogs', '/administracion/compras' => 'adminPurchasing', '/auditoria' => 'audit', '/reportes' => 'reports'])) {
+    if (getenv('TRANSPORTE_BROWSER_OFFICE') === '1' && array_key_exists($uri, ['/dashboard' => 'dashboard', '/transporte' => 'transport', '/administracion/flota' => 'fleet', '/administracion/personal' => 'personnel', '/administracion/catalogos' => 'catalogs', '/administracion/compras' => 'adminPurchasing', '/auditoria' => 'audit', '/reportes' => 'reports', '/inventario' => 'inventory', '/compras' => 'purchasing', '/facturacion' => 'billing', '/gastos' => 'expenses', '/alertas' => 'alerts'])) {
         // Synthetic bootstrap only; transition and data requests are intercepted by Playwright.
-        $role = ($_GET['office_role'] ?? '') === 'secretary' ? 'secretary' : 'administrator';
+        $role = in_array($_GET['office_role'] ?? '', ['secretary', 'mechanic', 'driver'], true) ? $_GET['office_role'] : 'administrator';
         $modules = [
             ['key' => 'dashboard', 'label' => 'Inicio', 'href' => '/dashboard'],
             ['key' => 'transport', 'label' => 'Transporte', 'href' => '/transporte'],
@@ -71,11 +71,12 @@ if (isset($pages[$uri])) {
             ['key' => 'driver', 'label' => 'Mis viajes', 'href' => '/mis-viajes'],
             ['key' => 'personnel', 'label' => 'Personal', 'href' => '/administracion/personal'],
         ];
+        $modules[] = ['key' => 'purchasing', 'label' => 'Compras', 'href' => '/compras'];
         if ($role === 'secretary') {
             $modules = [$modules[1]];
         }
         $view = 'office';
-        $data = ['context' => ['page' => ['/dashboard' => 'dashboard', '/transporte' => 'transport', '/administracion/flota' => 'fleet', '/administracion/personal' => 'personnel', '/administracion/catalogos' => 'catalogs', '/administracion/compras' => 'adminPurchasing', '/auditoria' => 'audit', '/reportes' => 'reports'][$uri],
+        $data = ['context' => ['page' => ['/dashboard' => 'dashboard', '/transporte' => 'transport', '/administracion/flota' => 'fleet', '/administracion/personal' => 'personnel', '/administracion/catalogos' => 'catalogs', '/administracion/compras' => 'adminPurchasing', '/auditoria' => 'audit', '/reportes' => 'reports', '/inventario' => 'inventory', '/compras' => 'purchasing', '/facturacion' => 'billing', '/gastos' => 'expenses', '/alertas' => 'alerts'][$uri],
             'session' => ['id' => '7', 'login' => $role, 'roles' => [$role]],
             'navigation' => ['home' => $role === 'secretary' ? '/transporte' : '/dashboard', 'modules' => $modules]]];
     }

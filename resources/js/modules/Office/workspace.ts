@@ -1,4 +1,4 @@
-import { nextTick, ref, shallowRef } from 'vue';
+import { computed, nextTick, ref, shallowRef } from 'vue';
 import { createRouter, createWebHistory } from 'vue-router';
 import type { Component } from 'vue';
 import type { OfficeContext, OfficeHost, OfficePage } from './context';
@@ -11,6 +11,8 @@ export function createOfficeWorkspace(initial: OfficeContext, components: Record
     const context = shallowRef<OfficeContext | null>(initial);
     const pending = ref(false), error = ref(''), dirty = ref(false);
     const blockers = new Set<() => boolean>();
+    const blockerVersion=ref(0);
+    const blocked=computed(()=>{void blockerVersion.value;return [...blockers].some(check=>check());});
     let sequence = 0, controller: AbortController | null = null, leaving = false;
     const verified = new WeakMap<object, OfficeContext>();
     const runs = new WeakMap<object, number>();
@@ -30,8 +32,9 @@ export function createOfficeWorkspace(initial: OfficeContext, components: Record
         routes: Object.entries(officePaths).map(([page, path]) => ({ path, name: page, component: () => load(page as OfficePage) })),
         scrollBehavior: (_to, _from, saved) => saved ?? { top: 0 },
     });
+    function hasRecovery(): boolean { return [...recoveryStores.values()].some(store => store.size > 0); }
     function mayLeave(): boolean {
-        if ([...blockers].some(blocked => blocked())) {
+        if (hasRecovery() || [...blockers].some(blocked => blocked())) {
             error.value = 'Hay una operación pendiente o sin confirmar. Atiéndela antes de salir.';
             return false;
         }
@@ -45,7 +48,7 @@ export function createOfficeWorkspace(initial: OfficeContext, components: Record
         const initialEntry = firstEntry && !from.matched.length && to.path === officePaths[initial.page];
         firstEntry = false;
         if (to.path === from.path && context.value) return ![...blockers].some(blocked => blocked());
-        if (!initialEntry && !mayLeave()) return false;
+        if (!initialEntry && !(to.path === from.path && !context.value) && !mayLeave()) return false;
         controller = new AbortController();
         pending.value = true; error.value = '';
         try {
@@ -92,7 +95,7 @@ export function createOfficeWorkspace(initial: OfficeContext, components: Record
     router.onError(() => { pending.value = false; error.value = 'No se pudo cargar el módulo. Vuelve a intentarlo.'; });
     const host: OfficeHost = {
         context,
-        registerBlocker(blocked) { blockers.add(blocked); return () => blockers.delete(blocked); },
+        registerBlocker(blocked) { blockers.add(blocked);blockerVersion.value++; return () => {blockers.delete(blocked);blockerVersion.value++;}; },
         navigate(path, replace = false) { const target=router.resolve(path);void router.push({path:target.path,query:target.query,hash:target.hash,replace,force:!context.value}).catch(() => {}); },
         invalidate() { context.value = null; },
         markClean() { dirty.value = false; },
@@ -117,7 +120,7 @@ export function createOfficeWorkspace(initial: OfficeContext, components: Record
         if (event.target instanceof Element && event.target.closest('form:not([data-office-filter])')) dirty.value = true;
     }
     function beforeUnload(event: BeforeUnloadEvent): void {
-        if (!leaving && (dirty.value || [...blockers].some(blocked => blocked()) || [...recoveryStores.values()].some(store=>store.size>0))) { event.preventDefault(); event.returnValue = ''; }
+        if (!leaving && (dirty.value || [...blockers].some(blocked => blocked()) || hasRecovery())) { event.preventDefault(); event.returnValue = ''; }
     }
     function dispose(): void { sequence++; controller?.abort(); blockers.clear(); }
     async function signOut(): Promise<void> {
@@ -127,5 +130,5 @@ export function createOfficeWorkspace(initial: OfficeContext, components: Record
         catch { error.value = 'No se pudo confirmar el cierre de sesión. Vuelve a intentarlo.'; }
         finally { pending.value = false; }
     }
-    return { router, host, context, pending, error, click, input, beforeUnload, dispose, signOut };
+    return { router, host, context, pending, blocked, error, click, input, beforeUnload, dispose, signOut };
 }
