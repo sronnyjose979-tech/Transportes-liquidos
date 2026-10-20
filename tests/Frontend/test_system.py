@@ -40,6 +40,8 @@ class SystemBrowserTest(unittest.IsolatedAsyncioTestCase):
         await route.fulfill(json={'data':data,'meta':{'current_page':1,'last_page':1,'per_page':25,'total':len(data)}})
 
     async def test_admin_dashboard_and_shared_navigation_use_contract_counts(self):
+        navigation_requests=[]
+        self.page.on('request', lambda request: navigation_requests.append(request.url) if urlparse(request.url).path=='/api/navigation' else None)
         await self.page.goto(self.base+'/dashboard')
         await expect(self.page.get_by_role('heading',name='Panel general',exact=True)).to_be_visible()
         await expect(self.page.get_by_label('Resumen general')).to_contain_text('3')
@@ -47,6 +49,21 @@ class SystemBrowserTest(unittest.IsolatedAsyncioTestCase):
         for label in ['Flota','Personal','Catálogos','Taller','Inventario','Compras','Facturación']:
             await expect(nav.get_by_role('link',name=label,exact=True)).to_be_visible()
         self.assertNotIn('Ingresos',await self.page.locator('main').inner_text())
+        await expect(self.page.get_by_role('heading',name='¿Qué necesitas hacer?',exact=True)).to_be_visible()
+        await expect(self.page.get_by_role('region',name='Accesos rápidos').get_by_role('link',name='Personal',exact=False)).to_be_visible()
+        self.assertEqual(1,len(navigation_requests))
+
+    async def test_login_redirect_and_dashboard_each_request_navigation_once(self):
+        self.role=None
+        navigation_pages=[]
+        self.page.on('request', lambda request: navigation_pages.append(urlparse(request.frame.url).path) if urlparse(request.url).path=='/api/navigation' else None)
+        await self.page.goto(self.base+'/login')
+        await self.page.get_by_label('Usuario',exact=True).fill('administrator')
+        await self.page.get_by_label('Contraseña',exact=True).fill('synthetic-password')
+        await self.page.get_by_role('button',name='Iniciar sesión',exact=True).click()
+        await expect(self.page.get_by_label('Resumen general')).to_contain_text('3')
+        await expect(self.page.get_by_role('region',name='Accesos rápidos').get_by_role('link',name='Personal',exact=False)).to_be_visible()
+        self.assertEqual(['/login','/dashboard'],navigation_pages)
 
     async def test_driver_has_assigned_trips_but_no_office_navigation(self):
         self.role='driver'

@@ -1,12 +1,14 @@
 <script setup lang="ts">
 import {computed,ref,watch,onBeforeUnmount} from 'vue';
 import type {Session} from '../FleetAndDocuments/contracts';
-import {request} from '../Administration/api';
-export interface ModuleLink {key:string;label:string;href:string}
+import {useNavigation} from './useNavigation';
+import type {ModuleLink} from './navigation';
+export type {ModuleLink} from './navigation';
+const navigation=useNavigation();
 const props=defineProps<{session:Session|null;disabled?:boolean;workspace?:boolean}>();
 const currentPath=window.location.pathname;
 const links=ref<ModuleLink[]>([]),error=ref('');let generation=0;
-watch(()=>[props.session?.id,props.session?.roles.join('|')],async()=>{const current=++generation;links.value=[];error.value='';if(!props.session)return;try{const result=await request<{home:string;modules:ModuleLink[]}>('/navigation');if(current===generation)links.value=result.modules;}catch{if(current===generation)error.value='No se pudo consultar la navegación autorizada.';}},{immediate:true});
+watch(()=>props.session,async actor=>{const current=++generation;links.value=[];error.value='';if(!actor){navigation.clear();return;}try{const result=await navigation.get(actor);if(current===generation)links.value=result.modules;}catch{if(current===generation)error.value='No se pudo consultar la navegación autorizada.';}},{immediate:true,deep:true});
 const areas = computed(() => {
     const names: Record<string,string> = { dashboard:'Mi trabajo',transport:'Mi trabajo',driver:'Mi trabajo',
         personnel:'Administración',fleet:'Administración',catalogs:'Administración',

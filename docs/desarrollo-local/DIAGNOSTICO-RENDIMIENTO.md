@@ -1,5 +1,8 @@
 # Diagnóstico de Navigation y Dashboard
 
+Las [optimizaciones de consultas](OPTIMIZACION-CONSULTAS.md) conservan esta
+instrumentación. Sus conteos de pruebas no incluyen el almacenamiento real de sesiones.
+
 Instrumentación opcional para `GET /api/navigation` y `GET /api/dashboard`.
 Desactivada por defecto. No cambia contenido, cabeceras, autorización ni reglas.
 

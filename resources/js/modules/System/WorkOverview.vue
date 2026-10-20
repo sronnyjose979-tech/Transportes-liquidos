@@ -2,7 +2,8 @@
 import { ref, watch, onBeforeUnmount } from 'vue';
 import type { Session } from '../FleetAndDocuments/contracts';
 import type { ModuleLink } from './SharedNavigation.vue';
-import { request } from '../Administration/api';
+import { useNavigation } from './useNavigation';
+const navigation = useNavigation();
 const props = defineProps<{ session: Session | null; office?: boolean; disabled?: boolean }>();
 const links = ref<ModuleLink[]>([]), unavailable = ref(false);
 const descriptions: Record<string,string> = {
@@ -19,7 +20,7 @@ let generation = 0;
 watch(()=>props.session,async actor=>{
     const current=++generation;links.value=[];unavailable.value=false;
     if(!actor)return;
-    try { const result=await request<{modules:ModuleLink[]}>('/navigation');
+    try { const result=await navigation.get(actor);
         if(current===generation)links.value=result.modules.filter(link=>link.key in descriptions && (props.office ? ['transport','documents','purchasing','billing','expenses','alerts'].includes(link.key) : true));
     } catch { if(current===generation)unavailable.value=true; }
 },{immediate:true});

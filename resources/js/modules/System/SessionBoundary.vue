@@ -1,8 +1,13 @@
 <script setup lang="ts">
-import { onBeforeUnmount, ref } from 'vue';
+import { onBeforeUnmount, provide, ref } from 'vue';
 import { watchSession } from './sessionIdentity';
+import { request } from '../Administration/api';
+import { createNavigationLoader, navigationKey } from './navigation';
+import type { Navigation } from './navigation';
+const navigation = createNavigationLoader(() => request<Navigation>('/navigation'));
+provide(navigationKey, navigation);
 const checking = ref(false), changed = ref(false);
-const stop = watchSession(value => { checking.value = value.checking; changed.value = value.changed; });
+const stop = watchSession(value => { checking.value = value.checking; changed.value = value.changed; if(value.changed)navigation.clear(); });
 onBeforeUnmount(stop);
 function reload(): void { window.location.reload(); }
 </script>
