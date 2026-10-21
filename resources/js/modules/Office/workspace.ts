@@ -14,7 +14,7 @@ export function createOfficeWorkspace(initial: OfficeContext, components: Record
     const blockers = new Set<() => boolean>();
     const blockerVersion=ref(0);
     const blocked=computed(()=>{void blockerVersion.value;return [...blockers].some(check=>check());});
-    let sequence = 0, controller: AbortController | null = null, leaving = false;
+    let sequence = 0, controller: AbortController | null = null;
     const verified = new WeakMap<object, OfficeContext>();
     const runs = new WeakMap<object, number>();
     const recoveryStores = new Map<string, Map<string, unknown>>();
@@ -103,6 +103,7 @@ export function createOfficeWorkspace(initial: OfficeContext, components: Record
         navigate(path, replace = false) { const target=router.resolve(path);void router.push({path:target.path,query:target.query,hash:target.hash,replace,force:!context.value}).catch(() => {}); },
         invalidate() { context.value = null; },
         markClean() { dirty.value = false; },
+        confirmDiscard() { if (!mayLeave()) return false; dirty.value = false; return true; },
         recovery<T>(scope: string): Map<string, T> {
             if (!recoveryStores.has(scope)) recoveryStores.set(scope, new Map());
             return recoveryStores.get(scope) as Map<string, T>;
@@ -118,19 +119,18 @@ export function createOfficeWorkspace(initial: OfficeContext, components: Record
             event.preventDefault();
             if (!pending.value) host.navigate(url.pathname + url.search + url.hash);
         } else if (!mayLeave()) event.preventDefault();
-        else leaving = true;
     }
     function input(event: Event): void {
         if (event.target instanceof Element && !event.target.closest('[data-office-filter]') && event.target.closest('form,[data-office-dirty]')) dirty.value = true;
     }
     function beforeUnload(event: BeforeUnloadEvent): void {
-        if (!leaving && (dirty.value || [...blockers].some(blocked => blocked()) || hasRecovery())) { event.preventDefault(); event.returnValue = ''; }
+        if (dirty.value || [...blockers].some(blocked => blocked()) || hasRecovery()) { event.preventDefault(); event.returnValue = ''; }
     }
     function dispose(): void { sequence++; controller?.abort(); blockers.clear(); }
     async function signOut(): Promise<void> {
         if (pending.value || !mayLeave()) return;
         pending.value = true;
-        try { await logout(); context.value = null; leaving = true; window.location.assign('/login'); }
+        try { await logout(); context.value = null; dirty.value = false; window.location.assign('/login'); }
         catch { error.value = 'No se pudo confirmar el cierre de sesión. Vuelve a intentarlo.'; }
         finally { pending.value = false; }
     }

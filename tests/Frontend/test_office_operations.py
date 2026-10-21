@@ -141,3 +141,31 @@ class OfficeAlertsBrowserTest(OfficeHarness, unittest.IsolatedAsyncioTestCase):
     contract=test_document_alerts.DocumentAlertsBrowserTest
     test_filters_status_days_original_link_and_review_refresh=test_document_alerts.DocumentAlertsBrowserTest.test_filters_status_days_original_link_and_review_refresh
     test_unknown_response_requires_same_explicit_review_without_auto_retry=test_document_alerts.DocumentAlertsBrowserTest.test_unknown_response_requires_same_explicit_review_without_auto_retry
+
+    async def test_rejected_review_conflict_has_visible_explicit_resolution(self):
+        async def conflict(route):
+            await route.fulfill(status=409,json={'message':'Documento reemplazado'})
+        await self.page.route('**/api/document-alerts/doc-1/review',conflict)
+        await self.page.goto(self.base+'/alertas')
+        await self.page.get_by_role('button',name='Marcar revisada',exact=True).click()
+        await expect(self.page.get_by_role('button',name='Resolver conflicto consultando alertas actuales')).to_be_visible()
+        await expect(self.page.get_by_role('button',name='Cerrar sesión',exact=True)).to_be_disabled()
+        await expect(self.page.get_by_text('doc-1',exact=False)).to_be_visible()
+        self.status=500
+        await self.page.get_by_role('button',name='Resolver conflicto consultando alertas actuales').click()
+        await expect(self.page.get_by_role('button',name='Resolver conflicto consultando alertas actuales')).to_be_enabled()
+        await expect(self.page.get_by_role('button',name='Cerrar sesión',exact=True)).to_be_disabled()
+        await expect(self.page.get_by_text('doc-1',exact=False)).to_be_visible()
+        self.status=200
+        await self.page.get_by_role('button',name='Resolver conflicto consultando alertas actuales').click()
+        await expect(self.page.get_by_role('button',name='Cerrar sesión',exact=True)).to_be_enabled()
+        await self.page.get_by_role('link',name='Compras',exact=True).click()
+        await expect(self.page).to_have_url(self.base+'/compras')
+
+    async def test_uncertain_review_cannot_be_discarded_as_a_conflict(self):
+        self.lost=True
+        await self.page.goto(self.base+'/alertas')
+        await self.page.get_by_role('button',name='Marcar revisada',exact=True).click()
+        await expect(self.page.get_by_role('button',name='Confirmar la misma revisión')).to_be_visible()
+        await expect(self.page.get_by_role('button',name='Resolver conflicto consultando alertas actuales')).to_have_count(0)
+        await expect(self.page.get_by_role('button',name='Cerrar sesión',exact=True)).to_be_disabled()

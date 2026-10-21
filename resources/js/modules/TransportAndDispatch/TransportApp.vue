@@ -12,7 +12,7 @@ import RequestBoard from './components/RequestBoard.vue';
 import TripBoard from './components/TripBoard.vue';
 import TripDetail from './components/TripDetail.vue';
 import {useOffice} from '../Office/context';
-import {useRoute} from 'vue-router';
+import {onBeforeRouteUpdate,useRoute} from 'vue-router';
 const officeHost=useOffice(()=>busy.value||uncertain.value);
 const officeRoute=officeHost?useRoute():null;
 const session = ref<Session | null>(null);
@@ -26,7 +26,7 @@ const fields = ref<Record<string, string[]>>({});
 const csrfExpired = ref(false);
 const username = ref('');
 const password = ref('');
-function locationView(): {view:string;trip:string} { const params = new URLSearchParams(window.location.search); const trip = params.get('viaje') ?? ''; const tab = params.get('vista'); return {view:trip ? 'trips' : tab && ['dashboard','requests','trips'].includes(tab) ? tab : 'dashboard',trip}; }
+function locationView(search=window.location.search): {view:string;trip:string} { const params = new URLSearchParams(search); const trip = params.get('viaje') ?? ''; const tab = params.get('vista'); return {view:trip ? 'trips' : tab && ['dashboard','requests','trips'].includes(tab) ? tab : 'dashboard',trip}; }
 const initialLocation = locationView();
 const view = ref(initialLocation.view);
 const selectedTrip = ref(initialLocation.trip);
@@ -56,6 +56,12 @@ function previousLocation(): void {
     initialRequest.value = ''; requestFilter.value = '';
     void nextTick(() => { restoringLocation = false; });
 }
+if(officeHost)onBeforeRouteUpdate(to=>{
+    const target=locationView(new URL(to.fullPath,location.origin).search);
+    // An internal update already has this state. History applies a different state
+    // only after the shared dirty/pending checks, before the route watcher runs.
+    if(target.view!==view.value||target.trip!==selectedTrip.value)return officeHost.confirmDiscard();
+});
 if(officeRoute)watch(()=>officeRoute.fullPath,()=>{
     if(officeRoute.path!=='/transporte')return;
     const target=locationView();

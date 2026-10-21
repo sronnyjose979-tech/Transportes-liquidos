@@ -129,3 +129,28 @@ para uso offline. El tamaño inicial no equivale al total de assets de la aplica
 No se midió latencia en Azure. Persisten el aviso de fuentes opcionales de Vite y
 los avisos experimentales del transformador TypeScript de Node; no son errores.
 No se realiza push, despliegue ni cambio de infraestructura.
+
+## Correcciones de protección de salida
+
+Se reprodujeron tres defectos con pruebas de navegador que fallaban antes de
+corregirlos: una descarga dejaba desactivado `beforeunload` para cambios futuros;
+el historial de Transporte reemplazaba formularios modificados; y un HTTP 409 de
+revisión documental dejaba una entrada de recuperación invisible.
+
+Se eliminó la exención persistente de salida. Transporte consulta el bloqueo
+compartido antes de aplicar un destino distinto del historial, conservando los
+ajustes internos de URL que no reemplazan la vista. Los conflictos de Alertas
+muestran la revisión pendiente y permiten resolver expresamente el rechazo tras
+consultar correctamente las alertas actuales. Si esa consulta falla, se conserva
+la recuperación. Una respuesta perdida o incierta no ofrece esta resolución ni
+se descarta automáticamente.
+
+La verificación de esta corrección usa HTTP sintético y almacenamiento local de
+pruebas en navegador. Las pruebas PHP ejecutadas sin DB incluyen la unidad básica
+y el acceso anónimo que redirige al login; no verifican integración PostgreSQL.
+No se ejecutan migraciones ni pruebas que escriban datos en bases de datos.
+
+Resultado: 57 pruebas de navegador satisfactorias (41 de oficina y 16 de conductor),
+38 Node y 2 PHP sin DB; TypeScript, Pint y build correctos. Las tres regresiones
+originales fallaron antes de la corrección y pasaron después. La recuperación
+continúa en memoria y no garantiza supervivencia ante cierre forzado del navegador.

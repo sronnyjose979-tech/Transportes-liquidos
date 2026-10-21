@@ -14,6 +14,7 @@ export interface OfficeHost {
     navigate: (path: string, replace?: boolean) => void;
     invalidate: () => void;
     markClean: () => void;
+    confirmDiscard: () => boolean;
     recovery: <T>(scope: string) => Map<string, T>;
 }
 export const officeKey: InjectionKey<OfficeHost> = Symbol('office');

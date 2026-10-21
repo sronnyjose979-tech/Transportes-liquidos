@@ -356,3 +356,34 @@ class OfficeNavigationBrowserTest(unittest.IsolatedAsyncioTestCase):
         await self.page.get_by_label('Catálogo',exact=True).select_option('liquid-products')
         await expect(self.page).to_have_url(self.base+'/administracion/catalogos?catalogo=liquid-products')
         await expect(self.page.get_by_role('form',name='Registro de catálogo')).to_have_count(0)
+
+    async def test_download_does_not_disable_later_dirty_or_uncertain_unload_guards(self):
+        await self.page.route('**/receipt-test',lambda route:route.fulfill(body=b'%PDF-1.4 synthetic',headers={'Content-Type':'application/pdf','Content-Disposition':'attachment; filename="receipt.pdf"'}))
+        await self.page.goto(self.base+'/administracion/flota')
+        await self.fleet_ready()
+        async with self.page.expect_download():
+            await self.page.locator('#office-content').evaluate("el=>{const a=document.createElement('a');a.href='/receipt-test';el.append(a);a.click();a.remove();}")
+        await self.page.get_by_role('button',name='Registrar cabezal',exact=True).click()
+        await self.page.get_by_label('Código del activo',exact=True).fill('CONSERVAR')
+        guarded="()=>{const e=new Event('beforeunload',{cancelable:true});window.dispatchEvent(e);return e.defaultPrevented;}"
+        self.assertTrue(await self.page.evaluate(guarded))
+        self.accept_dialogs=True
+        await self.page.get_by_role('button',name='Guardar activo',exact=True).click()
+        await expect(self.page.get_by_role('button',name='Consultar estado confirmado')).to_be_visible()
+        self.assertTrue(await self.page.evaluate(guarded))
+
+    async def test_transport_history_requires_confirmation_before_discarding_dirty_form(self):
+        await self.page.goto(self.base+'/transporte?vista=requests')
+        await self.page.get_by_role('button',name='Viajes',exact=True).click()
+        await expect(self.page).to_have_url(self.base+'/transporte?vista=trips')
+        await self.page.get_by_role('button',name='Crear viaje',exact=True).click()
+        form=self.page.get_by_role('form',name='Crear viaje asociado')
+        await form.get_by_label('Solicitud de transporte',exact=True).select_option(transport.REQUEST)
+        await self.page.go_back()
+        await expect(form.get_by_label('Solicitud de transporte',exact=True)).to_have_value(transport.REQUEST)
+        await expect(self.page).to_have_url(self.base+'/transporte?vista=trips')
+        self.accept_dialogs=True
+        await self.page.go_back()
+        await expect(self.page).to_have_url(self.base+'/transporte?vista=requests')
+        await self.page.go_forward()
+        await expect(self.page).to_have_url(self.base+'/transporte?vista=trips')
