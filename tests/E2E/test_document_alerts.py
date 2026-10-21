@@ -1,6 +1,7 @@
 """Real Chromium + Laravel + isolated PostgreSQL: documents, reviews and renewal."""
 import asyncio
 import unittest
+import uuid
 from playwright.async_api import expect
 import test_document_module as support
 import test_system_navigation as navigation
@@ -17,7 +18,7 @@ class DocumentAlertsE2E(unittest.IsolatedAsyncioTestCase):
     async def upload(self,expiration='2026-10-10',previous=None):
         asset=self.fixture['tractor']['id']
         path='/api/fleet-assets/'+asset+'/documents'+('/'+previous+'/renew' if previous else '')
-        data={'expires_on':expiration,'file':{'name':'document.pdf','mimeType':'application/pdf','buffer':(support.ROOT/'tests/Fixtures/fleet-documents/valid.pdf').read_bytes()}}
+        data={'request_key':str(uuid.uuid4()),'expires_on':expiration,'file':{'name':'document.pdf','mimeType':'application/pdf','buffer':(support.ROOT/'tests/Fixtures/fleet-documents/valid.pdf').read_bytes()}}
         if previous is None:data['document_type_id']=self.fixture['types'][0]['id']
         token=await self.page.evaluate("decodeURIComponent(document.cookie.split('; ').find(c=>c.startsWith('XSRF-TOKEN='))?.slice(11)??'')")
         response=await self.context.request.post(self.base+path,headers={'Accept':'application/json','X-XSRF-TOKEN':token},multipart=data)

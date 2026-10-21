@@ -4,6 +4,7 @@ import { computed, onMounted, ref } from 'vue';
 import { failure, getSession, login, logout, refreshCsrf } from './api';
 import type { ApiError } from './api';
 import type { FieldErrors, FleetAsset, Session } from './contracts';
+import DocumentUploadRecovery from './components/DocumentUploadRecovery.vue';
 import AssetPicker from './components/AssetPicker.vue';
 import AssetDocuments from './components/AssetDocuments.vue';
 import DocumentTypes from './components/DocumentTypes.vue';
@@ -13,6 +14,8 @@ const session = ref<Session | null>(null);
 const initialLoading = ref(true);
 const loginBusy = ref(false);
 const locked = ref(false);
+const recoveryBusy = ref(false);
+const documentsRevision = ref(0);
 const username = ref('');
 const password = ref('');
 const loginErrors = ref<FieldErrors>({});
@@ -48,7 +51,7 @@ async function signIn(): Promise<void> {
     finally { loginBusy.value = false; }
 }
 async function signOut(): Promise<void> {
-    if (locked.value) return;
+    if (locked.value || recoveryBusy.value) return;
     locked.value = true;
     try { await logout(); session.value = null; clearPrivateState(); message.value = ''; }
     catch (error) { await report(failure(error)); }
@@ -66,7 +69,7 @@ async function renewCsrf(): Promise<void> {
     <header class="border-b border-slate-200 bg-white">
         <div class="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-4 py-5 sm:px-6 lg:px-8">
             <div class="flex items-center gap-3"><span aria-hidden="true" class="flex h-11 w-11 items-center justify-center rounded-xl bg-teal-800 text-lg font-bold text-white">TL</span><div><p class="font-semibold">Transporte de Líquidos</p><p class="text-sm text-slate-500">Documentación de flota</p></div></div>
-            <div v-if="session" class="flex flex-wrap items-center gap-3 text-sm"><SharedNavigation workspace :session="session" :disabled="locked"/><span class="max-w-48 break-words text-slate-600">{{ session.login ?? 'Cuenta activa' }} · {{ canManageTypes ? 'Administrador' : authorized ? 'Secretaria' : 'Sin acceso documental' }}</span><button class="btn-secondary" :disabled="locked" @click="signOut">Cerrar sesión</button></div>
+            <div v-if="session" class="flex flex-wrap items-center gap-3 text-sm"><SharedNavigation workspace :session="session" :disabled="locked || recoveryBusy"/><span class="max-w-48 break-words text-slate-600">{{ session.login ?? 'Cuenta activa' }} · {{ canManageTypes ? 'Administrador' : authorized ? 'Secretaria' : 'Sin acceso documental' }}</span><button class="btn-secondary" :disabled="locked || recoveryBusy" @click="signOut">Cerrar sesión</button></div>
         </div>
     </header>
     <main id="main-content" class="mx-auto max-w-7xl space-y-6 px-4 py-6 sm:px-6 lg:px-8 lg:py-8" tabindex="-1">
@@ -82,9 +85,10 @@ async function renewCsrf(): Promise<void> {
         </section>
         <section v-else-if="!authorized" class="panel" aria-labelledby="denied-title"><h1 id="denied-title" class="text-xl font-semibold">Acceso no autorizado</h1><p class="mt-3 text-slate-600">Esta sección está disponible para administrador y secretaria.</p></section>
         <template v-else>
+            <DocumentUploadRecovery :actor-id="session.id" :blocked="locked" @error="report" @busy="recoveryBusy = $event" @resolved="documentsRevision++" />
             <div><h1 class="text-3xl font-semibold tracking-tight">Documentación de flota</h1><p class="mt-2 text-slate-600">Documentos privados, vigencia e historial de cabezales y cisternas.</p></div>
-            <nav class="flex flex-wrap gap-2 border-b border-slate-200 pb-4" aria-label="Gestión documental"><button class="btn-secondary" :class="view === 'documents' ? 'bg-teal-50 text-teal-900' : ''" :aria-pressed="view === 'documents'" :disabled="locked" @click="view = 'documents'; message = ''">Documentos por activo</button><button class="btn-secondary" :class="view === 'types' ? 'bg-teal-50 text-teal-900' : ''" :aria-pressed="view === 'types'" :disabled="locked" @click="view = 'types'; message = ''">Tipos documentales</button></nav>
-            <template v-if="view === 'documents'"><AssetPicker :selected-id="asset?.id ?? null" :locked="locked" @select="asset = $event; message = ''" @error="report" /><AssetDocuments v-if="asset" :key="asset.id" :asset="asset" @error="report" @busy="locked = $event" /><p v-else class="panel text-slate-600">Selecciona un activo para consultar sus documentos y requisitos.</p></template>
+            <nav class="flex flex-wrap gap-2 border-b border-slate-200 pb-4" aria-label="Gestión documental"><button class="btn-secondary" :class="view === 'documents' ? 'bg-teal-50 text-teal-900' : ''" :aria-pressed="view === 'documents'" :disabled="locked || recoveryBusy" @click="view = 'documents'; message = ''">Documentos por activo</button><button class="btn-secondary" :class="view === 'types' ? 'bg-teal-50 text-teal-900' : ''" :aria-pressed="view === 'types'" :disabled="locked || recoveryBusy" @click="view = 'types'; message = ''">Tipos documentales</button></nav>
+            <template v-if="view === 'documents'"><AssetPicker :selected-id="asset?.id ?? null" :locked="locked || recoveryBusy" @select="asset = $event; message = ''" @error="report" /><AssetDocuments v-if="asset" :key="`${asset.id}:${documentsRevision}`" :actor-id="session.id" :asset="asset" @error="report" @busy="locked = $event" /><p v-else class="panel text-slate-600">Selecciona un activo para consultar sus documentos y requisitos.</p></template>
             <DocumentTypes v-else :can-manage="canManageTypes" @error="report" @busy="locked = $event" />
         </template>
     </main>

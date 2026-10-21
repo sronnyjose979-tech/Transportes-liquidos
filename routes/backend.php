@@ -64,6 +64,7 @@ Route::prefix('api')->group(function () {
             Route::get('fleet-assets/{assetId}/documents', [$documents, 'index'])->whereUuid('assetId')->name('asset');
             Route::get('fleet-assets/{assetId}/documents/history', [$documents, 'index'])->whereUuid('assetId')->name('history');
             Route::get('fleet-assets/{assetId}/documents/missing', [$documents, 'missing'])->whereUuid('assetId')->name('missing');
+            Route::get('fleet-assets/{assetId}/document-uploads/{requestKey}', [DocumentController::class, 'uploadResult'])->whereUuid(['assetId', 'requestKey'])->name('upload-result');
             Route::post('fleet-assets/{assetId}/documents', [$documents, 'store'])->whereUuid('assetId')->name('store');
             Route::post('fleet-assets/{assetId}/documents/{id}/renew', [$documents, 'renew'])->whereUuid(['assetId', 'id'])->name('renew');
         });

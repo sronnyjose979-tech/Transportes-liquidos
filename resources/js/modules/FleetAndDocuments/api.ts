@@ -9,6 +9,7 @@ export class ApiError extends Error {
 const messages: Record<number, string> = {
     401: 'Tu sesión terminó. Inicia sesión nuevamente.',
     403: 'No tienes permiso para realizar esta operación.',
+    409: 'La clave corresponde a otra carga. Consulta el resultado original; no generes otra clave para reintentar.',
     404: 'El activo, documento o archivo solicitado ya no está disponible.',
     419: 'La sesión de seguridad venció. Actualízala antes de volver a enviar el formulario.',
     422: 'Revisa los campos indicados.',
@@ -118,6 +119,7 @@ export async function upload(assetId: string, body: FormData, renewedId?: string
     const url = `/api/fleet-assets/${encodeURIComponent(assetId)}/documents${renewedId ? `/${encodeURIComponent(renewedId)}/renew` : ''}`;
     return single(await request(url, { method: 'POST', body }), fleetDocument);
 }
+export const getUploadResult = async (assetId: string, requestKey: string, fingerprint: string): Promise<FleetDocument> => single(await request(`/api/fleet-assets/${encodeURIComponent(assetId)}/document-uploads/${encodeURIComponent(requestKey)}`, { headers: { 'X-Upload-Fingerprint': fingerprint } }), fleetDocument);
 export async function download(id: string, signal: AbortSignal): Promise<void> {
     const response = await checked(await fetch(`/api/documents/${encodeURIComponent(id)}/download`, {
         credentials: 'same-origin', cache: 'no-store', signal, headers: { Accept: 'application/json' },

@@ -1,11 +1,13 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref } from 'vue';
+import { computed, nextTick, onMounted, onBeforeUnmount, ref } from 'vue';
 import { failure, upload } from '../api';
 import type { ApiError } from '../api';
 import type { DocumentType, FieldErrors, FleetAsset, FleetDocument } from '../contracts';
+import { confirmUpload, pendingUploads, preserveUpload, uploadBody, uploadsChanged } from '../uploadRecovery';
+import type { PendingUpload } from '../uploadRecovery';
 import FieldError from './FieldError.vue';
 
-const props = defineProps<{ asset: FleetAsset; types: DocumentType[]; renewal: FleetDocument | null; initialTypeId: string }>();
+const props = defineProps<{ actorId: string; asset: FleetAsset; types: DocumentType[]; renewal: FleetDocument | null; initialTypeId: string }>();
 const emit = defineEmits<{ saved: []; cancel: []; error: [error: ApiError]; busy: [value: boolean] }>();
 const typeId = ref(props.renewal?.document_type_id ?? props.initialTypeId);
 const selectedType = computed(() => props.types.find((type) => type.id === typeId.value));
@@ -14,6 +16,11 @@ const expiresOn = ref('');
 const fileInput = ref<HTMLInputElement | null>(null);
 const firstField = ref<HTMLSelectElement | null>(null);
 const busy = ref(false);
+const pending = ref<PendingUpload | null>(null);
+function beforeUnload(event: BeforeUnloadEvent): void { if (busy.value) { event.preventDefault(); event.returnValue = ''; } }
+function recovered(event: Event): void { if (event instanceof CustomEvent && event.detail === pending.value?.requestKey) { pending.value = null; emit('saved'); } }
+onMounted(() => { window.addEventListener('beforeunload', beforeUnload); window.addEventListener(uploadsChanged, recovered); });
+onBeforeUnmount(() => { window.removeEventListener('beforeunload', beforeUnload); window.removeEventListener(uploadsChanged, recovered); });
 const errors = ref<FieldErrors>({});
 const message = ref('');
 onMounted(async () => { await nextTick(); (props.renewal ? fileInput.value : firstField.value)?.focus(); });
@@ -25,16 +32,32 @@ async function submit(): Promise<void> {
     message.value = '';
     busy.value = true;
     emit('busy', true);
-    const body = new FormData();
-    if (!props.renewal) body.append('document_type_id', typeId.value);
-    body.append('file', file);
-    if (issuedOn.value) body.append('issued_on', issuedOn.value);
-    if (expiresOn.value) body.append('expires_on', expiresOn.value);
+    let intent: PendingUpload | null = null;
+    let confirmed = false;
     try {
-        await upload(props.asset.id, body, props.renewal?.id);
+        if ((await pendingUploads(props.actorId)).length) {
+            message.value = 'Hay una carga pendiente. Resuélvela en Recuperación de cargas antes de iniciar otra.';
+            return;
+        }
+        intent = { actorId: props.actorId, requestKey: crypto.randomUUID(), assetId: props.asset.id,
+            renewedId: props.renewal?.id, typeId: typeId.value, issuedOn: issuedOn.value, expiresOn: expiresOn.value, file };
+        await preserveUpload(intent);
+        pending.value = intent;
+        await upload(intent.assetId, uploadBody(intent), intent.renewedId);
+        confirmed = true;
+        // Avoid treating our own acknowledgement as an external recovery event.
+        pending.value = null;
+        await confirmUpload(intent);
         emit('saved');
     } catch (error) {
         const problem = failure(error);
+        if (confirmed && intent) pending.value = intent;
+        // These first-attempt responses are definitive rejections before commit.
+        // Recovery retries never discard an earlier uncertain intent on these statuses.
+        if (intent && !confirmed && [401, 403, 404, 413, 419, 422, 429].includes(problem.status)) {
+            pending.value = null;
+            try { await confirmUpload(intent); } catch { pending.value = intent; }
+        }
         errors.value = problem.fields;
         message.value = problem.message;
         emit('error', problem);
@@ -48,9 +71,10 @@ async function submit(): Promise<void> {
                 <p class="mt-1 text-sm text-slate-600">{{ asset.code }} · Se creará una nueva versión actual; el historial se conserva.</p></div>
             <button class="btn-secondary" :disabled="busy" @click="emit('cancel')">Cancelar</button>
         </div>
+        <p v-if="pending" role="status" class="mb-4">La carga se conserva con su clave y archivo. Utiliza Recuperación de cargas para consultar o reintentar la misma operación.</p>
         <p v-if="message" role="alert" class="notice-error mb-4">{{ message }}</p>
         <form :aria-busy="busy" @submit.prevent="submit">
-            <fieldset :disabled="busy" class="grid gap-5 sm:grid-cols-2">
+            <fieldset :disabled="busy || !!pending" class="grid gap-5 sm:grid-cols-2">
                 <div class="sm:col-span-2">
                     <label for="upload-type" class="field-label">Tipo documental</label>
                     <select v-if="!renewal" id="upload-type" ref="firstField" v-model="typeId" class="field" required :aria-invalid="!!errors.document_type_id" aria-describedby="upload-type-error">

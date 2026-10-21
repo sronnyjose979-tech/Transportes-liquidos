@@ -18,6 +18,7 @@ class DocumentUploadRequest extends FormRequest
     public function rules(): array
     {
         return [
+            'request_key' => ['required', 'uuid'],
             'document_type_id' => [$this->routeIs('fleet.documents.renew') ? 'prohibited' : 'required', 'uuid', Rule::exists('document_types', 'id')],
             'issued_on' => ['nullable', 'date_format:Y-m-d'],
             'expires_on' => ['nullable', 'date_format:Y-m-d'],
@@ -62,7 +63,7 @@ class DocumentUploadRequest extends FormRequest
                 && $this->filled('issued_on') && $this->filled('expires_on') && $this->input('issued_on') > $this->input('expires_on')) {
                 $validator->errors()->add('expires_on', 'El vencimiento no puede ser anterior a la emisión.');
             }
-            foreach (array_diff(array_keys($this->all()), ['document_type_id', 'issued_on', 'expires_on', 'file', '_token']) as $field) {
+            foreach (array_diff(array_keys($this->all()), ['request_key', 'document_type_id', 'issued_on', 'expires_on', 'file', '_token']) as $field) {
                 $validator->errors()->add($field, 'Campo no permitido.');
             }
         }];

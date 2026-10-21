@@ -8,7 +8,7 @@ import DocumentList from './DocumentList.vue';
 import DocumentUploadForm from './DocumentUploadForm.vue';
 import Pagination from './Pagination.vue';
 
-const props = defineProps<{ asset: FleetAsset }>();
+const props = defineProps<{ actorId: string; asset: FleetAsset }>();
 const emit = defineEmits<{ error: [error: ApiError]; busy: [value: boolean] }>();
 const result = ref<Page<FleetDocument> | null>(null);
 const missing = ref<Page<DocumentType> | null>(null);
@@ -115,7 +115,7 @@ async function downloadFile(document: FleetDocument): Promise<void> {
         </div>
         <p v-if="summaryLoading" role="status" class="text-sm text-slate-600">Actualizando indicadores…</p>
         <p v-if="summaryFailed" class="text-sm text-red-700">No fue posible consultar los indicadores de vigencia. Usa Actualizar para volver a consultar.</p>
-        <DocumentUploadForm v-if="formOpen" :asset="asset" :types="types" :renewal="renewal" :initial-type-id="initialTypeId" @saved="saved" @cancel="closeForm" @error="emit('error', $event)" @busy="busy" />
+        <DocumentUploadForm v-if="formOpen" :actor-id="actorId" :asset="asset" :types="types" :renewal="renewal" :initial-type-id="initialTypeId" @saved="saved" @cancel="closeForm" @error="emit('error', $event)" @busy="busy" />
         <section class="panel" aria-labelledby="document-list-title" :aria-busy="loading">
             <div class="mb-5 flex flex-wrap items-center justify-between gap-3">
                 <div class="flex flex-wrap gap-2" aria-label="Vista documental"><button class="btn-secondary" :class="!history ? 'bg-teal-50 text-teal-900' : ''" :aria-pressed="!history" :disabled="saving || typesLoading" @click="viewCurrent">Documentos actuales</button><button class="btn-secondary" :class="history ? 'bg-teal-50 text-teal-900' : ''" :aria-pressed="history" :disabled="saving || typesLoading" @click="viewHistory()">Historial completo</button></div>

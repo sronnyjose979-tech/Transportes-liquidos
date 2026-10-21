@@ -2,6 +2,7 @@
 
 namespace App\Modules\FleetAndDocuments\Infrastructure;
 
+use App\Modules\FleetAndDocuments\Domain\DocumentOperationFailed;
 use App\Modules\FleetAndDocuments\Models\Document;
 use Closure;
 use Illuminate\Filesystem\FilesystemAdapter;
@@ -11,6 +12,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use RuntimeException;
 use Symfony\Component\HttpFoundation\StreamedResponse;
+use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 use Throwable;
 
 class PrivateDocumentStorage
@@ -23,7 +25,6 @@ class PrivateDocumentStorage
     private function synchronized(Closure $operation): mixed
     {
         $disk = $this->disk();
-        $disk->makeDirectory('.pending');
         $lock = @fopen($disk->path('.coordination.lock'), 'c');
         if ($lock === false) {
             throw new RuntimeException('No se pudo abrir el coordinador del almacenamiento privado.');
@@ -33,6 +34,9 @@ class PrivateDocumentStorage
             throw new RuntimeException('No se pudo coordinar el almacenamiento privado.');
         }
         try {
+            // Directory creation must also be serialized on a fresh private disk.
+            $disk->makeDirectory('.pending');
+
             return $operation($disk);
         } finally {
             flock($lock, LOCK_UN);
@@ -52,9 +56,17 @@ class PrivateDocumentStorage
                 if (! $disk->put($marker, json_encode(['document_id' => $id, 'key' => $key, 'backend_pid' => DB::selectOne('SELECT pg_backend_pid() AS pid')->pid, 'pending_commit' => true], JSON_THROW_ON_ERROR))) {
                     throw new RuntimeException('No se pudo registrar la carga pendiente.');
                 }
+                $this->sync($disk->path($marker));
+                $this->sync($disk->path('.pending'));
                 if ($disk->putFileAs('files', $file, basename($key)) !== $key) {
                     throw new RuntimeException('No se pudo guardar el archivo privado.');
                 }
+                if (hash_file('sha256', $disk->path($key)) !== hash_file('sha256', $file->getRealPath())) {
+                    throw new RuntimeException('No se pudo verificar la copia privada.');
+                }
+                $this->sync($disk->path($key));
+                $this->sync($disk->path('files'));
+                $this->sync($disk->path(''));
                 $document = $persist($key);
             } catch (Throwable $exception) {
                 // A failed/uncertain commit must never cause deletion of a committed historical file.
@@ -68,9 +80,9 @@ class PrivateDocumentStorage
             // With an enclosing transaction, retain the receipt until the real commit.
             DB::afterCommit(function () use ($disk, $marker, $id): void {
                 try {
-                    if (! $disk->delete($marker)) {
-                        throw new RuntimeException('No se pudo cerrar la carga pendiente.');
-                    }
+                    // A concurrent replay may return another upload's committed document.
+                    // Reconcile the staged candidate instead of orphaning its bytes.
+                    $this->reconcileMarker($disk, $marker);
                 } catch (Throwable) {
                     Log::warning('fleet_document.receipt_pending', ['upload_id' => $id]);
                 }
@@ -78,6 +90,21 @@ class PrivateDocumentStorage
 
             return $document;
         });
+    }
+
+    private function sync(string $path): void
+    {
+        $handle = @fopen($path, 'r');
+        if ($handle === false) {
+            throw new RuntimeException('No se pudo verificar la durabilidad del almacenamiento privado.');
+        }
+        try {
+            if (! @fsync($handle)) {
+                throw new RuntimeException('No se pudo confirmar la durabilidad del almacenamiento privado.');
+            }
+        } finally {
+            fclose($handle);
+        }
     }
 
     private function reconcileMarker(FilesystemAdapter $disk, string $marker, bool $deferActiveTransaction = true): bool
@@ -125,7 +152,7 @@ class PrivateDocumentStorage
 
     public function reconcile(): int
     {
-        return $this->synchronized(function (FilesystemAdapter $disk): int {
+        return $this->safe(fn () => $this->synchronized(function (FilesystemAdapter $disk): int {
             $markers = $disk->files('.pending');
             $resolved = 0;
             foreach ($markers as $marker) {
@@ -133,7 +160,7 @@ class PrivateDocumentStorage
             }
 
             return $resolved;
-        });
+        }));
     }
 
     private function validKey(string $key): bool
@@ -141,17 +168,35 @@ class PrivateDocumentStorage
         return preg_match('/\Afiles\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(pdf|jpg|png)\z/D', $key) === 1;
     }
 
+    /** Sanitize console reconciliation and deferred streaming failures as well as HTTP uploads. */
+    private function safe(Closure $operation): mixed
+    {
+        try {
+            return $operation();
+        } catch (Throwable $exception) {
+            if ($exception instanceof HttpExceptionInterface || $exception instanceof DocumentOperationFailed) {
+                throw $exception;
+            }
+            throw new DocumentOperationFailed('Fallo de almacenamiento documental.', previous: $exception);
+        }
+    }
+
     public function download(Document $document): StreamedResponse
     {
-        $key = $document->storage_key;
-        abort_unless($this->validKey($key), 404);
-        abort_unless($this->disk()->exists($key), 404);
-        $extension = pathinfo($key, PATHINFO_EXTENSION);
+        return $this->safe(function () use ($document): StreamedResponse {
+            $key = $document->storage_key;
+            abort_unless($this->validKey($key), 404);
+            abort_unless($this->disk()->exists($key), 404);
+            $extension = pathinfo($key, PATHINFO_EXTENSION);
+            $response = $this->disk()->download($key, 'document-'.$document->id.'.'.$extension, [
+                'Content-Type' => ['pdf' => 'application/pdf', 'jpg' => 'image/jpeg', 'png' => 'image/png'][$extension],
+                'Cache-Control' => 'private, no-store',
+                'X-Content-Type-Options' => 'nosniff',
+            ]);
+            $stream = $response->getCallback();
+            $response->setCallback(fn () => $this->safe($stream));
 
-        return $this->disk()->download($key, 'document-'.$document->id.'.'.$extension, [
-            'Content-Type' => ['pdf' => 'application/pdf', 'jpg' => 'image/jpeg', 'png' => 'image/png'][$extension],
-            'Cache-Control' => 'private, no-store',
-            'X-Content-Type-Options' => 'nosniff',
-        ]);
+            return $response;
+        });
     }
 }

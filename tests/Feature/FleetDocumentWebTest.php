@@ -9,6 +9,7 @@ use App\Modules\FleetAndDocuments\Models\Document;
 use App\Modules\FleetAndDocuments\Models\DocumentType;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Tests\PostgresTestCase;
 
 class FleetDocumentWebTest extends PostgresTestCase
@@ -78,10 +79,10 @@ class FleetDocumentWebTest extends PostgresTestCase
         $author = $this->account('secretary');
         $this->actingAs($author);
         $file = new UploadedFile(__DIR__.'/../Fixtures/fleet-documents/valid.pdf', 'permiso.pdf', null, null, true);
-        $created = $this->postJson('/api/fleet-assets/'.$asset->id.'/documents', ['file' => $file, 'document_type_id' => $type->id])
+        $created = $this->postJson('/api/fleet-assets/'.$asset->id.'/documents', ['request_key' => (string) Str::uuid(), 'file' => $file, 'document_type_id' => $type->id])
             ->assertCreated()->assertJsonPath('data.uploaded_by', ['id' => (string) $author->id, 'name' => $author->name]);
         $id = $created->json('data.id');
-        $this->postJson('/api/fleet-assets/'.$asset->id.'/documents/'.$id.'/renew', ['file' => $file])->assertCreated();
+        $this->postJson('/api/fleet-assets/'.$asset->id.'/documents/'.$id.'/renew', ['request_key' => (string) Str::uuid(), 'file' => $file])->assertCreated();
         foreach (['/api/documents', '/api/fleet-assets/'.$asset->id.'/documents', '/api/fleet-assets/'.$asset->id.'/documents/history'] as $url) {
             $response = $this->getJson($url)->assertOk();
             foreach ($response->json('data') as $document) {

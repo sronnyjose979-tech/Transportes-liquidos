@@ -2,9 +2,11 @@
 
 use App\Http\Middleware\MeasureSystemRequests;
 use App\Modules\AccessAndPersonnel\Http\Middleware\EnsureActiveAccount;
+use App\Modules\FleetAndDocuments\Domain\DocumentOperationFailed;
 use App\Modules\TransportAndDispatch\Http\Middleware\TransportApiErrors;
 use App\Modules\Workshop\Http\Middleware\WorkshopApiErrors;
 use App\Support\RequestPerformance;
+use App\Support\SafeOperationalFailure;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Contracts\Session\Middleware\AuthenticatesSessions;
@@ -39,7 +41,17 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->redirectGuestsTo(fn (Request $request) => $request->is('api/*') ? null : '/login');
     })
     ->withExceptions(function (Exceptions $exceptions): void {
-        $exceptions->report(function (QueryException $exception) {
+        $exceptions->report(function (Throwable $failure) {
+            $exception = SafeOperationalFailure::database($failure);
+            if ($exception === null) {
+                if (SafeOperationalFailure::documentary($failure)) {
+                    Log::error('fleet_document.operation_failed', ['kind' => 'storage_or_runtime']);
+
+                    return false;
+                }
+
+                return null;
+            }
             // Never pass the exception, SQL, bindings or connection details to the logger.
             // Cover HTTP and console alike, including routes added in the future.
             $state = $exception->errorInfo[0] ?? null;
@@ -50,6 +62,16 @@ return Application::configure(basePath: dirname(__DIR__))
             ] + ($metrics?->correlation() ?? []));
 
             return false;
+        });
+        $exceptions->render(function (Throwable $exception, Request $request) {
+            if (SafeOperationalFailure::documentary($exception)) {
+                return (new DocumentOperationFailed)->render($request);
+            }
+            if (! $exception instanceof QueryException && SafeOperationalFailure::database($exception) !== null) {
+                return response()->json(['message' => 'Server Error'], 500)->header('Cache-Control', 'private, no-store');
+            }
+
+            return null;
         });
         $exceptions->render(function (QueryException $exception, Request $request) {
             if ($request->is('api/audit*', 'api/document-alerts*', 'api/reports/*', 'api/expenses*', 'api/billing/*', 'api/workshop/*', 'api/workshop', 'api/purchasing/*', 'api/inventory/*', 'api/catalogs/spare-parts*', 'api/purchasing', 'api/inventory')) {

@@ -128,7 +128,7 @@ $result = match ($command) {
         $disk = Storage::disk('fleet_documents');
         $before = $disk->allFiles('files');
         try {
-            app(DocumentAdministration::class)->register($actor, $input['asset_id'], ['document_type_id' => $input['type_id'],
+            app(DocumentAdministration::class)->register($actor, $input['asset_id'], ['request_key' => (string) Str::uuid(), 'document_type_id' => $input['type_id'],
                 'issued_on' => '2028-01-01', 'expires_on' => '2027-01-01'], $file);
             throw new RuntimeException('PostgreSQL debía rechazar las fechas.');
         } catch (ValidationException) {

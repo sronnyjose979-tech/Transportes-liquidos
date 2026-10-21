@@ -4,6 +4,7 @@ namespace App\Modules\FleetAndDocuments\Application;
 
 use App\Models\User;
 use App\Modules\FleetAndDocuments\Domain\DocumentOperationFailed;
+use App\Modules\FleetAndDocuments\Domain\DocumentUploadConflict;
 use App\Modules\FleetAndDocuments\Infrastructure\PrivateDocumentStorage;
 use App\Modules\FleetAndDocuments\Models\Document;
 use App\Modules\FleetAndDocuments\Models\DocumentType;
@@ -17,6 +18,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 
 class DocumentAdministration
 {
@@ -55,14 +57,32 @@ class DocumentAdministration
         FleetAsset::query()->findOrFail($assetId);
         $renewed = $renewedId === null ? null : Document::query()->where('fleet_asset_id', $assetId)->findOrFail($renewedId);
         $typeId = $renewed?->document_type_id ?? $data['document_type_id'];
+        $requestKey = strtolower($data['request_key'] ?? '');
+        if (! Str::isUuid($requestKey)) {
+            throw ValidationException::withMessages(['request_key' => 'Se requiere una clave UUID por operación.']);
+        }
         $id = (string) Str::uuid();
 
         try {
-            return $this->storage->register($id, $file, function (string $key) use ($actor, $assetId, $data, $typeId, $id): Document {
+            $fileHash = hash_file('sha256', $file->getRealPath());
+            if ($fileHash === false) {
+                throw new \RuntimeException('No se pudo verificar el archivo pendiente.');
+            }
+            $fingerprint = hash('sha256', json_encode([strtolower($assetId), $renewedId === null ? null : strtolower($renewedId),
+                strtolower($typeId), $data['issued_on'] ?? null, $data['expires_on'] ?? null,
+                $fileHash, $file->getSize(), $file->getMimeType(), strtolower($file->getClientOriginalExtension())], JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES));
+            if ($document = $this->replay($actor, $requestKey, $fingerprint)) {
+                return $document;
+            }
+
+            return $this->storage->register($id, $file, function (string $key) use ($actor, $assetId, $data, $typeId, $id, $requestKey, $fingerprint, $renewedId): Document {
                 // All file IO completes before opening the PostgreSQL transaction.
-                return DB::transaction(function () use ($actor, $assetId, $data, $typeId, $key, $id): Document {
+                return DB::transaction(function () use ($actor, $assetId, $data, $typeId, $key, $id, $requestKey, $fingerprint, $renewedId): Document {
                     DB::select('SELECT pg_advisory_xact_lock(873210)');
                     $this->authorize($actor, 'manage-fleet-documents');
+                    if ($document = $this->replay($actor, $requestKey, $fingerprint)) {
+                        return $document;
+                    }
                     $type = DocumentType::query()->lockForUpdate()->findOrFail($typeId);
                     FleetAsset::query()->findOrFail($assetId);
                     if ($type->tracks_expiration && empty($data['expires_on'])) {
@@ -73,6 +93,9 @@ class DocumentAdministration
                         'storage_key' => $key, 'uploaded_by_id' => $actor->id,
                         'issued_on' => $data['issued_on'] ?? null, 'expires_on' => $data['expires_on'] ?? null]);
                     $document->save();
+                    DB::table('document_upload_operations')->insert(['actor_id' => $actor->id, 'request_key' => $requestKey,
+                        'fleet_asset_id' => $assetId, 'renewed_document_id' => $renewedId,
+                        'document_id' => $id, 'fingerprint' => $fingerprint]);
 
                     return $this->documents()->findOrFail($id);
                 });
@@ -84,10 +107,38 @@ class DocumentAdministration
             throw new DocumentOperationFailed('Fallo de persistencia documental.', previous: $exception);
         } catch (\Throwable $exception) {
             if ($exception instanceof AuthorizationException || $exception instanceof ValidationException
-                || $exception instanceof ModelNotFoundException) {
+                || $exception instanceof ModelNotFoundException || $exception instanceof HttpExceptionInterface) {
                 throw $exception;
             }
             throw new DocumentOperationFailed('Fallo de almacenamiento documental.', previous: $exception);
         }
+    }
+
+    private function replay(User $actor, string $requestKey, string $fingerprint): ?Document
+    {
+        $receipt = DB::table('document_upload_operations')->where('actor_id', $actor->id)->where('request_key', $requestKey)->first();
+        if ($receipt === null) {
+            return null;
+        }
+        if (! hash_equals($receipt->fingerprint, $fingerprint)) {
+            throw new DocumentUploadConflict;
+        }
+
+        $this->authorize($actor, 'manage-fleet-documents');
+
+        return $this->documents()->findOrFail($receipt->document_id);
+    }
+
+    public function uploadResult(User $actor, string $assetId, string $requestKey, ?string $fingerprint = null): Document
+    {
+        $this->authorize($actor, 'manage-fleet-documents');
+        $receipt = DB::table('document_upload_operations')->where('actor_id', $actor->id)
+            ->where('request_key', $requestKey)->where('fleet_asset_id', $assetId)->first();
+        abort_if($receipt === null, 404);
+        if ($fingerprint !== null && ! hash_equals($receipt->fingerprint, $fingerprint)) {
+            throw new DocumentUploadConflict;
+        }
+
+        return $this->documents()->findOrFail($receipt->document_id);
     }
 }

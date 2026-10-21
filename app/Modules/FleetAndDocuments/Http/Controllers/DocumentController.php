@@ -14,6 +14,7 @@ use App\Modules\FleetAndDocuments\Models\Document;
 use App\Modules\FleetAndDocuments\Models\DocumentType;
 use App\Modules\FleetAndDocuments\Models\FleetAsset;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class DocumentController extends Controller
@@ -64,6 +65,17 @@ class DocumentController extends Controller
     public function renew(DocumentUploadRequest $request, DocumentAdministration $service, string $assetId, string $id): JsonResponse
     {
         return $this->created($service->register($request->user(), $assetId, $request->safe()->except('file'), $request->file('file'), $id));
+    }
+
+    public function uploadResult(DocumentQueryRequest $request, DocumentAdministration $service, string $assetId, string $requestKey): JsonResponse
+    {
+        $fingerprint = $request->header('X-Upload-Fingerprint');
+        if ($fingerprint !== null && preg_match('/\A[0-9a-f]{64}\z/D', $fingerprint) !== 1) {
+            throw ValidationException::withMessages(['fingerprint' => 'Huella de operación inválida.']);
+        }
+
+        return (new DocumentResource($service->uploadResult($request->user(), $assetId, $requestKey, $fingerprint)))
+            ->response()->header('Cache-Control', 'no-store');
     }
 
     private function created(Document $document): JsonResponse

@@ -87,6 +87,7 @@ class FleetDocumentsBrowserTest(unittest.IsolatedAsyncioTestCase):
         self.errors = []
         self.page.on('pageerror', lambda error: self.errors.append(str(error)))
         self.role = 'administrator'
+        self.actor_id = '7'
         self.assets = [dict(id=ASSET, code='CAB-01', type='tractor_unit'), dict(id=OTHER, code='CIS-01', type='tanker')]
         self.types = [dtype(), dtype('20000000-0000-4000-8000-000000000002', 'Permiso especial', False)]
         self.documents = [document()]
@@ -94,6 +95,9 @@ class FleetDocumentsBrowserTest(unittest.IsolatedAsyncioTestCase):
         self.forced = {}
         self.delay_asset = None
         self.delay_upload = False
+        self.receipts = {}
+        self.upload_payloads = []
+        self.lose_upload_response = False
         await self.context.route('**/api/**', self.api)
         await self.context.route('**/api/navigation', lambda route: FleetDocumentsBrowserTest.navigation(self, route))
 
@@ -148,7 +152,7 @@ class FleetDocumentsBrowserTest(unittest.IsolatedAsyncioTestCase):
             await route.fulfill(status=204, headers={'Set-Cookie': 'XSRF-TOKEN=test-csrf; Path=/; SameSite=Lax'})
             return
         if path == '/api/session':
-            await route.fulfill(status=200 if self.role else 401, json={'data': {'id': '7', 'login': 'ana', 'roles': [self.role]}} if self.role else {})
+            await route.fulfill(status=200 if self.role else 401, json={'data': {'id': self.actor_id, 'login': 'ana', 'roles': [self.role]}} if self.role else {})
             return
         if path == '/api/login':
             payload = request.post_data_json
@@ -185,6 +189,10 @@ class FleetDocumentsBrowserTest(unittest.IsolatedAsyncioTestCase):
             await route.fulfill(body=(ROOT / 'tests/Fixtures/fleet-documents/valid.pdf').read_bytes(),
                                 headers={'Content-Type': 'application/pdf', 'Cache-Control': 'no-store'})
             return
+        if method == 'GET' and '/document-uploads/' in path:
+            result = self.receipts.get(path.split('/')[-1])
+            await route.fulfill(status=200 if result else 404, json={'data': result} if result else {})
+            return
         if method == 'POST' and '/documents' in path:
             if self.delay_upload:
                 await asyncio.sleep(.3)
@@ -193,6 +201,11 @@ class FleetDocumentsBrowserTest(unittest.IsolatedAsyncioTestCase):
                 f'Content-Type: {content_type}\r\nMIME-Version: 1.0\r\n\r\n'.encode() + request.post_data_buffer)
             payload = {part.get_param('name', header='content-disposition'): part.get_payload(decode=True)
                        for part in message.iter_parts()}
+            self.upload_payloads.append(payload)
+            key = payload['request_key'].decode()
+            if key in self.receipts:
+                await route.fulfill(status=201, json={'data': self.receipts[key]})
+                return
             renewed = path.endswith('/renew')
             if renewed:
                 self.assertNotIn('document_type_id', payload)
@@ -210,6 +223,11 @@ class FleetDocumentsBrowserTest(unittest.IsolatedAsyncioTestCase):
             value['configuration'] = {k: v for k, v in kind.items() if k != 'id'}
             value['document_type_id'] = type_id
             self.documents.append(value)
+            self.receipts[key] = value
+            if self.lose_upload_response:
+                self.lose_upload_response = False
+                await route.abort('failed')
+                return
             await route.fulfill(status=201, json={'data': value})
             return
         if '/documents' in path:
@@ -397,6 +415,99 @@ class FleetDocumentsBrowserTest(unittest.IsolatedAsyncioTestCase):
         await expect(self.page.get_by_text('Documento registrado correctamente.', exact=True)).to_be_visible()
         self.assertEqual(1, sum(method == 'POST' and path == f'/api/fleet-assets/{ASSET}/documents' for method, path, _ in self.requests))
 
+    async def test_lost_response_survives_reload_and_receipt_lookup_without_reupload(self):
+        await self.enter()
+        await self.select_asset()
+        await self.upload_form()
+        self.lose_upload_response = True
+        await self.page.get_by_role('button', name='Guardar documento', exact=True).click()
+        await expect(self.page.get_by_role('button', name='Consultar resultado')).to_be_enabled()
+        self.assertEqual(2, len(self.documents))
+        await self.page.reload()
+        await expect(self.page.get_by_role('heading', name='Recuperación de cargas')).to_be_visible()
+        await self.page.get_by_role('button', name='Consultar resultado').click()
+        await expect(self.page.get_by_text('Carga confirmada. El archivo pendiente se retiró de este navegador.')).to_be_visible()
+        self.assertEqual(1, len(self.upload_payloads))
+        self.assertEqual(0, await self.page.evaluate("""async () => {
+            const db = await new Promise((resolve) => { const r = indexedDB.open('transport-document-upload-recovery',1); r.onsuccess=()=>resolve(r.result); });
+            return await new Promise((resolve) => { const r=db.transaction('pending').objectStore('pending').count(); r.onsuccess=()=>{db.close();resolve(r.result);}; });
+        }"""))
+
+    async def test_uncertain_retry_preserves_exact_key_file_parameters_and_visible_conflict(self):
+        await self.enter()
+        await self.select_asset()
+        await self.upload_form()
+        self.lose_upload_response = True
+        await self.page.get_by_role('button', name='Guardar documento', exact=True).click()
+        await expect(self.page.get_by_role('button', name='Reintentar misma carga')).to_be_enabled()
+        endpoint = ('POST', f'/api/fleet-assets/{ASSET}/documents')
+        self.forced[endpoint] = (409, {})
+        await self.page.get_by_role('button', name='Reintentar misma carga').click()
+        await expect(self.page.get_by_text('La clave corresponde a otra carga.', exact=False).first).to_be_visible()
+        await expect(self.page.get_by_role('button', name='Consultar resultado')).to_be_enabled()
+        self.forced.pop(endpoint)
+        await self.page.get_by_role('button', name='Reintentar misma carga').click()
+        await expect(self.page.get_by_text('Carga confirmada. El archivo pendiente se retiró de este navegador.')).to_be_visible()
+        # Chromium omits disk-backed file bytes from intercepted initial postData.
+        self.assertEqual({k:v for k,v in self.upload_payloads[0].items() if k != 'file'}, {k:v for k,v in self.upload_payloads[-1].items() if k != 'file'})
+        self.assertEqual((ROOT / 'tests/Fixtures/fleet-documents/valid.pdf').read_bytes(), self.upload_payloads[-1]['file'])
+        self.assertEqual(2, len(self.documents))
+
+    async def test_pending_upload_is_hidden_from_another_account_and_restored_for_owner(self):
+        await self.enter()
+        await self.select_asset()
+        await self.upload_form()
+        self.lose_upload_response = True
+        await self.page.get_by_role('button', name='Guardar documento', exact=True).click()
+        await expect(self.page.get_by_role('button', name='Consultar resultado')).to_be_enabled()
+        self.actor_id = '8'
+        await self.page.reload()
+        await expect(self.page.get_by_role('button', name='Cerrar sesión')).to_be_visible()
+        await expect(self.page.get_by_role('heading', name='Recuperación de cargas')).to_have_count(0)
+        self.actor_id = '7'
+        await self.page.reload()
+        await expect(self.page.get_by_role('button', name='Consultar resultado')).to_be_enabled()
+        key = self.upload_payloads[0]['request_key'].decode()
+        self.forced[('GET', f'/api/fleet-assets/{ASSET}/document-uploads/{key}')] = (401, {})
+        await self.page.get_by_role('button', name='Consultar resultado').click()
+        await expect(self.page.get_by_role('heading', name='Acceso a documentación')).to_be_visible()
+        self.forced.clear()
+        await self.page.get_by_label('Usuario', exact=True).fill('administrator')
+        await self.page.get_by_label('Contraseña', exact=True).fill('synthetic-test-only')
+        await self.page.get_by_role('button', name='Iniciar sesión', exact=True).click()
+        await expect(self.page.get_by_role('button', name='Consultar resultado')).to_be_enabled()
+        await expect(self.page.get_by_role('button', name='Cerrar sesión')).to_be_enabled()
+        self.assertEqual(1, len(self.upload_payloads))
+
+    async def test_failed_local_acknowledgement_freezes_original_intent_until_receipt_recovery(self):
+        await self.enter()
+        await self.select_asset()
+        await self.upload_form()
+        await self.page.evaluate("""() => {
+            const remove = IDBObjectStore.prototype.delete;
+            IDBObjectStore.prototype.delete = function (...args) {
+                IDBObjectStore.prototype.delete = remove;
+                throw new DOMException('synthetic acknowledgement failure', 'QuotaExceededError');
+            };
+        }""")
+        await self.page.get_by_role('button', name='Guardar documento', exact=True).click()
+        await expect(self.page.get_by_role('button', name='Consultar resultado')).to_be_enabled()
+        await expect(self.page.get_by_label('Archivo documental')).to_be_disabled()
+        await self.page.get_by_role('button', name='Consultar resultado').click()
+        await expect(self.page.get_by_text('Carga confirmada. El archivo pendiente se retiró de este navegador.')).to_be_visible()
+        self.assertEqual(1, len(self.upload_payloads))
+        self.assertEqual(2, len(self.documents))
+
+    async def test_storage_failure_does_not_send_an_unrecoverable_upload(self):
+        await self.enter()
+        await self.select_asset()
+        await self.upload_form()
+        await self.page.evaluate("() => { indexedDB.open = () => { throw new Error('synthetic quota failure'); }; }")
+        await self.page.get_by_role('button', name='Guardar documento', exact=True).click()
+        await expect(self.page.get_by_role('button', name='Guardar documento', exact=True)).to_be_enabled()
+        self.assertEqual([], self.upload_payloads)
+        self.assertEqual('valid.pdf', await self.page.get_by_label('Archivo documental').evaluate('(e) => e.files[0].name'))
+
     async def test_late_responses_do_not_replace_new_asset(self):
         self.documents.append(document('30000000-0000-4000-8000-000000000002', asset=OTHER, validity='no_expiration'))
         self.delay_asset = ASSET
@@ -419,7 +530,7 @@ class FleetDocumentsBrowserTest(unittest.IsolatedAsyncioTestCase):
         await self.page.get_by_role('navigation', name='Páginas de tipos documentales').get_by_role('button', name='Siguiente').click()
         await expect(self.page.get_by_role('rowheader', name='Tipo 28', exact=True)).to_be_visible()
 
-    async def test_responsive_keyboard_and_no_persistent_private_storage(self):
+    async def test_responsive_keyboard_and_no_private_read_cache(self):
         for width, height in [(390, 844), (768, 1024), (1440, 1000)]:
             await self.enter('secretary', width, height)
             await self.select_asset()
@@ -433,7 +544,11 @@ class FleetDocumentsBrowserTest(unittest.IsolatedAsyncioTestCase):
             await expect(self.page.get_by_role('button', name='Registrar documento', exact=True)).to_be_focused()
         self.assertEqual(0, await self.page.evaluate('localStorage.length'))
         self.assertEqual(0, await self.page.evaluate('sessionStorage.length'))
-        self.assertEqual([], await self.page.evaluate('indexedDB.databases()'))
+        self.assertEqual([{'name': 'transport-document-upload-recovery', 'version': 1}], await self.page.evaluate('indexedDB.databases()'))
+        self.assertEqual(0, await self.page.evaluate("""async () => {
+            const db = await new Promise((resolve) => { const r=indexedDB.open('transport-document-upload-recovery',1);r.onsuccess=()=>resolve(r.result); });
+            return await new Promise((resolve) => { const r=db.transaction('pending').objectStore('pending').count(); r.onsuccess=()=>{db.close();resolve(r.result);}; });
+        }"""))
 
     async def test_history_uses_frozen_type_configuration(self):
         old = self.documents[0]

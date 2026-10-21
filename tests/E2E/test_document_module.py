@@ -14,6 +14,7 @@ import socket
 import subprocess
 import time
 import unittest
+import uuid
 from urllib.parse import unquote
 from urllib.request import urlopen
 
@@ -331,6 +332,7 @@ class DocumentModuleE2E(unittest.IsolatedAsyncioTestCase):
         await expect(self.page.get_by_text('El vencimiento no puede ser anterior a la emisión.')).to_be_visible()
         invalid_calendar = await self.page.evaluate('''async ({asset, type}) => {
             const body = new FormData();
+            body.append('request_key', crypto.randomUUID());
             body.append('document_type_id', type);
             body.append('expires_on', '2027-02-30');
             body.append('file', document.getElementById('upload-file').files[0]);
@@ -440,7 +442,13 @@ class DocumentModuleE2E(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(before['documents'][0], next(d for d in after['documents'] if d['id'] == old['id']))
         self.assertEqual(before['files'][old['id']], after['files'][old['id']])
         self.assertEqual(2, len(self.posts))  # Initial upload + one renewal, no automatic retry.
-        await self.page.get_by_role('button', name='Cancelar', exact=True).click()
+        await self.page.reload()
+        await expect(self.page.get_by_role('button', name='Consultar resultado')).to_be_enabled()
+        await self.page.get_by_role('button', name='Consultar resultado').click()
+        await expect(self.page.get_by_text('Carga confirmada. El archivo pendiente se retiró de este navegador.')).to_be_visible()
+        self.assertEqual(after, self.inspect())
+        self.assertEqual(2, len(self.posts))
+        await self.select()
         await self.page.get_by_role('button', name='Actualizar', exact=True).click()
         await expect(self.page.get_by_text('Cargando documentos…')).not_to_be_visible()
         await self.page.get_by_role('button', name='Historial completo').click()
@@ -460,6 +468,23 @@ class DocumentModuleE2E(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(before, self.inspect())
         await self.page.get_by_role('button', name='Actualizar', exact=True).click()
         await expect(self.page.get_by_role('cell', name='Vigente', exact=True)).to_be_visible()
+
+    async def test_concurrent_real_http_same_key_replays_one_document(self):
+        await self.sign_in('secretary')
+        url = self.base + '/api/fleet-assets/' + self.asset['id'] + '/documents'
+        headers = await self.headers()
+        body = {'request_key': str(uuid.uuid4()), 'document_type_id': self.kind['id'], 'expires_on': self.expiration,
+                'file': {'name': 'valid.pdf', 'mimeType': 'application/pdf',
+                         'buffer': (ROOT / 'tests/Fixtures/fleet-documents/valid.pdf').read_bytes()}}
+        responses = await asyncio.gather(*[self.context.request.post(url, headers=headers, multipart=body) for _ in range(2)])
+        for response in responses:
+            self.assertEqual(201, response.status, await response.text())
+        self.assertEqual((await responses[0].json())['data']['id'], (await responses[1].json())['data']['id'])
+        persisted = self.inspect()
+        self.assertEqual(1, len(persisted['documents']))
+        self.assertEqual(1, len(persisted['current']))
+        self.assertEqual(1, len(persisted['files']))
+        self.assertEqual(0, persisted['pending'])
 
     async def test_concurrent_real_http_registrations_preserve_unique_current_and_files(self):
         await self.sign_in()
@@ -485,7 +510,7 @@ class DocumentModuleE2E(unittest.IsolatedAsyncioTestCase):
             url = self.base + '/api/fleet-assets/' + self.asset['id'] + '/documents/' + old['id'] + '/renew'
             async def renew(context, headers, expiration):
                 return await context.request.post(url, headers=headers, multipart={
-                    'expires_on': expiration, 'file': {'name': 'valid.pdf', 'mimeType': 'application/pdf',
+                    'request_key': str(uuid.uuid4()), 'expires_on': expiration, 'file': {'name': 'valid.pdf', 'mimeType': 'application/pdf',
                                                        'buffer': (ROOT / 'tests/Fixtures/fleet-documents/valid.pdf').read_bytes()}})
             tasks = [asyncio.create_task(renew(self.context, headers_a, '2027-01-01')),
                      asyncio.create_task(renew(second, headers_b, '2027-02-01'))]

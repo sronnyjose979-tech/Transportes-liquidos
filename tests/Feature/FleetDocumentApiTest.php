@@ -69,7 +69,7 @@ class FleetDocumentApiTest extends PostgresTestCase
     private function upload(FleetAsset $asset, DocumentType $type, ?string $expiration = '2027-01-01', string $extension = 'pdf'): TestResponse
     {
         return $this->postJson('/api/fleet-assets/'.$asset->id.'/documents', [
-            'document_type_id' => $type->id, 'expires_on' => $expiration, 'file' => $this->file($extension),
+            'request_key' => (string) Str::uuid(), 'document_type_id' => $type->id, 'expires_on' => $expiration, 'file' => $this->file($extension),
         ]);
     }
 
@@ -160,14 +160,14 @@ class FleetDocumentApiTest extends PostgresTestCase
             UploadedFile::fake()->createWithContent('bad.pdf', '%PDF-1.4'.str_repeat(' ', Document::MAX_FILE_SIZE_BYTES).'%%EOF'),
         ];
         foreach ($invalid as $file) {
-            $this->postJson('/api/fleet-assets/'.$asset->id.'/documents', ['document_type_id' => $type->id, 'expires_on' => '2027-01-01', 'file' => $file])
+            $this->postJson('/api/fleet-assets/'.$asset->id.'/documents', ['request_key' => (string) Str::uuid(), 'document_type_id' => $type->id, 'expires_on' => '2027-01-01', 'file' => $file])
                 ->assertUnprocessable()->assertJsonValidationErrors('file');
         }
         $content = file_get_contents($this->file()->getRealPath());
         $content = substr_replace($content, str_repeat(' ', Document::MAX_FILE_SIZE_BYTES - strlen($content)).'%%EOF', strrpos($content, '%%EOF'), 5);
         $this->assertSame(Document::MAX_FILE_SIZE_BYTES, strlen($content));
         $file = UploadedFile::fake()->createWithContent('limit.pdf', $content);
-        $this->postJson('/api/fleet-assets/'.$asset->id.'/documents', ['document_type_id' => $type->id, 'expires_on' => '2027-01-01', 'file' => $file])->assertCreated();
+        $this->postJson('/api/fleet-assets/'.$asset->id.'/documents', ['request_key' => (string) Str::uuid(), 'document_type_id' => $type->id, 'expires_on' => '2027-01-01', 'file' => $file])->assertCreated();
         $this->assertSame(1, Document::count());
     }
 
@@ -177,7 +177,7 @@ class FleetDocumentApiTest extends PostgresTestCase
         $asset = $this->asset();
         $type = $this->type();
         $url = '/api/fleet-assets/'.$asset->id.'/documents';
-        $base = ['document_type_id' => $type->id, 'file' => $this->file()];
+        $base = ['request_key' => (string) Str::uuid(), 'document_type_id' => $type->id, 'file' => $this->file()];
         $this->postJson($url, $base)->assertUnprocessable()->assertJsonValidationErrors('expires_on');
         foreach (['storage_key', 'uploaded_by_id', 'registered_at', 'id', 'is_current'] as $field) {
             $this->postJson($url, $base + ['expires_on' => '2027-01-01', $field => '../secret'])->assertUnprocessable()->assertJsonValidationErrors($field);
@@ -201,7 +201,7 @@ class FleetDocumentApiTest extends PostgresTestCase
         $this->patchJson('/api/document-types/'.$type->id, ['name' => 'Nueva configuración', 'tracks_expiration' => true, 'required_for_tractor_units' => false])->assertOk();
         $this->actingAs($this->account('secretary'));
         $this->getJson('/api/documents/'.$oldId)->assertOk()->assertJsonPath('data.validity', 'no_expiration')->assertJsonPath('data.configuration.name', 'DEKRA');
-        $newId = $this->postJson('/api/fleet-assets/'.$asset->id.'/documents/'.$oldId.'/renew', ['file' => $this->file(), 'expires_on' => '2027-01-01'])
+        $newId = $this->postJson('/api/fleet-assets/'.$asset->id.'/documents/'.$oldId.'/renew', ['request_key' => (string) Str::uuid(), 'file' => $this->file(), 'expires_on' => '2027-01-01'])
             ->assertCreated()->assertJsonPath('data.configuration.tracks_expiration', true)->json('data.id');
         $this->assertSame($original, $old->fresh()->getRawOriginal());
         $this->assertNotSame($old->storage_key, Document::findOrFail($newId)->storage_key);
@@ -211,7 +211,7 @@ class FleetDocumentApiTest extends PostgresTestCase
         $this->assertDatabaseHas('current_fleet_documents', ['fleet_asset_id' => $asset->id, 'document_type_id' => $type->id, 'document_id' => $newId]);
         Storage::disk('fleet_documents')->assertExists($old->storage_key);
         $this->get('/api/documents/'.$oldId.'/download')->assertOk();
-        $this->postJson('/api/fleet-assets/'.$this->asset()->id.'/documents/'.$oldId.'/renew', ['file' => $this->file(), 'expires_on' => '2027-01-01'])->assertNotFound();
+        $this->postJson('/api/fleet-assets/'.$this->asset()->id.'/documents/'.$oldId.'/renew', ['request_key' => (string) Str::uuid(), 'file' => $this->file(), 'expires_on' => '2027-01-01'])->assertNotFound();
         $this->deleteJson('/api/documents/'.$oldId)->assertStatus(405);
     }
 
@@ -246,7 +246,7 @@ class FleetDocumentApiTest extends PostgresTestCase
         $files = Storage::disk('fleet_documents')->allFiles('files');
         try {
             app(DocumentAdministration::class)->register($this->account(), $asset->id,
-                ['document_type_id' => $type->id, 'issued_on' => '2028-01-01', 'expires_on' => '2027-01-01'], $this->file());
+                ['request_key' => (string) Str::uuid(), 'document_type_id' => $type->id, 'issued_on' => '2028-01-01', 'expires_on' => '2027-01-01'], $this->file());
             $this->fail('La persistencia debe rechazar fechas inconsistentes.');
         } catch (ValidationException) {
             $this->assertSame($files, Storage::disk('fleet_documents')->allFiles('files'));
@@ -266,7 +266,7 @@ class FleetDocumentApiTest extends PostgresTestCase
         });
         Storage::set('fleet_documents', $fault);
         try {
-            app(DocumentAdministration::class)->register($this->account(), $this->asset()->id, ['document_type_id' => $this->type()->id, 'expires_on' => '2027-01-01'], $this->file());
+            app(DocumentAdministration::class)->register($this->account(), $this->asset()->id, ['request_key' => (string) Str::uuid(), 'document_type_id' => $this->type()->id, 'expires_on' => '2027-01-01'], $this->file());
             $this->fail('El almacenamiento debe fallar.');
         } catch (RuntimeException $e) {
             $this->assertInstanceOf(DocumentOperationFailed::class, $e);
@@ -311,7 +311,7 @@ class FleetDocumentApiTest extends PostgresTestCase
         });
         Storage::set('fleet_documents', $fault);
         try {
-            app(DocumentAdministration::class)->register($actor, $asset->id, ['document_type_id' => $type->id, 'expires_on' => '2027-01-01'], $this->file());
+            app(DocumentAdministration::class)->register($actor, $asset->id, ['request_key' => (string) Str::uuid(), 'document_type_id' => $type->id, 'expires_on' => '2027-01-01'], $this->file());
             $this->fail('Una autorización anterior no permite registrar tras revocación.');
         } catch (AuthorizationException) {
             $this->assertSame(0, Document::count());

@@ -2,17 +2,23 @@
 
 namespace Tests\Feature;
 
+use App\Modules\FleetAndDocuments\Domain\DocumentOperationFailed;
+use App\Modules\FleetAndDocuments\Infrastructure\PrivateDocumentStorage;
+use App\Modules\FleetAndDocuments\Models\Document;
 use App\Modules\TransportAndDispatch\Http\Middleware\TransportApiErrors;
 use App\Modules\Workshop\Http\Middleware\WorkshopApiErrors;
 use Illuminate\Contracts\Debug\ExceptionHandler;
 use Illuminate\Database\QueryException;
+use Illuminate\Filesystem\FilesystemAdapter;
 use Illuminate\Log\Logger;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\Storage;
 use Monolog\Handler\TestHandler;
 use Monolog\Logger as Monolog;
 use PDOException;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 use Tests\TestCase;
 
 class QueryExceptionSafetyTest extends TestCase
@@ -82,6 +88,83 @@ class QueryExceptionSafetyTest extends TestCase
         app(ExceptionHandler::class)->report($this->failure('password=synthetic-secret'));
         $this->assertSame('unknown', $this->logs->getRecords()[0]['context']['sqlstate']);
         $this->assertSafeLogs();
+    }
+
+    public function test_nested_document_database_failure_is_safe_in_logs_and_debug_http(): void
+    {
+        config(['app.debug' => true]);
+        $failure = new \RuntimeException('synthetic-token', previous: new DocumentOperationFailed('synthetic-secret', previous: $this->failure('08006')));
+        Route::get('/api/documents/__nested-failure', fn () => throw $failure);
+        $response = $this->getJson('/api/documents/__nested-failure')->assertStatus(503);
+        $this->assertSafeResponse($response->getContent());
+        $this->assertSame('08006', $this->logs->getRecords()[0]['context']['sqlstate']);
+        $this->assertSafeLogs();
+    }
+
+    public function test_nested_storage_failure_is_reported_without_private_messages(): void
+    {
+        $failure = new \RuntimeException('synthetic-token', previous: new DocumentOperationFailed('synthetic-secret', previous: new \RuntimeException('password=synthetic-secret private/storage/key')));
+        app(ExceptionHandler::class)->report($failure);
+        $records = $this->logs->getRecords();
+        $this->assertSame('fleet_document.operation_failed', $records[0]['message']);
+        $this->assertSame(['kind' => 'storage_or_runtime'], $records[0]['context']);
+        $this->assertSafeResponse(json_encode($records, JSON_THROW_ON_ERROR));
+    }
+
+    public function test_storage_adapter_errors_are_sanitized_for_download_and_console_reconciliation(): void
+    {
+        config(['app.debug' => true]);
+        Storage::shouldReceive('disk')->andThrow(new \RuntimeException('synthetic-token password=synthetic-secret private/storage/key'));
+        Route::get('/api/documents/__storage-failure', fn () => app(PrivateDocumentStorage::class)->download(
+            (new Document)->forceFill(['storage_key' => 'files/10000000-0000-4000-8000-000000000001.pdf'])
+        ));
+        $response = $this->getJson('/api/documents/__storage-failure')->assertStatus(503);
+        $this->assertSafeResponse($response->getContent());
+        try {
+            app(PrivateDocumentStorage::class)->reconcile();
+            $this->fail('Must report failed reconciliation.');
+        } catch (DocumentOperationFailed $exception) {
+            app(ExceptionHandler::class)->report($exception);
+        }
+        $this->assertCount(2, $this->logs->getRecords());
+        foreach ($this->logs->getRecords() as $record) {
+            $this->assertSame('fleet_document.operation_failed', $record['message']);
+        }
+        $this->assertSafeResponse(json_encode($this->logs->getRecords(), JSON_THROW_ON_ERROR));
+    }
+
+    public function test_reconciliation_command_fails_visibly_without_printing_private_causes(): void
+    {
+        $this->mock(PrivateDocumentStorage::class)->shouldReceive('reconcile')->once()
+            ->andThrow(new \RuntimeException('password=synthetic-secret synthetic-token private/storage/key'));
+        $this->artisan('fleet-documents:reconcile-storage')
+            ->expectsOutputToContain('No se pudo reconciliar el almacenamiento documental.')
+            ->doesntExpectOutputToContain('synthetic-secret')
+            ->doesntExpectOutputToContain('synthetic-token')
+            ->assertExitCode(1);
+        $this->assertSame('fleet_document.operation_failed', $this->logs->getRecords()[0]['message']);
+        $this->assertSafeResponse(json_encode($this->logs->getRecords(), JSON_THROW_ON_ERROR));
+    }
+
+    public function test_deferred_download_failure_never_reports_private_adapter_causes(): void
+    {
+        $disk = \Mockery::mock(FilesystemAdapter::class);
+        $disk->shouldReceive('exists')->once()->andReturn(true);
+        $disk->shouldReceive('download')->once()->andReturn(new StreamedResponse(
+            fn () => throw new \RuntimeException('synthetic-token password=synthetic-secret private/storage/key')
+        ));
+        Storage::shouldReceive('disk')->andReturn($disk);
+        $response = app(PrivateDocumentStorage::class)->download((new Document)->forceFill([
+            'id' => '10000000-0000-4000-8000-000000000001', 'storage_key' => 'files/10000000-0000-4000-8000-000000000001.pdf',
+        ]));
+        try {
+            $response->sendContent();
+            $this->fail('Streaming failure must remain visible.');
+        } catch (DocumentOperationFailed $exception) {
+            app(ExceptionHandler::class)->report($exception);
+        }
+        $this->assertSame('fleet_document.operation_failed', $this->logs->getRecords()[0]['message']);
+        $this->assertSafeResponse(json_encode($this->logs->getRecords(), JSON_THROW_ON_ERROR));
     }
 
     private function assertSafeResponse(string $body): void
