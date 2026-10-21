@@ -387,3 +387,103 @@ class OfficeNavigationBrowserTest(unittest.IsolatedAsyncioTestCase):
         await expect(self.page).to_have_url(self.base+'/transporte?vista=requests')
         await self.page.go_forward()
         await expect(self.page).to_have_url(self.base+'/transporte?vista=trips')
+
+    async def personnel_fixture(self):
+        role={'id':'role-driver','name':'driver'}
+        account={'id':'44','name':'Persona sintética','login':'persona-sintetica','email':'persona@example.test','is_active':True,'roles':[role],'employee_id':'employee-44'}
+        employee={'id':'employee-44','name':'Persona sintética','is_active':True,'user_id':44}
+        async def records(route):
+            path=urlparse(route.request.url).path
+            self.assertEqual('GET',route.request.method)
+            if path=='/api/users/44':
+                await route.fulfill(json={'data':account})
+            elif path=='/api/employees/employee-44':
+                await route.fulfill(json={'data':employee})
+            else:
+                rows={'/api/users':[account],'/api/employees':[employee],'/api/roles':[role]}[path]
+                await route.fulfill(json=self.pagination(rows,{'per_page':['100'],'page':['1']}))
+        for pattern in ['**/api/users**','**/api/employees**','**/api/roles**']:
+            await self.page.route(pattern,records)
+        self.personnel_dialogs=[]
+        self.page.on('dialog',lambda dialog:self.personnel_dialogs.append(dialog.type))
+
+    async def edit_personnel_account(self):
+        await self.page.get_by_role('button',name='Consultar / editar',exact=True).click()
+        form=self.page.get_by_role('form',name='Registro de personal')
+        await form.get_by_label('Nombre visible',exact=True).fill('Cambios por conservar')
+        await form.get_by_label('Nueva contraseña (opcional)',exact=True).fill('SyntheticPassword456!')
+        return form
+
+    async def personnel_query_link(self,path):
+        await self.page.locator('#office-content').evaluate("(el,path)=>{const a=document.createElement('a');a.href=path;el.append(a);a.click();a.remove();}",path)
+
+    async def test_personnel_general_link_requires_confirming_dirty_account_discard(self):
+        await self.personnel_fixture()
+        original=self.base+'/administracion/personal?vista=cuentas'
+        await self.page.goto(original)
+        form=await self.edit_personnel_account()
+        await self.link('Personal')
+        await expect(self.page).to_have_url(original)
+        await expect(form.get_by_label('Nombre visible',exact=True)).to_have_value('Cambios por conservar')
+        await expect(form.get_by_label('Nueva contraseña (opcional)',exact=True)).to_have_value('SyntheticPassword456!')
+        self.assertEqual(['confirm'],self.personnel_dialogs)
+        self.accept_dialogs=True
+        await self.link('Personal')
+        await expect(form).to_have_count(0)
+        await expect(self.page.get_by_role('button',name='Empleados',exact=True)).to_have_attribute('aria-pressed','true')
+        self.assertEqual(['confirm','confirm'],self.personnel_dialogs)
+        self.assertEqual(['/administracion/personal'],self.documents_seen)
+
+    async def test_personnel_back_and_forward_preserve_dirty_forms_when_cancelled(self):
+        await self.personnel_fixture()
+        await self.page.goto(self.base+'/administracion/personal')
+        await self.personnel_query_link('/administracion/personal?vista=cuentas')
+        await expect(self.page.get_by_role('button',name='Cuentas y roles',exact=True)).to_have_attribute('aria-pressed','true')
+        await self.page.wait_for_function("new URL(location.href).searchParams.get('estado')==='all'")
+        account_url=self.page.url
+        form=await self.edit_personnel_account()
+        await self.page.go_back()
+        await expect(self.page).to_have_url(account_url)
+        await expect(form.get_by_label('Nueva contraseña (opcional)',exact=True)).to_have_value('SyntheticPassword456!')
+        self.assertEqual(['confirm'],self.personnel_dialogs)
+        self.accept_dialogs=True
+        await self.page.go_back()
+        await expect(self.page.get_by_role('button',name='Empleados',exact=True)).to_have_attribute('aria-pressed','true')
+        await expect(form).to_have_count(0)
+        await self.page.wait_for_function("new URL(location.href).searchParams.get('vista')==='empleados'")
+        employee_url=self.page.url
+        await self.page.get_by_role('button',name='Consultar / editar',exact=True).click()
+        await form.get_by_label('Nombre del empleado',exact=True).fill('Empleado sin guardar')
+        self.accept_dialogs=False
+        await self.page.go_forward()
+        await expect(self.page).to_have_url(employee_url)
+        await expect(form.get_by_label('Nombre del empleado',exact=True)).to_have_value('Empleado sin guardar')
+        self.accept_dialogs=True
+        await self.page.go_forward()
+        await expect(self.page.get_by_role('button',name='Cuentas y roles',exact=True)).to_have_attribute('aria-pressed','true')
+        await expect(form).to_have_count(0)
+        self.assertEqual(['confirm']*4,self.personnel_dialogs)
+        self.assertEqual(['/administracion/personal'],self.documents_seen)
+
+    async def test_personnel_guards_status_changes_but_preserves_forms_for_unrelated_query(self):
+        await self.personnel_fixture()
+        await self.page.goto(self.base+'/administracion/personal?vista=cuentas')
+        form=await self.edit_personnel_account()
+        unchanged=self.base+'/administracion/personal?vista=cuentas&origen=prueba'
+        await self.personnel_query_link('/administracion/personal?vista=cuentas&origen=prueba')
+        await expect(self.page).to_have_url(unchanged)
+        await expect(form.get_by_label('Nombre visible',exact=True)).to_have_value('Cambios por conservar')
+        self.assertEqual([],self.personnel_dialogs)
+        await self.personnel_query_link('/administracion/personal?vista=cuentas&estado=inactive')
+        await expect(self.page).to_have_url(unchanged)
+        await expect(form.get_by_label('Nueva contraseña (opcional)',exact=True)).to_have_value('SyntheticPassword456!')
+        self.assertEqual(['confirm'],self.personnel_dialogs)
+        await self.personnel_query_link('/administracion/personal?vista=cuentas&estado=inactive&estado=active')
+        await expect(self.page).to_have_url(unchanged)
+        await expect(form.get_by_label('Nueva contraseña (opcional)',exact=True)).to_have_value('SyntheticPassword456!')
+        self.assertEqual(['confirm','confirm'],self.personnel_dialogs)
+        self.accept_dialogs=True
+        await self.personnel_query_link('/administracion/personal?vista=cuentas&estado=inactive')
+        await expect(self.page.get_by_label('Estado del personal',exact=True)).to_have_value('inactive')
+        await expect(form).to_have_count(0)
+        self.assertEqual(['confirm']*3,self.personnel_dialogs)

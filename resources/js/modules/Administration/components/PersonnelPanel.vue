@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import {useOffice} from '../../Office/context';
-import {useRoute} from 'vue-router';
+import {onBeforeRouteUpdate,useRoute} from 'vue-router';
 const officeHost=useOffice();
 const officeRoute=officeHost?useRoute():null;
 import { computed, onMounted, reactive, ref, watch } from 'vue';
@@ -32,6 +32,17 @@ const accountOptions = computed(() => accounts.value.filter(item => !item.employ
 watch([query, section, statusFilter], () => { guided.value = false; page.value = 1; showForm.value = false; clearPasswords(); ctx.errors.value = {}; });
 watch([section, page, statusFilter], () => { const url = new URL(window.location.href); url.searchParams.set('vista', section.value === 'accounts' ? 'cuentas' : 'empleados'); url.searchParams.set('pagina', String(page.value)); url.searchParams.set('estado', statusFilter.value); if(officeHost)officeHost.navigate(url.pathname+url.search,true);else window.history.replaceState(history.state, '', url); });
 watch(section, () => { if (section.value === 'accounts' && statusFilter.value === 'driver') statusFilter.value = 'all'; });
+if (officeHost) onBeforeRouteUpdate(to => {
+    const params = new URL(to.fullPath, window.location.origin).searchParams;
+    const nextSection = params.get('vista') === 'cuentas' ? 'accounts' : 'employees';
+    const nextStatus = params.get('estado');
+    // Match the route watcher, including missing and repeated query parameters.
+    // Confirm before it closes the form or clears passwords.
+    const changesStatus = nextStatus !== null
+        && ['all', 'active', 'inactive', 'driver'].includes(nextStatus)
+        && nextStatus !== statusFilter.value;
+    if (nextSection !== section.value || changesStatus) return officeHost.confirmDiscard();
+});
 if(officeRoute)watch(()=>officeRoute.fullPath,()=>{const q=new URLSearchParams(location.search);const next=q.get('vista')==='cuentas'?'accounts':'employees';if(section.value!==next)section.value=next;const target=Number(q.get('pagina')??1);if(Number.isInteger(target)&&target>0)page.value=target;const status=q.get('estado');if(status&&['all','active','inactive','driver'].includes(status))statusFilter.value=status as typeof statusFilter.value;});
 watch(pages, () => { page.value = Math.min(page.value, pages.value); });
 function matchesStatus(active: boolean): boolean { return statusFilter.value === 'active' ? active : statusFilter.value === 'inactive' ? !active : true; }
