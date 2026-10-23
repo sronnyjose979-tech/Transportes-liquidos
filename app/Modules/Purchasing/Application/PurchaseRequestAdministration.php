@@ -6,6 +6,7 @@ use App\Models\User;
 use App\Modules\Inventory\Models\SparePart;
 use App\Modules\Purchasing\Models\PurchaseRequest;
 use App\Modules\Purchasing\Models\PurchaseRequestDecision;
+use App\Support\BoundedTransaction;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
@@ -30,7 +31,7 @@ class PurchaseRequestAdministration
             : ['purchase_request_id' => $requestId, 'decision' => $content['decision'], 'reason' => $content['reason']];
         $fingerprint = hash('sha256', json_encode($content, JSON_THROW_ON_ERROR));
         try {
-            return DB::transaction(function () use ($actor, $data, $requestId, $scope, $fingerprint): PurchaseRequest {
+            return app(BoundedTransaction::class)->run(function () use ($actor, $data, $requestId, $scope, $fingerprint): PurchaseRequest {
                 DB::select('SELECT pg_advisory_xact_lock(873210)');
                 Gate::forUser(User::findOrFail($actor->id))->authorize($requestId === null ? 'manage-purchase-requests' : 'decide-purchase-request');
                 DB::table('transport_assignment_guard')->where('id', 1)->increment('version');

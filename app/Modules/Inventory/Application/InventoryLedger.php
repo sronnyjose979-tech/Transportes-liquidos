@@ -3,6 +3,7 @@
 namespace App\Modules\Inventory\Application;
 
 use App\Models\User;
+use App\Support\BoundedTransaction;
 use Closure;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\QueryException;
@@ -85,7 +86,7 @@ final class InventoryLedger
         };
         $fingerprint = hash('sha256', json_encode($canonical($data), JSON_THROW_ON_ERROR));
         try {
-            return DB::transaction(function () use ($actor, $scope, $key, $roles, $work, $fingerprint): array {
+            return app(BoundedTransaction::class)->run(function () use ($actor, $scope, $key, $roles, $work, $fingerprint): array {
                 DB::select('SELECT pg_advisory_xact_lock(873210)');
                 DB::table('transport_assignment_guard')->where('id', 1)->increment('version');
                 $fresh = User::query()->lockForUpdate()->find($actor->id);

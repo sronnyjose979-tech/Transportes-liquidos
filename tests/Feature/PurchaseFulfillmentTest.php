@@ -138,8 +138,10 @@ class PurchaseFulfillmentTest extends PostgresTestCase
         $config = config('database.connections.pgsql_testing');
         $other = new \PDO('pgsql:host='.$config['host'].';port='.$config['port'].';dbname='.$config['database'], $config['username'], $config['password'], [\PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION]);
         $other->exec('SET search_path TO '.DB::selectOne('SELECT current_schema() AS name')->name.',public');
-        DB::beginTransaction();
         app(PurchaseFulfillment::class)->record($admin, ['request_key' => (string) Str::uuid(), 'received_at' => now()->toIso8601String(), 'reason' => 'Primera', 'items' => [['purchase_order_item_id' => $order['items'][0]['id'], 'quantity' => '5.123456']]], $order['id']);
+        // Hold the coordinator independently of the completed service command.
+        DB::beginTransaction();
+        DB::select('SELECT pg_advisory_xact_lock(873210)');
         $other->beginTransaction();
         $other->exec("SET LOCAL lock_timeout='100ms'");
         try {

@@ -9,6 +9,7 @@ use App\Modules\Purchasing\Models\PurchaseOrderItem;
 use App\Modules\Purchasing\Models\PurchaseReceipt;
 use App\Modules\Purchasing\Models\PurchaseRequest;
 use App\Modules\Workshop\Application\WorkshopAccess;
+use App\Support\BoundedTransaction;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -26,7 +27,7 @@ class PurchaseFulfillment
         $content = ['target' => $orderId ?? $data['purchase_request_id'], 'reason' => $data['reason'], 'received_at' => $data['received_at'] ?? null, 'items' => array_map(fn ($i) => [$key => $i[$key], 'quantity' => $i['quantity']], $data['items'])];
         $fingerprint = hash('sha256', json_encode($content, JSON_THROW_ON_ERROR));
         try {
-            return DB::transaction(function () use ($actor, $data, $orderId, $scope, $fingerprint): PurchaseOrder {
+            return app(BoundedTransaction::class)->run(function () use ($actor, $data, $orderId, $scope, $fingerprint): PurchaseOrder {
                 DB::select('SELECT pg_advisory_xact_lock(873210)');
                 app(WorkshopAccess::class)->office($actor);
                 DB::table('transport_assignment_guard')->where('id', 1)->increment('version');

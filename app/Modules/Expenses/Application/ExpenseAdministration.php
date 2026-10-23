@@ -6,6 +6,7 @@ use App\Models\User;
 use App\Modules\BillingAndPayments\Application\Money;
 use App\Modules\TransportAndDispatch\Application\DriverOfflineContext;
 use App\Modules\TransportAndDispatch\Models\Trip;
+use App\Support\BoundedTransaction;
 use Closure;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\QueryException;
@@ -103,7 +104,7 @@ final class ExpenseAdministration
         ksort($data);
         $fingerprint = hash('sha256', json_encode($data, JSON_THROW_ON_ERROR));
         try {
-            return DB::transaction(function () use ($actor, $scope, $key, $fingerprint, $admin, $work): array {
+            return app(BoundedTransaction::class)->run(function () use ($actor, $scope, $key, $fingerprint, $admin, $work): array {
                 DB::select('SELECT pg_advisory_xact_lock(873210)');
                 DB::table('transport_assignment_guard')->where('id', 1)->increment('version');
                 $fresh = User::query()->lockForUpdate()->find($actor->id);

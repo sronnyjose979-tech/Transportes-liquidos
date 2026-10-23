@@ -183,8 +183,10 @@ class PurchaseRequestTest extends PostgresTestCase
         $config = config('database.connections.pgsql_testing');
         $other = new PDO('pgsql:host='.$config['host'].';port='.$config['port'].';dbname='.$config['database'], $config['username'], $config['password'], [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
         $other->exec('SET search_path TO '.DB::selectOne('SELECT current_schema() AS name')->name.',public');
-        DB::beginTransaction();
         $created = $service->record($admin, $data);
+        // Hold the coordinator independently of the completed service command.
+        DB::beginTransaction();
+        DB::select('SELECT pg_advisory_xact_lock(873210)');
         $other->beginTransaction();
         $other->exec("SET LOCAL lock_timeout='100ms'");
         try {
@@ -196,9 +198,10 @@ class PurchaseRequestTest extends PostgresTestCase
         }
         DB::commit();
         $this->assertSame($created->id, $service->record($admin, $data)->id);
-        DB::beginTransaction();
         $decision = ['request_key' => (string) Str::uuid(), 'decision' => 'approved', 'reason' => 'Revisión'];
         $service->record($admin, $decision, $created->id);
+        DB::beginTransaction();
+        DB::select('SELECT pg_advisory_xact_lock(873210)');
         $other->beginTransaction();
         $other->exec("SET LOCAL lock_timeout='100ms'");
         try {

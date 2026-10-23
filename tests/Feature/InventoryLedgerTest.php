@@ -139,8 +139,10 @@ class InventoryLedgerTest extends PostgresTestCase
         $rival = new \PDO('pgsql:host='.$configuration['host'].';port='.$configuration['port'].';dbname='.$configuration['database'], $configuration['username'], $configuration['password'], [\PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION]);
         $rival->exec('SET search_path TO '.$this->workshopSchema.',public');
         $rival->exec("SET lock_timeout='150ms'");
-        DB::beginTransaction();
         $ledger->apply($admin, $decisions[0], (string) Str::uuid(), ['occurred_at' => $at]);
+        // Hold the coordinator independently of the completed service command.
+        DB::beginTransaction();
+        DB::select('SELECT pg_advisory_xact_lock(873210)');
         $insert = $rival->prepare('INSERT INTO inventory_applications(id,decision_id,applied_by_id,occurred_at) VALUES(?,?,?,?)');
         $parameters = [(string) Str::uuid(), $decisions[1], $admin->id, $at];
         try {
