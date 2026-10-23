@@ -21,7 +21,7 @@ estos comandos en savepoints y convertir sus errores en un commit exterior.
 ## Comportamiento
 
 `config/operations.php` fija 2000 ms para cada espera de bloqueo y 10000 ms para
-cada sentencia, incluido COMMIT y sus restricciones diferidas. Se reutiliza
+cada sentencia mediante configuración local. Se reutiliza
 `set_config(..., true)` de Taller, antes del advisory. Son límites locales; no se
 cambia PostgreSQL global ni la sesión de otras operaciones. No constituyen un
 presupuesto total de duración del comando. No se usa transaction_timeout, que
@@ -29,9 +29,17 @@ puede terminar la conexión y vuelve más compleja la confirmación del resultad
 
 Se conserva exactamente el orden de bloqueos existente, advisory 873210,
 guardias, validaciones, autorización, restricciones, triggers y recibos.
-El ejecutor hace un intento explícito. Laravel revierte la transacción antes de
-traducir 55P03, 57014, 40P01 y 40001 a 409 sin SQL ni parámetros. Los errores de
-integridad siguen en los manejadores originales. Ante una respuesta perdida,
+El ejecutor hace un intento explícito con beginTransaction/commit de Laravel.
+A diferencia de transaction(), commit() conserva el contador si PDO falla:
+el ejecutor intenta rollback físico y lógico antes de traducir 55P03, 57014,
+40P01 y 40001 a 409 sin SQL ni parámetros, también durante COMMIT diferido.
+Si falla la limpieza, descarta la conexión sin sustituir el error original.
+Las PDOException directas restantes descartan la conexión y reciben una respuesta
+503 que pide conservar la clave y consultar el recibo. No se infiere rollback
+por una desconexión: la confirmación puede haberse realizado. No hay reintentos
+automáticos. El registro reconoce PDOException (incluidas QueryException y causas
+anidadas) y conserva solo SQLSTATE validado y la correlación existente. Los errores
+de integridad envueltos en QueryException siguen en los manejadores originales. Ante una respuesta perdida,
 consultar el resultado y reenviar con la misma clave; no generar otra clave.
 
 ## Verificación y límites
@@ -65,3 +73,39 @@ El fixture de conteo sintético usa las tres transacciones públicas del proceso
 sin envolverlas en otra transacción. No se cambió código ni esquema de producción.
 Las migraciones se ejecutaron únicamente en los clústeres temporales recién creados,
 que el script detuvo al finalizar. No se ejecutó la suite global ni E2E navegador.
+
+## Corrección P2 de la auditoría independiente (23 de octubre de 2026)
+
+Se confirmó el hallazgo contra Laravel instalado: transaction() propaga
+PDOException de COMMIT y reduce el contador sin rollback explícito. La corrección
+se limita al ejecutor, reconocimiento/sanitización de PDO, pruebas y este documento;
+no modifica servicios, migraciones, advisory, guardias ni reglas de negocio.
+
+Las pruebas nuevas insertan efectos y recibo de inventario antes de activar un
+trigger de restricción INITIALLY DEFERRED. Cubren los cuatro SQLSTATE mediante
+RAISE en COMMIT, cancelación real, espera real de advisory y violación 23514;
+comprueban HTTP, estado PDO, límites restaurados, liberación del advisory de negocio,
+rollback visible desde otra conexión y reenvío con la misma clave confirmado una vez.
+Una terminación real del backend durante COMMIT verifica descarte y respuesta 503.
+PDO/libpq puede identificar esa terminación como HY000 u 08006; ninguno se reintenta.
+Dos inyecciones en PDO, usando persistencia real, cubren pérdida de acuse tras un
+commit exitoso y fallo durante la limpieza. La primera conserva efectos/recibo y
+el reenvío no duplica; la segunda descarta también callbacks pendientes de Laravel.
+No se simula que una respuesta perdida pruebe ausencia de confirmación.
+
+Límite observado durante la verificación: un pg_sleep(1) en el trigger diferido
+no fue cancelado por statement_timeout=100ms. Se usa cancelación real del backend
+para verificar 57014 durante COMMIT. Los valores configurados se conservan, pero
+no se certifica un plazo máximo para todo el trabajo diferido de COMMIT ni para
+la operación completa. Cambiar esa política queda fuera de esta corrección P2.
+
+Validación de esta corrección, ejecutada en WSL con PostgreSQL 18.6 recién
+inicializado, solo socket privado y sin TCP:
+
+- `bash tests/run-postgres.sh --filter 'BoundedTransactionTest|BillingPaymentsTest|InventoryLedgerTest|PurchaseRequestTest|PurchaseFulfillmentTest|ExpenseApiTest|WorkshopMaterialsTest|WorkshopMaterialApiTest|AdministrativeReportsTest|AdministrativeAuditTest|QueryExceptionSafetyTest|RequestPerformanceTest'`:
+  87 pruebas y 2407 aserciones satisfactorias, incluidas las 8 de BoundedTransactionTest.
+  Artefactos sintéticos: `/tmp/transporte-tests-dYpHNK`.
+- `vendor/bin/pint --test --dirty` y `git diff --check`: satisfactorios.
+- No se ejecutaron suite global ni E2E navegador. Sin acceso a servidores remotos,
+  bases existentes, push ni despliegue. Los primeros ensayos detectaron expectativas
+  incorrectas del fixture, corregidas antes de la batería final satisfactoria.

@@ -68,7 +68,7 @@ return Application::configure(basePath: dirname(__DIR__))
                 return (new DocumentOperationFailed)->render($request);
             }
             if (! $exception instanceof QueryException && SafeOperationalFailure::database($exception) !== null) {
-                return response()->json(['message' => 'Server Error'], 500)->header('Cache-Control', 'private, no-store');
+                return response()->json(['message' => $exception instanceof PDOException ? 'No se pudo confirmar la operación; conserve la clave y consulte el recibo.' : 'Server Error'], $exception instanceof PDOException ? 503 : 500)->header('Cache-Control', 'private, no-store');
             }
 
             return null;

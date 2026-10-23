@@ -3,15 +3,15 @@
 namespace App\Support;
 
 use App\Modules\FleetAndDocuments\Domain\DocumentOperationFailed;
-use Illuminate\Database\QueryException;
+use PDOException;
 use Throwable;
 
 final class SafeOperationalFailure
 {
-    public static function database(Throwable $exception): ?QueryException
+    public static function database(Throwable $exception): ?PDOException
     {
         do {
-            if ($exception instanceof QueryException) {
+            if ($exception instanceof PDOException) {
                 return $exception;
             }
         } while ($exception = $exception->getPrevious());
